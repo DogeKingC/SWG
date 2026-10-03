@@ -42,8 +42,18 @@ func isChallenge(resp *http.Response, body []byte) bool {
 }
 
 // ModsbaseResolve runs modsbase's "Create download link" step (the same form
-// post the site's own button makes) and returns the generated file link.
+// post the site's own button makes) and returns the generated file link. A
+// failed attempt is retried once; a Cloudflare check is not retried.
 func ModsbaseResolve(page string) (string, error) {
+	link, err := modsbaseResolveOnce(page)
+	if err == nil || errors.Is(err, ErrChallenge) {
+		return link, err
+	}
+	time.Sleep(3 * time.Second)
+	return modsbaseResolveOnce(page)
+}
+
+func modsbaseResolveOnce(page string) (string, error) {
 	code := ModsbaseCode(page)
 	if code == "" {
 		return "", fmt.Errorf("not a modsbase file page: %s", page)
@@ -56,7 +66,7 @@ func ModsbaseResolve(page string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	setHeaders(req)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Referer", page)
 	resp, err := client.Do(req)
@@ -84,7 +94,7 @@ func modsbaseCountdown(page string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	setHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -130,7 +140,7 @@ func ModsbaseDownload(link, page, path string, maxBytes int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	setHeaders(req)
 	req.Header.Set("Referer", page)
 	resp, err := client.Do(req)
 	if err != nil {

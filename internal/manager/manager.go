@@ -506,3 +506,11 @@ func maxName(rep *scan.Report) string {
 	}
 	return rep.Max().String()
 }
+
+// Overridable reports whether a refusal reason may be overridden by a person
+// from the GUI, for one install: HIGH findings, the cooldown and new findings
+// in an update. CRITICAL findings and the worm cutoff need the command line;
+// the blocklist, failed source checks and checksum mismatches never can be.
+func Overridable(reason string) bool {
+	return strings.Contains(reason, "--allow-high") || strings.Contains(reason, "--cooldown") || strings.Contains(reason, "--allow-new-findings")
+}

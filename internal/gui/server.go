@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/DogeKingC/SWG/internal/app"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/selfupdate"
+	"github.com/DogeKingC/SWG/internal/sources"
 )
 
 //go:embed web
@@ -69,6 +71,7 @@ type job struct {
 	Finished time.Time         `json:"finished,omitempty"`
 	Retry    map[string]any    `json:"retry,omitempty"` // request to repeat with an override
 	Findings []string          `json:"findings,omitempty"`
+	Browser  *app.NeedsBrowser `json:"browser,omitempty"`
 	opts     map[string]bool
 	logStart int
 }
@@ -92,6 +95,7 @@ func (s *server) logf(format string, a ...any) {
 // the process is interrupted.
 func Run(opt app.Options, g Options) error {
 	selfupdate.Cleanup()
+	app.PruneCache(14 * 24 * time.Hour)
 	if st, err := loadSettings(); err == nil {
 		st.apply(&opt)
 	}
@@ -134,6 +138,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/release", s.handleRelease)
 	mux.HandleFunc("/api/open", s.handleOpen)
+	mux.HandleFunc("/api/details", s.handleDetails)
+	mux.HandleFunc("/api/preview", s.handlePreview)
+	mux.HandleFunc("/api/thumb", s.handleThumb)
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 		go func() { time.Sleep(200 * time.Millisecond); close(s.quit) }()
@@ -155,7 +162,11 @@ func (s *server) guard(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			if r.Header.Get("X-Token") != s.token {
+			tok := r.Header.Get("X-Token")
+			if r.URL.Path == "/api/thumb" && tok == "" {
+				tok = r.URL.Query().Get("t") // <img> tags cannot send headers
+			}
+			if tok != s.token {
 				http.Error(w, "missing or bad token", http.StatusForbidden)
 				return
 			}
@@ -185,6 +196,7 @@ func (s *server) newApp(over map[string]bool) *app.App {
 	if over["allow_new_findings"] {
 		o.Policy.AllowNewFindings = true
 	}
+	o.BrowserFallback = over["browser"]
 	return &app.App{Opt: o, Logf: s.logf}
 }
 
@@ -401,6 +413,7 @@ func (s *server) do(j *job, req actionReq) error {
 		if len(req.Refs) == 0 {
 			return errors.New("nothing selected")
 		}
+		j.Data = map[string]string{"mods_dir": m.ModsDir}
 		if len(req.Refs) == 1 {
 			err := a.Install(m, req.Refs[0])
 			s.offerRetry(j, err, req)
@@ -449,23 +462,32 @@ func (s *server) do(j *job, req actionReq) error {
 }
 
 // offerRetry lets the UI re-run a refused install with an override, but only
-// for the overridable-by-a-person reasons: HIGH findings, the cooldown and
-// new findings in an update. CRITICAL findings, the worm cutoff and the
-// blocklist stay command-line-only (or not overridable at all).
+// for reasons a person may override (manager.Overridable), or with the
+// browser fallback when modsbase refused to hand out a link.
 func (s *server) offerRetry(j *job, err error, req actionReq) {
-	var rej *manager.Rejection
-	if !errors.As(err, &rej) {
-		return
-	}
 	over := map[string]bool{}
 	for k, v := range req.Override {
 		over[k] = v
 	}
+	retry := func() {
+		j.Retry = map[string]any{"action": req.Action, "refs": req.Refs, "path": req.Path, "workshop_id": req.WorkshopID, "override": over}
+	}
+	var nb *app.NeedsBrowser
+	if errors.As(err, &nb) {
+		j.Browser = nb
+		over["browser"] = true
+		retry()
+		return
+	}
+	var rej *manager.Rejection
+	if !errors.As(err, &rej) {
+		return
+	}
 	for _, r := range rej.Reasons {
-		switch {
-		case strings.Contains(r, "--allow-critical"), strings.Contains(r, "--allow-after-cutoff"), strings.Contains(r, "blocklist"),
-			strings.Contains(r, "not clean"), strings.Contains(r, "checksum"), strings.Contains(r, "no mod.json"):
+		if !manager.Overridable(r) {
 			return
+		}
+		switch {
 		case strings.Contains(r, "--allow-high"):
 			over["allow_high"] = true
 		case strings.Contains(r, "--cooldown"):
@@ -474,8 +496,7 @@ func (s *server) offerRetry(j *job, err error, req actionReq) {
 			over["allow_new_findings"] = true
 		}
 	}
-	retry := map[string]any{"action": req.Action, "refs": req.Refs, "path": req.Path, "workshop_id": req.WorkshopID, "override": over}
-	j.Retry = retry
+	retry()
 }
 
 func uploadDir() string {
@@ -591,4 +612,106 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(path, 0o755)
 	app.OpenFolder(path)
 	writeJSON(w, map[string]bool{"ok": true})
+}
+
+type detailsView struct {
+	app.SearchResult
+	sources.Details
+	Installed bool   `json:"installed"`
+	Page      string `json:"page"` // the mod's page on GameBanana / Steam
+	Revision  string `json:"revision,omitempty"`
+}
+
+// handleDetails returns the overview of one mod (description, images,
+// required items) without downloading it.
+func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
+	ref := app.NormalizeRef(r.URL.Query().Get("ref"))
+	var v detailsView
+	switch {
+	case strings.HasPrefix(ref, "gb:"):
+		id, err := strconv.Atoi(strings.TrimPrefix(ref, "gb:"))
+		if err != nil {
+			http.Error(w, "bad ref", http.StatusBadRequest)
+			return
+		}
+		mod, err := sources.GBGetMod(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		d, err := sources.GBDetails(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		v.SearchResult = app.SearchResult{Ref: ref, Source: "GameBanana", Name: mod.Name, Author: mod.Submitter.Name,
+			Category: mod.Category.Name, Date: time.Unix(mod.Modified, 0).Format("2006-01-02"), URL: mod.URL}
+		v.Details, v.Page = *d, mod.URL
+		if files, err := sources.GBFiles(id); err == nil && len(files) > 0 {
+			v.Size = app.HumanSize(files[0].Size)
+		}
+	case strings.HasPrefix(ref, "sky:"):
+		ws := strings.TrimPrefix(ref, "sky:")
+		it, err := sources.SkyByWorkshopID(ws)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		d, err := sources.SkyDetails(it.PageURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		v.SearchResult = app.SearchResult{Ref: ref, Source: "Skymods", Name: it.Title, Author: it.Author, Date: app.FmtTime(it.Revision),
+			Size: it.Size, URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, Image: it.Image,
+			AfterCutoff: !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff)}
+		v.Details, v.Page = *d, v.SearchResult.URL
+		if !it.Revision.IsZero() {
+			v.Revision = it.Revision.Format("2006-01-02 15:04 UTC")
+		}
+	default:
+		http.Error(w, "unknown ref", http.StatusBadRequest)
+		return
+	}
+	if st, err := manager.LoadState(); err == nil {
+		v.Installed = st.Mods[ref] != nil
+	}
+	writeJSON(w, v)
+}
+
+// handlePreview downloads and scans a mod without installing it.
+func (s *server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	a := s.newApp(nil)
+	m, err := a.Manager(true)
+	if err != nil {
+		w.WriteHeader(http.StatusConflict)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	ref := app.NormalizeRef(r.URL.Query().Get("ref"))
+	s.logf("previewing %s", ref)
+	p, err := a.Preview(m, ref)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, p)
+}
+
+// handleThumb serves a thumbnail extracted from a previewed mod archive.
+func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
+	p := app.ThumbPath(r.URL.Query().Get("ref"))
+	if p == "" {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", app.ImageType(b))
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Write(b)
 }

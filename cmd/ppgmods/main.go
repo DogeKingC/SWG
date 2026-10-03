@@ -139,6 +139,7 @@ func parseFlags(argv []string) (*app.App, []string, gui.Options, error) {
 		pos = append(pos, argv[0])
 		argv = argv[1:]
 	}
+	o.BrowserFallback = true
 	return &app.App{Opt: o, Logf: logf}, pos, g, nil
 }
 

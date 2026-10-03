@@ -41,9 +41,10 @@ function el(tag, attrs = {}, ...kids) {
   return e;
 }
 
-function toast(msg, ms = 3500) {
+function toast(msg, ms = 3500, action) {
   const t = $("#toast");
-  t.textContent = msg;
+  t.replaceChildren(el("span", {}, msg));
+  if (action) t.append(el("button", { class: "btn btn-sm toast-btn", onclick: () => { t.hidden = true; action.run(); } }, action.label));
   t.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => (t.hidden = true), ms);
@@ -111,6 +112,7 @@ async function refreshState() {
     $("#setGame").value = state.settings.game || "";
     $("#setCooldown").value = Math.round(state.settings.cooldown_hours);
     $("#setOffline").checked = state.settings.offline;
+    $("#setBgThumbs").checked = !state.settings.no_bg_thumbs;
   }
   $("#gameHint").textContent = p.game ? "Using: " + p.game : (p.game_error || "");
   $("#pathsInfo").textContent = [
@@ -122,6 +124,7 @@ async function refreshState() {
     "ppgmods data:  " + p.data,
   ].join("\n");
   renderInstalled();
+  markInstalledCards();
   if (state.job && state.job.running && !lastJobId) lastJobId = state.job.id;
   if (!lastJobId) setJob(state.job);
 }
@@ -212,6 +215,10 @@ function jobDone(j) {
     }
     if (sum) { toast(`${sum.OK} installed, ${sum.Refused} refused, ${sum.Failed} errors`, 6000); return; }
     if (j.name === "backup" && j.data) { $("#restorePath").value = j.data.dest; toast("Backup saved. Now restore the safe copies (step 2)."); return; }
+    if (j.name === "install") {
+      toast("Installed into " + ((j.data && j.data.mods_dir) || "your Mods folder"), 7000, { label: "Open Mods folder", run: () => api("/api/open?what=mods") });
+      return;
+    }
     toast(j.name + " finished");
     return;
   }
@@ -229,6 +236,15 @@ function jobDone(j) {
     body.push(el("p", { class: "small" }, "The log at the bottom has the full details."));
   }
   let extra = null;
+  if (j.browser && j.retry) {
+    body.splice(0, body.length,
+      el("p", {}, "modsbase.com didn't hand ppgmods the file from this connection (" + j.browser.reason + ")."),
+      el("p", {}, "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
+    dialog("Download in your browser", body, { label: "Open download page", run: () => run(j.retry, "Waiting for the browser download") });
+    $("#dlgExtra").className = "btn btn-primary";
+    return;
+  }
+  $("#dlgExtra").className = "btn btn-danger";
   if (j.retry) {
     body.push(el("div", { class: "warnbox" }, "Only continue if you have read the findings above and trust this mod's author. Mods run with full access to your PC."));
     extra = { label: "Install anyway", run: () => run(j.retry, "Installing (override)") };
@@ -326,16 +342,75 @@ function thumbURL(u) {
   return u;
 }
 
+// thumbImg shows the Workshop/GameBanana preview image, then the thumbnail
+// extracted from the mod archive (Valve deleted the Workshop images of the
+// removed mods), then a placeholder.
+function thumbImg(m, cls) {
+  const box = el("div", { class: cls + " thumb-empty" }, el("span", {}, (m.name || "?").trim().charAt(0).toUpperCase()));
+  const tries = [];
+  if (m.image) tries.push(thumbURL(m.image));
+  tries.push("/api/thumb?ref=" + encodeURIComponent(m.ref) + "&t=" + encodeURIComponent(TOKEN) + "&v=" + (thumbBust[m.ref] || 0));
+  const img = el("img", { alt: "", loading: "lazy", decoding: "async" });
+  let i = 0;
+  img.onerror = () => {
+    i++;
+    if (i < tries.length) { img.src = tries[i]; return; }
+    img.remove();
+    if (cls === "thumb") queueThumb(m);
+  };
+  img.onload = () => { box.classList.remove("thumb-empty"); box.querySelector("span")?.remove(); };
+  img.src = tries[0];
+  box.append(img);
+  return box;
+}
+const thumbBust = {};
+
+// Background thumbnail fetching for Workshop mirror mods whose Steam image is
+// gone: one small mod at a time, paused while a task runs.
+const thumbQueue = [];
+const thumbTried = new Set();
+let thumbBusy = false;
+
+function sizeBytes(s) {
+  const m = /([\d.]+)\s*(KB|MB|GB|B)/i.exec(s || "");
+  if (!m) return Infinity;
+  return Number(m[1]) * { B: 1, KB: 1024, MB: 1048576, GB: 1073741824 }[m[2].toUpperCase()];
+}
+
+function queueThumb(m) {
+  if (!m.ref.startsWith("sky:") || m.after_cutoff || thumbTried.has(m.ref)) return;
+  if (state?.settings?.no_bg_thumbs || sizeBytes(m.size) > 3 * 1048576) return;
+  thumbTried.add(m.ref);
+  thumbQueue.push(m);
+  pumpThumbs();
+}
+
+async function pumpThumbs() {
+  if (thumbBusy || !thumbQueue.length) return;
+  if (jobRunning || state?.settings?.no_bg_thumbs) { setTimeout(pumpThumbs, 3000); return; }
+  thumbBusy = true;
+  const m = thumbQueue.shift();
+  try {
+    if (document.querySelector(`.mod[data-ref="${CSS.escape(m.ref)}"]`)) {
+      const p = await api("/api/preview?ref=" + encodeURIComponent(m.ref));
+      if (p.thumb) {
+        thumbBust[m.ref] = Date.now();
+        $$(`.mod[data-ref="${CSS.escape(m.ref)}"] .thumb`).forEach((t) => t.replaceWith(thumbImg({ ...m, image: "" }, "thumb")));
+      }
+    }
+  } catch { /* leave the placeholder */ }
+  thumbBusy = false;
+  setTimeout(pumpThumbs, 500);
+}
+
 function card(m) {
   const isGB = m.ref.startsWith("gb:");
   const installed = (state?.installed || []).some((i) => i.key === m.ref);
-  const thumb = m.image
-    ? el("div", { class: "thumb", style: `background-image:url("${thumbURL(m.image).replace(/"/g, "%22")}")` })
-    : el("div", { class: "thumb thumb-empty" }, "◇");
   const pick = el("input", { type: "checkbox", class: "pick", title: "Select", "aria-label": "Select " + m.name });
   pick.checked = selected.has(m.ref);
   pick.disabled = m.after_cutoff || installed;
-  const c = el("div", { class: "mod" + (pick.checked ? " selected" : "") }, thumb, pick,
+  const c = el("div", { class: "mod" + (pick.checked ? " selected" : ""), tabindex: "0", role: "button", "aria-label": "Details for " + m.name, "data-ref": m.ref },
+    thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
       el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : "revised ") + m.date + (m.size ? " · " + m.size : "")),
@@ -346,18 +421,158 @@ function card(m) {
         installed ? el("span", { class: "badge badge-ok" }, "installed") : null,
         installed || m.after_cutoff ? null : el("button", {
           class: "btn btn-primary btn-sm", "data-busy": true, disabled: jobRunning,
-          onclick: () => run({ action: "install", refs: [m.ref] }, "Installing " + m.name),
+          onclick: (e) => { e.stopPropagation(); install(m.ref, m.name); },
         }, "Install"))));
+  pick.onclick = (e) => e.stopPropagation();
   pick.onchange = () => {
     if (pick.checked) selected.set(m.ref, m.name); else selected.delete(m.ref);
     c.classList.toggle("selected", pick.checked);
     updateSelection();
   };
-  c.querySelector(".mod-name").onclick = () => api("/api/open?what=url&url=" + encodeURIComponent(m.url));
-  c.querySelector(".mod-name").style.cursor = "pointer";
-  c.querySelector(".mod-name").title = "Open the mod's page";
+  c.onclick = () => openDetails(m);
+  c.onkeydown = (e) => { if (e.key === "Enter" && e.target === c) openDetails(m); };
   return c;
 }
+
+function markInstalledCards() {
+  const keys = new Set((state?.installed || []).map((i) => i.key));
+  $$(".mod[data-ref]").forEach((c) => {
+    if (!keys.has(c.dataset.ref) || c.querySelector(".badge-ok")) return;
+    const foot = c.querySelector(".mod-foot");
+    foot.querySelector(".btn")?.remove();
+    foot.append(el("span", { class: "badge badge-ok" }, "installed"));
+    const pick = c.querySelector(".pick");
+    pick.checked = false; pick.disabled = true;
+    c.classList.remove("selected");
+    selected.delete(c.dataset.ref);
+  });
+  updateSelection();
+}
+
+function install(ref, name, override) {
+  run({ action: "install", refs: [ref], override }, "Installing " + (name || ref));
+}
+
+// ---------- details ----------
+let detailsRef = null;
+
+async function openDetails(m) {
+  detailsRef = m.ref;
+  const d = $("#details");
+  const isGB = m.ref.startsWith("gb:");
+  $("#detHero").replaceChildren(thumbImg(m, "det-hero"));
+  $("#detTitle").textContent = m.name;
+  $("#detSub").replaceChildren(
+    el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : "Workshop mirror"),
+    m.author ? " by " + m.author : "");
+  $("#detFacts").replaceChildren();
+  $("#detDesc").textContent = "Loading description…";
+  $("#detRequired").replaceChildren();
+  $("#detCheck").replaceChildren(el("div", { class: "check-wait" }, el("span", { class: "spinner" }), "Downloading and scanning before install…"));
+  setDetailActions(m, null);
+  if (!d.open) d.showModal();
+  d.querySelector(".det-scroll").scrollTop = 0;
+
+  api("/api/details?ref=" + encodeURIComponent(m.ref)).then((v) => {
+    if (detailsRef !== m.ref) return;
+    const facts = [
+      [isGB ? "Updated" : "Last revision", v.revision || v.date],
+      ["Size", v.size],
+      ["Category", v.category],
+      ["Downloads", v.downloads ? v.downloads.toLocaleString() : ""],
+      ["Views", v.views ? v.views.toLocaleString() : ""],
+      ["ID", m.ref],
+    ].filter((f) => f[1]);
+    $("#detFacts").replaceChildren(...facts.map(([k, val]) => el("div", { class: "fact" }, el("span", {}, k), el("b", {}, String(val)))));
+    $("#detDesc").textContent = v.description || "No description.";
+    if (v.after_cutoff) $("#detSub").append(" ", el("span", { class: "badge badge-bad" }, "revised after the worm cutoff"));
+    if (v.required && v.required.length) {
+      $("#detRequired").replaceChildren(
+        el("h3", {}, "Needs these mods too"),
+        el("div", { class: "req-list" }, v.required.map((r) => el("button", {
+          class: "req", onclick: () => openDetails({ ref: "sky:" + r.workshop_id, name: r.title }),
+        }, r.title, el("span", { class: "muted" }, " · sky:" + r.workshop_id)))),
+        el("div", { class: "toolbar" }, el("button", {
+          class: "btn btn-sm", onclick: () => run({ action: "install", refs: v.required.map((r) => "sky:" + r.workshop_id) }, "Installing required mods"),
+        }, "Install all required mods")));
+    }
+    $("#detPage").onclick = () => api("/api/open?what=url&url=" + encodeURIComponent(v.page));
+  }).catch((e) => { if (detailsRef === m.ref) $("#detDesc").textContent = "Could not load the description: " + e.message; });
+
+  try {
+    const p = await api("/api/preview?ref=" + encodeURIComponent(m.ref));
+    if (detailsRef !== m.ref) return;
+    showCheck(m, p);
+  } catch (e) {
+    if (detailsRef !== m.ref) return;
+    $("#detCheck").replaceChildren(el("div", { class: "verdict verdict-bad" }, "Could not check this mod: " + e.message));
+    setDetailActions(m, { verdict: "error" });
+  }
+}
+
+function showCheck(m, p) {
+  if (p.thumb) {
+    thumbBust[m.ref] = Date.now();
+    $("#detHero").replaceChildren(thumbImg({ ...m, image: m.image }, "det-hero"));
+    $$(`.mod[data-ref="${CSS.escape(m.ref)}"] .thumb`).forEach((t) => t.replaceWith(thumbImg(m, "thumb")));
+  }
+  const box = [];
+  const text = {
+    ok: ["verdict-ok", "✓ Passed every check. Ready to install."],
+    review: ["verdict-warn", "⚠ Needs your review before installing."],
+    blocked: ["verdict-bad", "✕ ppgmods will not install this mod."],
+    browser: ["verdict-warn", "modsbase.com didn't hand ppgmods the file from this connection."],
+  }[p.verdict] || ["verdict-bad", p.verdict];
+  box.push(el("div", { class: "verdict " + text[0] }, text[1]));
+  if (p.verdict === "browser") {
+    box.push(el("p", { class: "small" }, "Reason: " + (p.browser?.reason || "unknown") + ". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."));
+  }
+  if (p.reasons && p.reasons.length && p.verdict !== "browser") {
+    box.push(el("ul", { class: "small" }, p.reasons.map((r) => el("li", {}, r.replace(/ \(override: [^)]*\)/, "")))));
+  }
+  const info = [];
+  if (p.files) info.push(`${p.files} files, ${p.scripts} C# scripts`);
+  if (p.version) info.push("version " + p.version);
+  if (p.author) info.push("mod.json author: " + p.author);
+  if (p.scan_max) info.push("scanner: " + (p.scan_max === "none" ? "nothing found" : "highest " + p.scan_max));
+  if (info.length) box.push(el("p", { class: "small muted" }, info.join(" · ")));
+  if (p.findings && p.findings.length) box.push(el("ul", { class: "findings mono small" }, p.findings.map((f) => el("li", {}, f))));
+  if (p.description && $("#detDesc").textContent.startsWith("No description")) $("#detDesc").textContent = p.description;
+  $("#detCheck").replaceChildren(...box);
+  setDetailActions(m, p);
+}
+
+function setDetailActions(m, p) {
+  const installed = (state?.installed || []).some((i) => i.key === m.ref);
+  const btn = $("#detInstall");
+  const warn = $("#detWarn");
+  warn.hidden = true;
+  btn.className = "btn btn-primary";
+  btn.disabled = jobRunning;
+  btn.onclick = () => { $("#details").close(); install(m.ref, m.name); };
+  btn.textContent = installed ? "Reinstall" : "Install";
+  if (!p) { btn.textContent = installed ? "Reinstall" : "Install"; return; }
+  if (p.verdict === "blocked" || p.verdict === "error") { btn.disabled = true; return; }
+  if (p.verdict === "browser") {
+    btn.textContent = "Open download page";
+    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }); };
+    return;
+  }
+  if (p.verdict === "review") {
+    const over = {};
+    for (const r of p.reasons || []) {
+      if (r.includes("--allow-high")) over.allow_high = true;
+      if (r.includes("--cooldown")) over.skip_cooldown = true;
+      if (r.includes("--allow-new-findings")) over.allow_new_findings = true;
+    }
+    btn.className = "btn btn-danger";
+    btn.textContent = "Install anyway";
+    warn.hidden = false;
+    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, over); };
+  }
+}
+$("#detClose").onclick = () => { detailsRef = null; $("#details").close(); };
+$("#details").addEventListener("close", () => (detailsRef = null));
 
 function updateSelection() {
   $("#selectionBar").hidden = !selected.size;
@@ -406,6 +621,7 @@ $("#settingsForm").onsubmit = async (e) => {
       game: $("#setGame").value.trim(),
       cooldown_hours: Math.max(0, Number($("#setCooldown").value) || 0),
       offline: $("#setOffline").checked,
+      no_bg_thumbs: !$("#setBgThumbs").checked,
     } });
     toast("Settings saved");
     document.activeElement.blur();

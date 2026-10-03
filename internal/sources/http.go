@@ -10,20 +10,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"time"
 )
 
 var UserAgent = "ppgmods/dev (+https://github.com/DogeKingC/SWG)"
 
-var client = &http.Client{Timeout: 5 * time.Minute}
+// client keeps cookies between requests, as a browser does: modsbase.com's
+// "create download link" step can depend on cookies set by its file page.
+var client = func() *http.Client {
+	jar, _ := cookiejar.New(nil)
+	return &http.Client{Timeout: 5 * time.Minute, Jar: jar}
+}()
+
+// setHeaders adds the identifying User-Agent and the standard headers every
+// browser sends.
+func setHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+}
 
 func get(url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	setHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -149,6 +149,8 @@
           <input id="setCooldown" type="number" min="0" step="1">
         </label>
         <label class="check"><input id="setOffline" type="checkbox"> Don't download the latest blocklist</label>
+        <label class="check"><input id="setBgThumbs" type="checkbox"> Load missing Workshop thumbnails in the background
+          <span class="hint">Valve deleted the preview images of the removed mods. ppgmods can fetch small mods (under 3 MB) one at a time to show their own thumbnail; this also pre-scans them so installing is instant.</span></label>
         <div><button class="btn btn-primary" type="submit">Save</button></div>
       </form>
       <h2>Folders</h2>
@@ -175,6 +177,34 @@
   <div class="dlg-actions">
     <button id="dlgExtra" class="btn btn-danger" hidden></button>
     <button id="dlgClose" class="btn btn-primary">Close</button>
+  </div>
+</dialog>
+<dialog id="details" class="details" aria-labelledby="detTitle">
+  <div class="det-scroll">
+    <div id="detHero"></div>
+    <div class="det-body">
+      <h2 id="detTitle"></h2>
+      <div id="detSub" class="det-sub"></div>
+      <div id="detFacts" class="facts"></div>
+      <section class="det-section">
+        <h3>Safety check</h3>
+        <div id="detCheck"></div>
+      </section>
+      <div id="detRequired" class="det-section"></div>
+      <section class="det-section">
+        <h3>Description</h3>
+        <div id="detDesc" class="desc"></div>
+      </section>
+    </div>
+  </div>
+  <div class="det-actions">
+    <div id="detWarn" class="warnbox" hidden>Only continue if you have read the findings above and trust this mod's author. Mods run with full access to your PC.</div>
+    <div class="det-buttons">
+      <button id="detPage" class="btn btn-ghost">View original page</button>
+      <span class="spacer"></span>
+      <button id="detClose" class="btn">Close</button>
+      <button id="detInstall" class="btn btn-primary">Install</button>
+    </div>
   </div>
 </dialog>
 <div id="toast" class="toast" hidden></div>

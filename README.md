@@ -43,7 +43,14 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 The window covers everything:
 
 - **Browse mods**: search GameBanana and the Skymods Workshop mirror, paste a
-  link, select several, install.
+  link, select several, install. Click a mod to open its details: the
+  description, size and dates, the mods it needs, and a **safety check** that
+  downloads and scans it before you install. Install then puts it straight
+  into your `Mods` folder (on Linux, usually
+  `~/.local/share/Steam/steamapps/common/People Playground/Mods`). Valve
+  deleted the Workshop preview images of the removed mods, so ppgmods shows
+  each mod's own thumbnail from inside its archive. For small mods it fetches
+  these in the background (this can be turned off in Settings).
 - **Installed**: check for and apply safe updates, verify files, rollback,
   pin, remove.
 - **Recover Workshop**: back up the Steam cache, restore the safe copies, or

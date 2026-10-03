@@ -4,8 +4,11 @@
 package app
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/game"
@@ -25,6 +29,8 @@ type Options struct {
 	Downloads                    string        // browser download folder to watch
 	Wait                         time.Duration // how long to wait for a browser download
 	NoWatch, Yes, Offline        bool
+	BrowserFallback              bool // on a modsbase refusal, open the browser and watch Downloads
+	UpdateOnly                   bool // fetch: skip when the installed file is already the newest
 	FileID                       int
 	Revision                     time.Time // known revision date (from a backup manifest)
 	Policy                       manager.Policy
@@ -146,40 +152,110 @@ func Search(q string, page int) SearchResults {
 var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
 var reWSURL = regexp.MustCompile(`steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)`)
 
+// NormalizeRef turns GameBanana / Steam Workshop links and bare Workshop IDs
+// into gb:<id> / sky:<workshop id>.
+func NormalizeRef(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if mm := reGBURL.FindStringSubmatch(ref); mm != nil {
+		return "gb:" + mm[1]
+	}
+	if mm := reWSURL.FindStringSubmatch(ref); mm != nil {
+		return "sky:" + mm[1]
+	}
+	if reWorkshopDir.MatchString(ref) {
+		return "sky:" + ref
+	}
+	return ref
+}
+
+// NeedsBrowser is returned when modsbase.com will not hand out a download
+// link to ppgmods (a Cloudflare check or a captcha). The user can open URL in
+// a browser; ppgmods then picks the file up from the Downloads folder.
+type NeedsBrowser struct {
+	URL        string `json:"url"`
+	Reason     string `json:"reason"`
+	WorkshopID string `json:"workshop_id"`
+}
+
+func (e *NeedsBrowser) Error() string {
+	return "modsbase.com did not give ppgmods a download link (" + e.Reason + ")"
+}
+
 // Install installs gb:<id>, sky:<workshop id>, a GameBanana URL or a Steam
 // Workshop URL.
 func (a *App) Install(m *manager.Manager, ref string) error {
-	ref = strings.TrimSpace(ref)
-	if mm := reGBURL.FindStringSubmatch(ref); mm != nil {
-		ref = "gb:" + mm[1]
-	} else if mm := reWSURL.FindStringSubmatch(ref); mm != nil {
-		ref = "sky:" + mm[1]
+	ref = NormalizeRef(ref)
+	c, err := a.Fetch(ref, m.State.Mods[ref])
+	var nb *NeedsBrowser
+	if errors.As(err, &nb) && a.Opt.BrowserFallback {
+		c, err = a.viaBrowser(nb)
 	}
+	if err != nil || c == nil {
+		return err
+	}
+	return m.Install(c)
+}
+
+// Fetch downloads (or reuses the cached download of) a mod and returns it as
+// an install candidate. prev is the installed version, if any; for GameBanana
+// a nil candidate with nil error means prev is already the newest file.
+func (a *App) Fetch(ref string, prev *manager.Installed) (*manager.Candidate, error) {
+	// One download per mod at a time: a preview and an install of the same
+	// mod share the cached file.
+	mu, _ := fetchLocks.LoadOrStore(ref, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	switch {
 	case strings.HasPrefix(ref, "gb:"):
 		id, err := strconv.Atoi(strings.TrimPrefix(ref, "gb:"))
 		if err != nil {
-			return fmt.Errorf("bad GameBanana id %q", ref)
+			return nil, fmt.Errorf("bad GameBanana id %q", ref)
 		}
-		return a.InstallGB(m, id, a.Opt.FileID, nil)
+		return a.fetchGB(id, a.Opt.FileID, prev)
 	case strings.HasPrefix(ref, "sky:"):
-		return a.InstallSky(m, strings.TrimPrefix(ref, "sky:"))
+		return a.fetchSky(strings.TrimPrefix(ref, "sky:"))
 	}
-	return fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, or a GameBanana/Steam Workshop link", ref)
+	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, or a GameBanana/Steam Workshop link", ref)
 }
 
-// InstallGB downloads and installs a GameBanana file. prev is non-nil for updates.
-func (a *App) InstallGB(m *manager.Manager, id, fileID int, prev *manager.Installed) error {
+var fetchLocks sync.Map
+
+// CacheDir is where downloaded archives and their thumbnails are kept, so a
+// preview and the install that follows download only once.
+func CacheDir(key string) (string, error) {
+	d, err := manager.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	p := filepath.Join(d, "cache", strings.ReplaceAll(key, ":", "-"))
+	return p, os.MkdirAll(p, 0o755)
+}
+
+// PruneCache removes cached downloads older than maxAge.
+func PruneCache(maxAge time.Duration) {
+	d, err := manager.ConfigDir()
+	if err != nil {
+		return
+	}
+	ents, _ := os.ReadDir(filepath.Join(d, "cache"))
+	for _, e := range ents {
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > maxAge {
+			os.RemoveAll(filepath.Join(d, "cache", e.Name()))
+		}
+	}
+}
+
+func (a *App) fetchGB(id, fileID int, prev *manager.Installed) (*manager.Candidate, error) {
 	mod, err := sources.GBGetMod(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	files, err := sources.GBFiles(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(files) == 0 {
-		return fmt.Errorf("gb:%d has no files", id)
+		return nil, fmt.Errorf("gb:%d has no files", id)
 	}
 	f := files[0]
 	if fileID != 0 {
@@ -190,112 +266,121 @@ func (a *App) InstallGB(m *manager.Manager, id, fileID int, prev *manager.Instal
 			}
 		}
 		if !found {
-			return fmt.Errorf("file %d not found in gb:%d", fileID, id)
+			return nil, fmt.Errorf("file %d not found in gb:%d", fileID, id)
 		}
 	}
-	if prev != nil && prev.FileID == f.ID {
-		return nil
+	if a.Opt.UpdateOnly && prev != nil && prev.FileID == f.ID {
+		return nil, nil
 	}
 	if !f.Clean() {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("GameBanana malware analysis for %s is %q/%q/%q, not clean", f.Name, f.AVState, f.AVResult, f.Analysis)}}
+		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("GameBanana malware analysis for %s is %q/%q/%q, not clean", f.Name, f.AVState, f.AVResult, f.Analysis)}}
 	}
-	a.logf("gb:%d %s - file %s (%s, uploaded %s)", id, mod.Name, f.Name, HumanSize(f.Size), f.AddedTime().Format("2006-01-02 15:04"))
-	dl, err := downloadsDir()
+	dir, err := CacheDir(fmt.Sprintf("gb:%d", id))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	path := filepath.Join(dl, fmt.Sprintf("gb-%d-%d-%s", id, f.ID, filepath.Base(f.Name)))
-	md5hex, shahex, err := sources.Download(f.DownloadURL, path, 1<<30)
-	if err != nil {
-		return err
+	path := filepath.Join(dir, fmt.Sprintf("%d-%s", f.ID, filepath.Base(f.Name)))
+	md5hex, _ := fileMD5(path)
+	if md5hex == "" || !strings.EqualFold(md5hex, f.MD5) {
+		a.logf("gb:%d %s - downloading %s (%s, uploaded %s)", id, mod.Name, f.Name, HumanSize(f.Size), f.AddedTime().Format("2006-01-02 15:04"))
+		if md5hex, _, err = sources.Download(f.DownloadURL, path, 1<<30); err != nil {
+			return nil, err
+		}
 	}
-	defer os.Remove(path)
 	if f.MD5 != "" && !strings.EqualFold(md5hex, f.MD5) {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("checksum mismatch: GameBanana says %s, got %s", f.MD5, md5hex)}}
+		os.Remove(path)
+		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("checksum mismatch: GameBanana says %s, got %s", f.MD5, md5hex)}}
 	}
-	return m.Install(&manager.Candidate{
+	sha, err := manager.FileSHA(path)
+	if err != nil {
+		return nil, err
+	}
+	return &manager.Candidate{
 		Key: fmt.Sprintf("gb:%d", id), Name: mod.Name, Source: mod.URL, Path: path,
-		FileID: f.ID, Version: f.Version, Revision: f.AddedTime(), ArchiveSHA: shahex,
-	})
+		FileID: f.ID, Version: f.Version, Revision: f.AddedTime(), ArchiveSHA: sha,
+	}, nil
 }
 
-func downloadsDir() (string, error) {
-	d, err := manager.ConfigDir()
+func fileMD5(p string) (string, error) {
+	f, err := os.Open(p)
 	if err != nil {
 		return "", err
 	}
-	p := filepath.Join(d, "downloads")
-	return p, os.MkdirAll(p, 0o755)
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// InstallSky installs the Skymods mirror copy of a Workshop item. It goes
-// through modsbase.com's own "create download link" step; if modsbase shows a
-// Cloudflare check or captcha, it opens the page in the browser and imports
-// the file once it appears in the Downloads folder.
-func (a *App) InstallSky(m *manager.Manager, ws string) error {
+// fetchSky gets the Skymods mirror copy of a Workshop item through
+// modsbase.com's own "create download link" step.
+func (a *App) fetchSky(ws string) (*manager.Candidate, error) {
 	it, err := sources.SkyByWorkshopID(ws)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	a.logf("Skymods: %s by %s (Workshop %s), revision %s, %s", it.Title, it.Author, it.WorkshopID, FmtTime(it.Revision), it.Size)
 	if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) && !a.Opt.Policy.AllowAfterCutoff {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
+		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
 	}
 	if it.DownloadURL == "" {
-		return fmt.Errorf("no download link on %s", it.PageURL)
+		return nil, fmt.Errorf("Skymods has no download for this item (%s)", it.PageURL)
+	}
+	dir, err := CacheDir("sky:" + ws)
+	if err != nil {
+		return nil, err
+	}
+	name := filepath.Base(strings.TrimSuffix(it.DownloadURL, ".html"))
+	path := filepath.Join(dir, name)
+	if st, err := os.Stat(path); err != nil || st.Size() == 0 {
+		a.logf("requesting download link from modsbase.com...")
+		link, err := sources.ModsbaseResolve(it.DownloadURL)
+		if err == nil {
+			_, err = sources.ModsbaseDownload(link, it.DownloadURL, path+".part", 1<<30)
+		}
+		if err != nil {
+			os.Remove(path + ".part")
+			a.logf("modsbase.com: %v", err)
+			return nil, &NeedsBrowser{URL: it.DownloadURL, Reason: err.Error(), WorkshopID: ws}
+		}
+		if err := os.Rename(path+".part", path); err != nil {
+			return nil, err
+		}
+		a.logf("downloaded %s", name)
 	}
 	b := a.with(func(o *Options) {
-		o.WorkshopID = ws
+		o.WorkshopID, o.Revision = ws, it.Revision
 		if o.Name == "" {
 			o.Name = it.Title
 		}
 	})
-	if file, err := a.skyDirect(it); err == nil {
-		defer os.Remove(file)
-		return b.Import(m, file)
-	} else {
-		a.logf("direct download not possible (%v); using the browser instead", err)
-	}
+	return b.candidate(path)
+}
 
+// viaBrowser opens the modsbase page in the browser and waits for the file
+// to appear in the Downloads folder.
+func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	dl := a.Opt.Downloads
 	if dl == "" {
 		dl = DownloadFolder()
 	}
-	a.logf("Opening the download page in your browser: %s", it.DownloadURL)
+	a.logf("Opening the download page in your browser: %s", nb.URL)
 	a.logf("Click the real download button (ignore ads; never run an .exe).")
 	if a.Opt.NoWatch || dl == "" {
-		a.logf("Then import the file with workshop id %s", ws)
-		OpenBrowser(it.DownloadURL)
-		return nil
+		OpenBrowser(nb.URL)
+		return nil, fmt.Errorf("download the file in your browser, then import it with workshop id %s", nb.WorkshopID)
 	}
 	since := time.Now()
-	OpenBrowser(it.DownloadURL)
-	a.logf("Waiting for %s_* in %s (up to %s)...", ws, dl, a.Opt.Wait)
-	file, err := waitForDownload(dl, ws, since, a.Opt.Wait)
+	OpenBrowser(nb.URL)
+	a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
+	file, err := waitForDownload(dl, nb.WorkshopID, since, a.Opt.Wait)
 	if err != nil {
-		return fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, ws)
+		return nil, fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, nb.WorkshopID)
 	}
 	a.logf("got %s", filepath.Base(file))
-	return b.Import(m, file)
-}
-
-func (a *App) skyDirect(it *sources.SkyItem) (string, error) {
-	a.logf("requesting download link from modsbase.com...")
-	link, err := sources.ModsbaseResolve(it.DownloadURL)
-	if err != nil {
-		return "", err
-	}
-	dir, err := downloadsDir()
-	if err != nil {
-		return "", err
-	}
-	name := filepath.Base(strings.TrimSuffix(it.DownloadURL, ".html"))
-	path := filepath.Join(dir, "sky-"+it.WorkshopID+"-"+name)
-	if _, err := sources.ModsbaseDownload(link, it.DownloadURL, path, 1<<30); err != nil {
-		return "", err
-	}
-	a.logf("downloaded %s", name)
-	return path, nil
+	return a.with(func(o *Options) { o.WorkshopID = nb.WorkshopID }).candidate(file)
 }
 
 // DownloadFolder returns the user's browser download folder.
@@ -382,13 +467,22 @@ var reWorkshopDir = regexp.MustCompile(`^\d{6,12}$`)
 
 // Import scans and installs an archive or folder already on disk.
 func (a *App) Import(m *manager.Manager, p string) error {
-	abs, err := filepath.Abs(p)
+	c, err := a.candidate(p)
 	if err != nil {
 		return err
 	}
+	return m.Install(c)
+}
+
+// candidate describes an archive or folder on disk as an install candidate.
+func (a *App) candidate(p string) (*manager.Candidate, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return nil, err
+	}
 	st, err := os.Stat(abs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ws := a.Opt.WorkshopID
 	if ws == "" && st.IsDir() && reWorkshopDir.MatchString(filepath.Base(abs)) {
@@ -397,7 +491,7 @@ func (a *App) Import(m *manager.Manager, p string) error {
 	c := &manager.Candidate{Path: abs, Name: a.Opt.Name}
 	if !st.IsDir() {
 		if c.ArchiveSHA, err = manager.FileSHA(abs); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if ws != "" {
@@ -408,6 +502,8 @@ func (a *App) Import(m *manager.Manager, p string) error {
 				c.Revision = manager.NewestMtime(abs)
 			}
 			a.logf("using newest file time %s as the revision date", FmtTime(c.Revision))
+		} else if !a.Opt.Revision.IsZero() {
+			c.Revision = a.Opt.Revision
 		} else if it, err := sources.SkyByWorkshopID(ws); err == nil && !it.Revision.IsZero() {
 			c.Revision = it.Revision
 			if c.Name == "" {
@@ -419,7 +515,7 @@ func (a *App) Import(m *manager.Manager, p string) error {
 		if c.ArchiveSHA == "" {
 			h, err := manager.TreeSHA(abs)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			c.ArchiveSHA = h
 		}
@@ -428,7 +524,7 @@ func (a *App) Import(m *manager.Manager, p string) error {
 	if c.Name == "" {
 		c.Name = strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs))
 	}
-	return m.Install(c)
+	return c, nil
 }
 
 // ---- update, restore, backup ----
@@ -464,7 +560,12 @@ func (a *App) Update(m *manager.Manager) Summary {
 			s.Current++
 			continue
 		}
-		a.tally(&s, inst.Key, "HELD", a.InstallGB(m, id, 0, inst))
+		b := a.with(func(o *Options) { o.UpdateOnly, o.FileID = true, 0 })
+		c, err := b.fetchGB(id, 0, inst)
+		if err == nil && c != nil {
+			err = m.Install(c)
+		}
+		a.tally(&s, inst.Key, "HELD", err)
 	}
 	verb := "updated"
 	if m.Policy.DryRun {

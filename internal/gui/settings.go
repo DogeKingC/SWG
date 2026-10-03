@@ -10,12 +10,15 @@ import (
 	"github.com/DogeKingC/SWG/internal/manager"
 )
 
+var bgThumbsOff bool
+
 // settings are the GUI preferences saved between runs. Safety overrides are
 // deliberately not persisted: they apply to one install at a time.
 type settings struct {
 	Game          string  `json:"game"`
 	CooldownHours float64 `json:"cooldown_hours"`
 	Offline       bool    `json:"offline"`
+	NoBgThumbs    bool    `json:"no_bg_thumbs"` // don't fetch missing Workshop thumbnails in the background
 }
 
 func settingsPath() (string, error) {
@@ -46,6 +49,7 @@ func (st *settings) save() error {
 }
 
 func (st *settings) apply(o *app.Options) {
+	bgThumbsOff = st.NoBgThumbs
 	o.Game = st.Game
 	o.Offline = st.Offline
 	if st.CooldownHours >= 0 {
@@ -54,5 +58,5 @@ func (st *settings) apply(o *app.Options) {
 }
 
 func settingsFrom(o app.Options) settings {
-	return settings{Game: o.Game, CooldownHours: o.Policy.Cooldown.Hours(), Offline: o.Offline}
+	return settings{Game: o.Game, CooldownHours: o.Policy.Cooldown.Hours(), Offline: o.Offline, NoBgThumbs: bgThumbsOff}
 }
