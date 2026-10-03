@@ -132,6 +132,12 @@ func Dir(root string) (*Report, error) {
 		ext := strings.ToLower(filepath.Ext(p))
 		base := strings.ToLower(d.Name())
 		switch {
+		case ext == ".dll":
+			if lib, ok := knownLibrary(p); ok {
+				r.add(lib.severity(), "known-library", rel, 0, lib.describe())
+			} else {
+				r.add(Critical, "executable-file", rel, 0, "unknown compiled library (.dll): its code cannot be checked")
+			}
 		case executableExt[ext]:
 			r.add(Critical, "executable-file", rel, 0, "executable/script file "+ext+" has no place in a mod")
 		case nestedArchiveExt[ext]:

@@ -291,6 +291,7 @@ dialog.details:not([open]) { display: none; }
 .req:hover { background: var(--surface-2); }
 .det-actions { border-top: 1px solid var(--border); padding: 12px 22px; background: var(--surface); }
 .det-actions .warnbox { margin: 0 0 10px; }
+.risk-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
 .det-buttons { display: flex; gap: 8px; align-items: center; }
 .spacer { flex: 1; }
 .toast { display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }

@@ -19,7 +19,7 @@ func writeModZip(t *testing.T, path, script string) {
 	}
 	zw := zip.NewWriter(f)
 	w, _ := zw.Create("Mod/mod.json")
-	w.Write([]byte(`{"Name":"Test","Scripts":["script.cs"]}`))
+	w.Write([]byte(`{"Name":"Test","Author":"Tester","Scripts":["script.cs"]}`))
 	w, _ = zw.Create("Mod/script.cs")
 	w.Write([]byte(script))
 	zw.Close()
@@ -133,7 +133,7 @@ func writeVersionedZip(t *testing.T, path, version, ugc string) {
 	}
 	zw := zip.NewWriter(f)
 	w, _ := zw.Create("Mod/mod.json")
-	w.Write([]byte(`{"Name":"Quick Draw Mod","ModVersion":"` + version + `","CreatorUGCIdentity":"` + ugc + `","Scripts":["s.cs"]}`))
+	w.Write([]byte(`{"Name":"Quick Draw Mod","Author":"51804","ModVersion":"` + version + `","CreatorUGCIdentity":"` + ugc + `","Scripts":["s.cs"]}`))
 	w, _ = zw.Create("Mod/s.cs")
 	w.Write([]byte(`class A {}`))
 	zw.Close()
@@ -166,6 +166,55 @@ func TestFetchWorkshopPicksHighestModVersion(t *testing.T) {
 	if c.Mirror != "skymods:478284" || c.Version != "4.0" {
 		t.Fatalf("picked %s version %s, want skymods:478284 version 4.0", c.Mirror, c.Version)
 	}
+}
+
+// Copies with no mod.json (not a mod) or no author anywhere are never
+// installed or offered, even when their version looks highest.
+func TestFetchWorkshopSkipsCopiesWithoutModJSONOrAuthor(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	const ws = "3801154352"
+	dir, _ := CacheDir("sky:" + ws)
+	zipFiles(t, filepath.Join(dir, "topmods-1-nojson.zip"), map[string]string{"Mod/s.cs": "class A {}"})
+	zipFiles(t, filepath.Join(dir, "skymods-2-noauthor.zip"), map[string]string{
+		"Mod/mod.json": `{"Name":"X","ModVersion":"9.0","Scripts":["s.cs"]}`, "Mod/s.cs": "class A {}"})
+	zipFiles(t, filepath.Join(dir, "trueworkshop-3-ok.zip"), map[string]string{
+		"Mod/mod.json": `{"Name":"X","Author":"Someone","ModVersion":"1.0","Scripts":["s.cs"]}`, "Mod/s.cs": "class A {}"})
+	list := []Mirror{
+		{ID: "topmods:1", Source: "top-mods", Title: "X v5", Author: "Someone", VersionTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), tm: &sources.TMItem{}},
+		{ID: "skymods:2", Source: "Skymods", Title: "X", VersionTime: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), sky: &sources.SkyItem{}},
+		{ID: "trueworkshop:3", Source: "True Workshop", Reviewed: true, tw: &sources.TWItem{ID: 3, Created: "2026-10-02 07:03:50", Trust: "dev"}},
+	}
+	mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: list}
+	defer delete(mirrorMemo, ws)
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
+	c, err := (&App{Opt: DefaultOptions()}).fetchWorkshop(m, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Mirror != "trueworkshop:3" {
+		t.Fatalf("picked %s, want trueworkshop:3", c.Mirror)
+	}
+	shown := append([]Mirror(nil), list...)
+	fillModVersions(shown)
+	if got := offered(shown); len(got) != 1 || got[0].ID != "trueworkshop:3" {
+		t.Fatalf("offered %v, want only trueworkshop:3", got)
+	}
+}
+
+func zipFiles(t *testing.T, path string, files map[string]string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for n, body := range files {
+		w, _ := zw.Create(n)
+		w.Write([]byte(body))
+	}
+	zw.Close()
+	f.Close()
 }
 
 func TestTitleVersion(t *testing.T) {

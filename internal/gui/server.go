@@ -83,6 +83,7 @@ type job struct {
 	Retry    map[string]any    `json:"retry,omitempty"` // request to repeat with an override
 	Findings []string          `json:"findings,omitempty"`
 	Browser  *app.NeedsBrowser `json:"browser,omitempty"`
+	Risk     bool              `json:"risk,omitempty"` // the retry accepts CRITICAL findings: needs the typed phrase
 	opts     map[string]bool
 	logStart int
 }
@@ -343,6 +344,9 @@ func (s *server) newApp(over map[string]bool) *app.App {
 	if over["allow_high"] {
 		o.Policy.AllowHigh = true
 	}
+	if over["accept_risk"] {
+		o.Policy.AcceptRisk = true
+	}
 	if over["skip_cooldown"] {
 		o.Policy.Cooldown = 0
 	}
@@ -456,7 +460,11 @@ type actionReq struct {
 	Pinned     bool            `json:"pinned,omitempty"`
 	Override   map[string]bool `json:"override,omitempty"`
 	Mirror     string          `json:"mirror,omitempty"`
+	Confirm    string          `json:"confirm,omitempty"` // RiskPhrase, typed by the person, with override accept_risk
 }
+
+// RiskPhrase must be typed to install a mod with CRITICAL findings.
+const RiskPhrase = "I accept the risk"
 
 var errBusy = errors.New("another task is still running")
 
@@ -469,6 +477,13 @@ func (s *server) handleAction(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if req.Override["accept_risk"] {
+		// One mod at a time, and only with the phrase typed in the window.
+		if req.Confirm != RiskPhrase || len(req.Refs) > 1 || (req.Action != "install" && req.Action != "import") {
+			http.Error(w, "accepting the risk needs the confirmation phrase and a single mod", http.StatusBadRequest)
+			return
+		}
 	}
 	j, err := s.start(req)
 	if err != nil {
@@ -681,6 +696,12 @@ func (s *server) offerRetry(j *job, err error, req actionReq) {
 			return
 		}
 		switch {
+		case manager.RiskReason(r):
+			if len(req.Refs) > 1 {
+				return // one mod at a time
+			}
+			over["accept_risk"] = true
+			j.Risk = true
 		case strings.Contains(r, "--allow-high"):
 			over["allow_high"] = true
 		case strings.Contains(r, "--cooldown"):

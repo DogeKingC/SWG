@@ -140,15 +140,37 @@ func namespaceVerdict(ns string) (Severity, string, bool) {
 }
 
 var (
-	reLongB64Str   = regexp.MustCompile(`^[A-Za-z0-9+/]{120,}={0,2}$`)
-	reGamePathStr  = regexp.MustCompile(`(?i)(workshop[/\\]+content|1118200|(^|[/\\])mods([/\\]|$)|contraptions|steamapps|people playground)`)
-	reShellStr     = regexp.MustCompile(`(?i)\b(cmd(\.exe)?|powershell|pwsh|/bin/(ba)?sh|bash|wscript|cscript|rundll32|regsvr32|mshta|curl|wget)\b`)
-	sensitiveExact = map[string]bool{"process": true, "file": true, "directory": true, "assembly": true, "registry": true, "registrykey": true,
-		"webclient": true, "httpclient": true, "socket": true, "tcpclient": true, "steamugc": true, "steamfriends": true, "steamuser": true,
-		"environment": true, "marshal": true, "appdomain": true, "start": false}
-	sensitiveSubstr = []string{"system.diagnostics.process", "processstartinfo", "system.net", "webclient", "httpclient", "steamugc", "steamfriends",
-		"steamuser", "steamworks", "microsoft.win32", "system.reflection.emit", "assembly.load", "dllimport", "kernel32", "user32"}
+	reLongB64Str  = regexp.MustCompile(`^[A-Za-z0-9+/]{120,}={0,2}$`)
+	reGamePathStr = regexp.MustCompile(`(?i)(workshop[/\\]+content|1118200|(^|[/\\])mods([/\\]|$)|contraptions|steamapps|people playground)`)
+	reShellStr    = regexp.MustCompile(`(?i)\b(cmd(\.exe)?|powershell|pwsh|/bin/(ba)?sh|bash|wscript|cscript|rundll32|regsvr32|mshta|curl|wget)\b`)
+	// Names that make a reflection lookup dangerous. File and folder access
+	// through reflection gets around the game's block on System.IO (HIGH);
+	// loading code, processes, network, Steam or the registry is CRITICAL.
+	sensitiveExact = map[string]Severity{"process": Critical, "assembly": Critical, "registry": Critical, "registrykey": Critical,
+		"webclient": Critical, "httpclient": Critical, "socket": Critical, "tcpclient": Critical, "steamugc": Critical, "steamfriends": Critical,
+		"steamuser": Critical, "marshal": Critical, "appdomain": Critical, "loadfrom": Critical, "loadfile": Critical,
+		"file": High, "directory": High, "environment": High, "readallbytes": High, "writeallbytes": High, "writealltext": High}
+	sensitiveSubstr = []struct {
+		s   string
+		sev Severity
+	}{{"system.diagnostics.process", Critical}, {"processstartinfo", Critical}, {"system.net", Critical}, {"webclient", Critical},
+		{"httpclient", Critical}, {"steamugc", Critical}, {"steamfriends", Critical}, {"steamuser", Critical}, {"steamworks", Critical},
+		{"microsoft.win32", Critical}, {"system.reflection.emit", Critical}, {"system.reflection.assembly", Critical}, {"assembly.load", Critical},
+		{"system.runtime.interopservices", Critical}, {"dllimport", Critical}, {"kernel32", Critical}, {"user32", Critical},
+		{"system.io.file", High}, {"system.io.directory", High}}
 )
+
+// lastSegment turns "System.Reflection.Assembly, mscorlib" into "assembly":
+// reflection lookups name types by their full, assembly-qualified name.
+func lastSegment(s string) string {
+	if i := strings.IndexByte(s, ','); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.LastIndexByte(s, '.'); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
 
 type ref struct {
 	parts []string
@@ -314,18 +336,23 @@ func analyzeCSharp(r *Report, rel, src string) {
 	dynamic := reflectionByName || seen["dynamic-code"]
 	for _, s := range joinedStrings(toks) {
 		low := strings.ToLower(strings.Join(strings.Fields(s.text), ""))
-		if dynamic && sensitiveExact[low] {
-			hit("reflection-sensitive-type", Critical, s.line, fmt.Sprintf("string %q is used with reflection", clip(s.text)))
+		sev, ok := sensitiveExact[low]
+		if !ok {
+			sev, ok = sensitiveExact[lastSegment(low)]
 		}
+		bySubstr := false
 		for _, w := range sensitiveSubstr {
-			if strings.Contains(low, w) {
-				if dynamic {
-					hit("reflection-sensitive-type", Critical, s.line, fmt.Sprintf("string %q is used with reflection", clip(s.text)))
-				} else {
-					hit("sensitive-string", Medium, s.line, fmt.Sprintf("string mentions %q", clip(s.text)))
-				}
-				break
+			if strings.Contains(low, w.s) && (!ok || w.sev > sev) {
+				sev, ok, bySubstr = w.sev, true, true
 			}
+		}
+		switch {
+		case ok && dynamic && sev >= Critical:
+			hit("reflection-sensitive-type", sev, s.line, fmt.Sprintf("string %q is used with reflection", clip(s.text)))
+		case ok && dynamic:
+			hit("reflection-file-access", sev, s.line, fmt.Sprintf("string %q is used with reflection (gets around the game's block on file access)", clip(s.text)))
+		case bySubstr:
+			hit("sensitive-string", Medium, s.line, fmt.Sprintf("string mentions %q", clip(s.text)))
 		}
 		if reShellStr.MatchString(s.text) {
 			hit("shell-string", High, s.line, fmt.Sprintf("string names a shell or download tool: %q", clip(s.text)))

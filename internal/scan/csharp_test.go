@@ -17,6 +17,9 @@ func TestEvasionsCaught(t *testing.T) {
 		"extern":        {"class A { [System.Runtime.InteropServices.DllImport(\"k\")] static extern int F(); }", "native-interop"},
 		"shell string":  {"class A { string s = \"powershell -c x\"; }", "shell-string"},
 		"concat refl":   {"class A { void B() { var t = System.Type.GetType(\"System.Diag\" + \"nostics.Process\"); } }", "reflection-sensitive-type"},
+		// ZeroOne Core's loader reaches Assembly.Load(byte[]) this way.
+		"qualified refl": {"using System; class A { void B() { var d = Type.GetType(\"System.IO.Directory, mscorlib\"); var a = Type.GetType(\"System.Reflection.Assembly\"); } }", "reflection-sensitive-type"},
+		"refl file io":   {"using System; class A { void B() { Type.GetType(\"System.IO.Directory\").GetMethod(\"Exists\"); } }", "reflection-file-access"},
 	}
 	for name, c := range cases {
 		if r := Source("x.cs", c.src); !has(r, c.rule) {

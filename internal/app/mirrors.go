@@ -34,7 +34,8 @@ type Mirror struct {
 	ModVersion  string    `json:"mod_version,omitempty"`   // from the copy's mod.json, once downloaded
 	TitleVer    string    `json:"title_version,omitempty"` // version written in the listing's title, e.g. "V:2.8"
 	Gone        bool      `json:"gone,omitempty"`          // the mirror no longer has the file
-	Reviewed    bool      `json:"reviewed,omitempty"`      // True Workshop: reviewed by its maintainers
+	invalid     string    // set once downloaded: why the copy is not offered
+	Reviewed    bool      `json:"reviewed,omitempty"` // True Workshop: reviewed by its maintainers
 
 	sky *sources.SkyItem
 	tm  *sources.TMItem
@@ -307,6 +308,7 @@ var (
 type copyInfo struct {
 	version, ugc string
 	gone         bool
+	invalid      string // why the copy is not offered: no mod.json, no author
 }
 
 // Authors learned from downloaded copies' mod.json, by Workshop ID, for
@@ -336,9 +338,22 @@ func fillModVersions(list []Mirror) {
 	defer modInfoMu.Unlock()
 	for i := range list {
 		ci := modInfo[list[i].ID]
-		list[i].ModVersion, list[i].Gone = ci.version, ci.gone
+		list[i].ModVersion, list[i].Gone, list[i].invalid = ci.version, ci.gone, ci.invalid
 		list[i].TitleVer = TitleVersion(list[i].Title)
 	}
+}
+
+// offered drops the copies a person should not be offered: files the mirror
+// no longer has, and downloaded copies that turned out to have no mod.json
+// (not a People Playground mod) or no author anywhere.
+func offered(list []Mirror) []Mirror {
+	var out []Mirror
+	for _, mr := range list {
+		if !mr.Gone && mr.invalid == "" {
+			out = append(out, mr)
+		}
+	}
+	return out
 }
 
 var reTitleVersion = regexp.MustCompile(`(?i)(?:\bv(?:er(?:sion)?)?\s*[:.]?\s*|\s)(\d+(?:\.\d+)*[a-z]?)\s*\)?\s*$`)
@@ -495,10 +510,24 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			// check does not apply; the cooldown applies unless reviewed.
 			c.SteamOrig, c.Reviewed, c.Revision = false, mr.Reviewed, mr.tw.CreatedTime()
 		}
-		version, ugc, clean, max := inspect(m, c)
+		in := inspect(m, c)
+		version, ugc, clean, max := in.version, in.ugc, in.clean, in.max
+		invalid := ""
+		switch {
+		case m == nil:
+		case !in.modJSON && !in.contraption:
+			invalid = "no mod.json, so it is not a People Playground mod"
+		case !in.contraption && in.author == "" && strings.TrimSpace(mr.Author) == "":
+			invalid = "no author in its mod.json or on the mirror page"
+		}
 		modInfoMu.Lock()
-		modInfo[mr.ID] = copyInfo{version: version, ugc: ugc}
+		modInfo[mr.ID] = copyInfo{version: version, ugc: ugc, invalid: invalid}
 		modInfoMu.Unlock()
+		if invalid != "" {
+			a.logf("  this copy has %s; skipped", invalid)
+			gone = append(gone, mr.Source+": "+invalid)
+			continue
+		}
 		if ugc != "" && ugc != ws {
 			a.logf("  this copy's mod.json belongs to Workshop item %s, not %s; skipped", ugc, ws)
 			continue
@@ -559,15 +588,26 @@ func orUnknown(s string) string {
 	return s
 }
 
-// inspect stages a copy and returns its mod.json ModVersion and
-// CreatorUGCIdentity (the Workshop ID) and whether it scans clean.
-func inspect(m *manager.Manager, c *manager.Candidate) (version, ugc string, clean bool, max string) {
+// inspected is what staging one mirror copy showed.
+type inspected struct {
+	version, ugc, author string
+	modJSON, contraption bool
+	clean                bool
+	max                  string
+}
+
+// inspect stages a copy and reads its mod.json (ModVersion, Author and
+// CreatorUGCIdentity, the Workshop ID) and whether it scans clean.
+func inspect(m *manager.Manager, c *manager.Candidate) inspected {
+	var in inspected
 	if m == nil {
-		return "", "", true, ""
+		in.clean = true
+		return in
 	}
 	dir, rep, err := m.Stage(c)
 	if err != nil {
-		return "", "", false, err.Error()
+		in.max = err.Error()
+		return in
 	}
 	defer os.RemoveAll(dir)
 	if roots, _ := modRoots(dir); len(roots) > 0 {
@@ -577,21 +617,25 @@ func inspect(m *manager.Manager, c *manager.Candidate) (version, ugc string, cle
 			CreatorUGCIdentity any    `json:"CreatorUGCIdentity"`
 		}
 		if b, err := os.ReadFile(filepath.Join(roots[0], "mod.json")); err == nil {
-			json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj)
+			in.modJSON = json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj) == nil
 		}
-		version = strings.TrimSpace(mj.ModVersion)
+		in.version, in.author = strings.TrimSpace(mj.ModVersion), strings.TrimSpace(mj.Author)
 		if mj.CreatorUGCIdentity != nil {
-			ugc = strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
-			if ugc == "0" || ugc == "<nil>" {
-				ugc = ""
+			in.ugc = strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
+			if in.ugc == "0" || in.ugc == "<nil>" {
+				in.ugc = ""
 			}
 		}
-		learnAuthor(ugc, mj.Author)
+		learnAuthor(in.ugc, mj.Author)
+	} else if names, _ := contraptions(dir); len(names) > 0 {
+		in.contraption = true
 	}
 	if rep.Max() >= scan.High {
-		return version, ugc, false, rep.Max().String()
+		in.max = rep.Max().String()
+		return in
 	}
-	return version, ugc, true, ""
+	in.clean = true
+	return in
 }
 
 // scansClean reports whether a candidate has no HIGH or CRITICAL findings.

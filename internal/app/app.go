@@ -709,7 +709,7 @@ func (a *App) Update(m *manager.Manager) Summary {
 			if err == nil && inst.Adopted && inst.ArchiveSHA == "" {
 				// Found already installed: we never saw its archive, so compare
 				// mod.json versions instead of file checksums.
-				if ver, _, _, _ := inspect(m, c); CompareVersions(ver, inst.Version) <= 0 {
+				if ver := inspect(m, c).version; CompareVersions(ver, inst.Version) <= 0 {
 					inst.ArchiveSHA = c.ArchiveSHA
 					m.State.Save()
 					s.Current++

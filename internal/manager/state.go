@@ -15,24 +15,25 @@ import (
 )
 
 type Installed struct {
-	Key         string            `json:"key"` // gb:<modid>, sky:<workshopid>, local:<sha256 prefix>
-	Name        string            `json:"name"`
-	Author      string            `json:"author,omitempty"`
-	Source      string            `json:"source"`
-	Folders     []string          `json:"folders"` // folder names under Mods/
-	FileID      int               `json:"file_id,omitempty"`
-	Version     string            `json:"version,omitempty"`
-	Mirror      string            `json:"mirror,omitempty"`   // Workshop items: mirror copy installed
-	Kind        string            `json:"kind,omitempty"`     // "mod" (default) or "contraption"
-	Adopted     bool              `json:"adopted,omitempty"`  // found already installed, not installed by ppgmods
-	ScanMax     string            `json:"scan_max,omitempty"` // highest scanner finding at install/adoption
-	Aliases     []string          `json:"aliases,omitempty"`  // other refs for the same mod, e.g. tw:30 for sky:2516131949
-	Revision    time.Time         `json:"revision,omitempty"` // upload/revision time at the source
-	ArchiveSHA  string            `json:"archive_sha256,omitempty"`
-	Files       map[string]string `json:"files"` // "<folder>/<rel>" -> sha256
-	Findings    []string          `json:"findings,omitempty"`
-	InstalledAt time.Time         `json:"installed_at"`
-	Pinned      bool              `json:"pinned,omitempty"`
+	Key          string            `json:"key"` // gb:<modid>, sky:<workshopid>, local:<sha256 prefix>
+	Name         string            `json:"name"`
+	Author       string            `json:"author,omitempty"`
+	Source       string            `json:"source"`
+	Folders      []string          `json:"folders"` // folder names under Mods/
+	FileID       int               `json:"file_id,omitempty"`
+	Version      string            `json:"version,omitempty"`
+	Mirror       string            `json:"mirror,omitempty"`        // Workshop items: mirror copy installed
+	Kind         string            `json:"kind,omitempty"`          // "mod" (default) or "contraption"
+	Adopted      bool              `json:"adopted,omitempty"`       // found already installed, not installed by ppgmods
+	ScanMax      string            `json:"scan_max,omitempty"`      // highest scanner finding at install/adoption
+	RiskAccepted bool              `json:"risk_accepted,omitempty"` // installed despite CRITICAL findings, by the person's choice
+	Aliases      []string          `json:"aliases,omitempty"`       // other refs for the same mod, e.g. tw:30 for sky:2516131949
+	Revision     time.Time         `json:"revision,omitempty"`      // upload/revision time at the source
+	ArchiveSHA   string            `json:"archive_sha256,omitempty"`
+	Files        map[string]string `json:"files"` // "<folder>/<rel>" -> sha256
+	Findings     []string          `json:"findings,omitempty"`
+	InstalledAt  time.Time         `json:"installed_at"`
+	Pinned       bool              `json:"pinned,omitempty"`
 }
 
 type State struct {

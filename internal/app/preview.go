@@ -55,6 +55,7 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 		if list, merr := WorkshopMirrors(strings.TrimPrefix(ref, "sky:"), a.Opt.Name); merr == nil {
 			p.Mirrors = append([]Mirror(nil), list...)
 			fillModVersions(p.Mirrors)
+			p.Mirrors = offered(p.Mirrors)
 		}
 	}
 	var nb *NeedsBrowser
@@ -114,6 +115,13 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 			for _, r := range rej.Reasons {
 				if !manager.Overridable(r) {
 					p.Verdict = "blocked"
+				}
+			}
+			if p.Verdict == "review" {
+				for _, r := range rej.Reasons {
+					if manager.RiskReason(r) {
+						p.Verdict = "risk" // CRITICAL, but the person may accept it
+					}
 				}
 			}
 		} else {

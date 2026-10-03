@@ -1,6 +1,8 @@
 package scan
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,5 +101,25 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestKnownLibrary(t *testing.T) {
+	if len(knownLibsJSON) == 0 {
+		t.Fatal("knownlibs.json not embedded")
+	}
+	dir := t.TempDir()
+	// Not a known build: stays CRITICAL.
+	os.WriteFile(filepath.Join(dir, "Mono.Cecil.dll"), []byte("MZ fake"), 0o644)
+	r, err := Dir(dir)
+	if err != nil || !has(r, "executable-file") {
+		t.Fatalf("unknown dll: %+v %v", r.Findings, err)
+	}
+	sum := sha256.Sum256([]byte("MZ fake"))
+	knownLibs[hex.EncodeToString(sum[:])] = knownLib{Name: "Mono.Cecil", Version: "0.10.4"}
+	defer delete(knownLibs, hex.EncodeToString(sum[:]))
+	r, _ = Dir(dir)
+	if has(r, "executable-file") || !has(r, "known-library") || r.Max() != High {
+		t.Fatalf("known dll: %+v", r.Findings)
 	}
 }

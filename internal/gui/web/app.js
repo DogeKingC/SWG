@@ -56,6 +56,7 @@ function dialog(title, body, extra) {
   b.replaceChildren(...[].concat(body));
   const x = $("#dlgExtra");
   x.hidden = !extra;
+  x.disabled = false;
   x.onclick = null;
   if (extra) {
     x.textContent = extra.label;
@@ -64,6 +65,26 @@ function dialog(title, body, extra) {
   $("#dialog").showModal();
 }
 $("#dlgClose").onclick = () => $("#dialog").close();
+
+// riskDialog asks the person to type RISK_PHRASE before installing a mod
+// with CRITICAL findings. The server refuses the override without it.
+const RISK_PHRASE = "I accept the risk";
+function riskDialog(name, findings, go) {
+  const input = el("input", { type: "text", class: "risk-input", autocomplete: "off", spellcheck: "false", "aria-label": "Confirmation phrase" });
+  const body = [
+    el("p", {}, el("b", {}, name), " has CRITICAL findings: code that could harm your PC or your Steam account if it is malicious."),
+    findings && findings.length ? el("ul", { class: "findings mono small" }, findings.filter((f) => f.startsWith("[CRITICAL")).map((f) => el("li", {}, f))) : null,
+    el("div", { class: "warnbox" }, "Mods run with full access to your PC. Only continue if you know the author, have read the code, or got the mod from them directly. Findings that match what the worm did can't be accepted here."),
+    el("p", {}, "Type ", el("code", {}, RISK_PHRASE), " to install it anyway:"),
+    input,
+  ];
+  dialog("Accept the risk?", body, { label: "Install anyway", run: () => go(RISK_PHRASE) });
+  const x = $("#dlgExtra");
+  x.className = "btn btn-danger";
+  x.disabled = true;
+  input.oninput = () => (x.disabled = input.value.trim() !== RISK_PHRASE);
+  input.focus();
+}
 
 // ---------- navigation ----------
 function show(view) {
@@ -153,6 +174,7 @@ function renderInstalled() {
           m.item_kind === "contraption" ? el("span", { class: "badge badge-kind" }, " contraption") : null,
           m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
           m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
+          m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
           m.author ? "by " + m.author + " · " : "", m.key, " · installed ", (m.installed_at || "").slice(0, 10),
@@ -268,7 +290,10 @@ function jobDone(j) {
     return;
   }
   $("#dlgExtra").className = "btn btn-danger";
-  if (j.retry) {
+  if (j.retry && j.risk) {
+    const name = (j.retry.refs || [j.retry.path || "this mod"])[0];
+    extra = { label: "Accept the risk…", run: () => riskDialog(name, j.findings, (confirm) => run({ ...j.retry, confirm }, "Installing (risk accepted)")) };
+  } else if (j.retry) {
     body.push(el("div", { class: "warnbox" }, "Only continue if you have read the findings above and trust this mod's author. Mods run with full access to your PC."));
     extra = { label: "Install anyway", run: () => run(j.retry, "Installing (override)") };
   }
@@ -529,8 +554,8 @@ function markInstalledCards() {
   updateSelection();
 }
 
-function install(ref, name, override, mirror) {
-  run({ action: "install", refs: [ref], override, mirror: mirror || "" }, "Installing " + (name || ref));
+function install(ref, name, override, mirror, confirm) {
+  run({ action: "install", refs: [ref], override, mirror: mirror || "", confirm: confirm || "" }, "Installing " + (name || ref));
 }
 
 // ---------- details ----------
@@ -653,6 +678,7 @@ function showCheck(m, p) {
     ok: ["verdict-ok", "✓ Passed every check. Ready to install."],
     review: ["verdict-warn", "⚠ Needs your review before installing."],
     blocked: ["verdict-bad", "✕ ppgmods will not install this mod."],
+    risk: ["verdict-bad", "✕ CRITICAL findings. ppgmods won't install this unless you read them and accept the risk."],
     browser: ["verdict-warn", "modsbase.com didn't hand ppgmods the file from this connection."],
     unavailable: ["verdict-bad", "✕ This mod's mirror copy is gone."],
   }[p.verdict] || ["verdict-bad", p.verdict];
@@ -694,6 +720,15 @@ function setDetailActions(m, p) {
   if (p.verdict === "browser") {
     btn.textContent = "Open download page";
     btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }, detailsMirror); };
+    return;
+  }
+  if (p.verdict === "risk") {
+    const over = { accept_risk: true };
+    for (const r of p.reasons || []) if (r.includes("--cooldown")) over.skip_cooldown = true;
+    btn.className = "btn btn-danger";
+    btn.textContent = "Accept the risk…";
+    warn.hidden = false;
+    btn.onclick = () => { $("#details").close(); riskDialog(m.name, p.findings, (confirm) => install(m.ref, m.name, over, detailsMirror, confirm)); };
     return;
   }
   if (p.verdict === "review") {

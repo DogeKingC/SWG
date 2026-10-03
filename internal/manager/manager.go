@@ -31,7 +31,8 @@ var FebruaryWindow = [2]time.Time{
 
 type Policy struct {
 	AllowHigh        bool          // install despite HIGH findings
-	AllowCritical    bool          // install despite CRITICAL findings
+	AllowCritical    bool          // install despite CRITICAL findings (command line)
+	AcceptRisk       bool          // install despite CRITICAL findings, except the worm's signatures (window)
 	AllowAfterCutoff bool          // accept Steam-origin copies revised after WormCutoff
 	Cooldown         time.Duration // refuse source files younger than this
 	AllowNewFindings bool          // updates: accept findings the installed version did not have
@@ -142,8 +143,12 @@ func (m *Manager) Check(c *Candidate, rep *scan.Report, prev *Installed) error {
 	}
 	switch max := rep.Max(); {
 	case max >= scan.Critical && !p.AllowCritical:
-		reasons = append(reasons, "CRITICAL scan findings (override: --allow-critical, only if you have read the code)")
-	case max >= scan.High && !p.AllowHigh && !p.AllowCritical:
+		if worm := wormFindings(rep); len(worm) > 0 {
+			reasons = append(reasons, "CRITICAL findings match what the worm did ("+strings.Join(worm, ", ")+") (override: --allow-critical, command line only, only if you have read the code)")
+		} else if !p.AcceptRisk {
+			reasons = append(reasons, "CRITICAL scan findings (override: accept the risk after reading the findings, or --allow-critical)")
+		}
+	case max >= scan.High && !p.AllowHigh && !p.AllowCritical && !p.AcceptRisk:
 		reasons = append(reasons, "HIGH scan findings (override: --allow-high after reviewing them)")
 	}
 	if prev != nil && !p.AllowNewFindings {
@@ -273,7 +278,8 @@ func (m *Manager) Install(c *Candidate) error {
 	inst := &Installed{
 		Key: c.Key, Name: c.Name, Source: c.Source, FileID: c.FileID, Version: c.Version, Mirror: c.Mirror,
 		Revision: c.Revision, ArchiveSHA: c.ArchiveSHA, Files: map[string]string{}, InstalledAt: time.Now().UTC(), Kind: kind,
-		ScanMax: maxName(rep),
+		ScanMax:      maxName(rep),
+		RiskAccepted: rep.Max() >= scan.Critical && m.Policy.AcceptRisk && !m.Policy.AllowCritical,
 	}
 	if prev != nil {
 		inst.Pinned = prev.Pinned
@@ -556,7 +562,31 @@ func maxName(rep *scan.Report) string {
 // in an update. CRITICAL findings and the worm cutoff need the command line;
 // the blocklist, failed source checks and checksum mismatches never can be.
 func Overridable(reason string) bool {
-	return strings.Contains(reason, "--allow-high") || strings.Contains(reason, "--cooldown") || strings.Contains(reason, "--allow-new-findings")
+	return RiskReason(reason) || strings.Contains(reason, "--allow-high") || strings.Contains(reason, "--cooldown") || strings.Contains(reason, "--allow-new-findings")
+}
+
+// RiskReason reports a CRITICAL refusal the person may accept in the window
+// (with a typed confirmation).
+func RiskReason(reason string) bool { return strings.Contains(reason, "override: accept the risk") }
+
+// wormRules are what the September 2026 worm did: spread through Workshop
+// uploads, spam friends, take over accounts, copy itself into other mods and
+// delete game files. A finding like this is never accepted from the window.
+var wormRules = map[string]bool{
+	"steam-ugc": true, "steam-friends": true, "steam-auth": true, "self-replication": true,
+	"game-path-tamper": true, "mass-delete": true, "encoded-code": true, "symlink": true, "blocklisted": true,
+}
+
+func wormFindings(rep *scan.Report) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range rep.Findings {
+		if f.Severity >= scan.Critical && wormRules[f.Rule] && !seen[f.Rule] {
+			seen[f.Rule] = true
+			out = append(out, f.Rule)
+		}
+	}
+	return out
 }
 
 const (
