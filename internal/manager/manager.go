@@ -55,7 +55,8 @@ type Candidate struct {
 	FileID     int
 	Version    string
 	Revision   time.Time
-	SteamOrig  bool // came from the Steam Workshop (mirror, cache or backup)
+	SteamOrig  bool   // came from the Steam Workshop (mirror, cache or backup)
+	Mirror     string // which mirror copy, e.g. topmods:4482
 	ArchiveSHA string
 }
 
@@ -254,7 +255,7 @@ func (m *Manager) Install(c *Candidate) error {
 	}
 
 	inst := &Installed{
-		Key: c.Key, Name: c.Name, Source: c.Source, FileID: c.FileID, Version: c.Version,
+		Key: c.Key, Name: c.Name, Source: c.Source, FileID: c.FileID, Version: c.Version, Mirror: c.Mirror,
 		Revision: c.Revision, ArchiveSHA: c.ArchiveSHA, Files: map[string]string{}, InstalledAt: time.Now().UTC(),
 	}
 	if prev != nil {

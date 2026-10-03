@@ -438,6 +438,7 @@ type actionReq struct {
 	Apply      bool            `json:"apply,omitempty"`
 	Pinned     bool            `json:"pinned,omitempty"`
 	Override   map[string]bool `json:"override,omitempty"`
+	Mirror     string          `json:"mirror,omitempty"`
 }
 
 var errBusy = errors.New("another task is still running")
@@ -575,6 +576,7 @@ func (s *server) do(j *job, req actionReq) error {
 	if err != nil {
 		return err
 	}
+	a.Opt.Mirror = req.Mirror
 	switch req.Action {
 	case "install":
 		if len(req.Refs) == 0 {
@@ -637,7 +639,7 @@ func (s *server) offerRetry(j *job, err error, req actionReq) {
 		over[k] = v
 	}
 	retry := func() {
-		j.Retry = map[string]any{"action": req.Action, "refs": req.Refs, "path": req.Path, "workshop_id": req.WorkshopID, "override": over}
+		j.Retry = map[string]any{"action": req.Action, "refs": req.Refs, "path": req.Path, "workshop_id": req.WorkshopID, "override": over, "mirror": req.Mirror}
 	}
 	var nb *app.NeedsBrowser
 	if errors.As(err, &nb) {
@@ -764,7 +766,8 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	case "url":
 		u := r.URL.Query().Get("url")
 		if strings.HasPrefix(u, "https://gamebanana.com/") || strings.HasPrefix(u, "https://steamcommunity.com/") ||
-			strings.HasPrefix(u, "https://github.com/DogeKingC/SWG") || strings.HasPrefix(u, "https://catalogue.smods.ru/") {
+			strings.HasPrefix(u, "https://github.com/DogeKingC/SWG") || strings.HasPrefix(u, "https://catalogue.smods.ru/") ||
+			strings.HasPrefix(u, "https://top-mods.com/") {
 			app.OpenBrowser(u)
 			writeJSON(w, map[string]bool{"ok": true})
 			return
@@ -784,9 +787,10 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 type detailsView struct {
 	app.SearchResult
 	sources.Details
-	Installed bool   `json:"installed"`
-	Page      string `json:"page"` // the mod's page on GameBanana / Steam
-	Revision  string `json:"revision,omitempty"`
+	Installed bool         `json:"installed"`
+	Page      string       `json:"page"` // the mod's page on GameBanana / Steam
+	Mirrors   []app.Mirror `json:"mirrors,omitempty"`
+	Revision  string       `json:"revision,omitempty"`
 }
 
 // handleDetails returns the overview of one mod (description, images,
@@ -819,22 +823,49 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		}
 	case strings.HasPrefix(ref, "sky:"):
 		ws := strings.TrimPrefix(ref, "sky:")
-		it, err := sources.SkyByWorkshopID(ws)
+		mirrors, err := app.WorkshopMirrors(ws, r.URL.Query().Get("name"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		d, err := sources.SkyDetails(it.PageURL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
+		newest := mirrors[0]
+		v.SearchResult = app.SearchResult{Ref: ref, Source: "Steam Workshop", Name: newest.Title, Author: newest.Author, Date: newest.Version,
+			Size: newest.Size, URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, AfterCutoff: true}
+		v.Page = v.SearchResult.URL
+		for _, mr := range mirrors {
+			if !mr.AfterCutoff {
+				v.AfterCutoff = false
+			}
+			if v.Image == "" || mr.Source == "top-mods" && mr.Image != "" {
+				v.Image = mr.Image
+			}
+			if v.Author == "" {
+				v.Author = mr.Author
+			}
 		}
-		v.SearchResult = app.SearchResult{Ref: ref, Source: "Skymods", Name: it.Title, Author: it.Author, Date: app.FmtTime(it.Revision),
-			Size: it.Size, URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, Image: it.Image,
-			AfterCutoff: !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff)}
-		v.Details, v.Page = *d, v.SearchResult.URL
-		if !it.Revision.IsZero() {
-			v.Revision = it.Revision.Format("2006-01-02 15:04 UTC")
+		v.Mirrors = mirrors
+		// Description and required items: Skymods has the full Steam text;
+		// top-mods has its own copy of the description.
+		for _, mr := range mirrors {
+			if mr.Source == "Skymods" {
+				if d, err := sources.SkyDetails(mr.Page); err == nil {
+					v.Details = *d
+					break
+				}
+			}
+		}
+		if v.Description == "" {
+			for _, mr := range mirrors {
+				if mr.Source == "top-mods" {
+					if it, err := sources.TMDetails(mr.Page); err == nil && it.Description != "" {
+						v.Description = it.Description
+						break
+					}
+				}
+			}
+		}
+		if v.Image != "" {
+			v.Images = append([]string{v.Image}, v.Images...)
 		}
 	default:
 		http.Error(w, "unknown ref", http.StatusBadRequest)
@@ -856,6 +887,7 @@ func (s *server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref := app.NormalizeRef(r.URL.Query().Get("ref"))
+	a.Opt.Mirror = r.URL.Query().Get("mirror")
 	s.logf("previewing %s", ref)
 	p, err := a.Preview(m, ref)
 	if err != nil {

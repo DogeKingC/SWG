@@ -30,6 +30,8 @@ type Preview struct {
 	Reasons     []string      `json:"reasons,omitempty"`
 	Thumb       bool          `json:"thumb"`
 	Browser     *NeedsBrowser `json:"browser,omitempty"`
+	Mirrors     []Mirror      `json:"mirrors,omitempty"` // Workshop items: every mirror copy, newest first
+	Chosen      string        `json:"chosen,omitempty"`  // the copy this preview checked
 }
 
 type modJSON struct {
@@ -45,7 +47,10 @@ type modJSON struct {
 func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 	ref = NormalizeRef(ref)
 	p := &Preview{Ref: ref}
-	c, err := a.Fetch(ref, nil)
+	if strings.HasPrefix(ref, "sky:") {
+		p.Mirrors, _ = WorkshopMirrors(strings.TrimPrefix(ref, "sky:"), a.Opt.Name)
+	}
+	c, err := a.Fetch(m, ref, nil)
 	var nb *NeedsBrowser
 	var rej *manager.Rejection
 	var un *Unavailable
@@ -68,7 +73,7 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	p.Name, p.Files, p.Scripts = c.Name, rep.Files, rep.Scripts
+	p.Name, p.Files, p.Scripts, p.Chosen = c.Name, rep.Files, rep.Scripts, c.Mirror
 	p.ScanMax = "none"
 	if rep.Max() >= 0 {
 		p.ScanMax = rep.Max().String()

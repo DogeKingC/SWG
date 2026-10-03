@@ -28,6 +28,7 @@ type Options struct {
 	Game, Dest, WorkshopID, Name string
 	Downloads                    string        // browser download folder to watch
 	Wait                         time.Duration // how long to wait for a browser download
+	Mirror                       string        // Workshop items: use this mirror copy ("skymods:<id>", "topmods:<id>") instead of choosing
 	NoWatch, Yes, Offline        bool
 	BrowserFallback              bool // on a modsbase refusal, open the browser and watch Downloads
 	UpdateOnly                   bool // fetch: skip when the installed file is already the newest
@@ -97,52 +98,128 @@ func HumanSize(n int64) string {
 // ---- search ----
 
 type SearchResult struct {
-	Ref         string `json:"ref"` // gb:<id> or sky:<workshop id>
-	Source      string `json:"source"`
-	Name        string `json:"name"`
-	Author      string `json:"author"`
-	Category    string `json:"category,omitempty"`
-	Date        string `json:"date"`
-	Size        string `json:"size,omitempty"`
-	URL         string `json:"url"`
-	Image       string `json:"image,omitempty"`
-	AfterCutoff bool   `json:"after_cutoff,omitempty"`
+	Ref         string   `json:"ref"` // gb:<id> or sky:<workshop id>
+	Source      string   `json:"source"`
+	Name        string   `json:"name"`
+	Author      string   `json:"author"`
+	Category    string   `json:"category,omitempty"`
+	Date        string   `json:"date"`
+	Size        string   `json:"size,omitempty"`
+	URL         string   `json:"url"`
+	Image       string   `json:"image,omitempty"`
+	AfterCutoff bool     `json:"after_cutoff,omitempty"` // Workshop: every known copy is after the cutoff
+	Mirrors     []string `json:"mirrors,omitempty"`      // Workshop: "top-mods 19.09.2026", ...
+
+	newest time.Time
 }
 
 type SearchResults struct {
 	GameBanana []SearchResult `json:"gamebanana"`
-	Skymods    []SearchResult `json:"skymods"`
+	Workshop   []SearchResult `json:"workshop"` // deleted Steam Workshop items, merged across mirrors
 	Errors     []string       `json:"errors,omitempty"`
 }
 
+// Search queries GameBanana and both Workshop mirrors. Skymods and top-mods
+// results for the same Workshop item are merged into one entry.
 func Search(q string, page int) SearchResults {
 	var r SearchResults
-	if gb, err := sources.GBSearch(q, page); err != nil {
-		r.Errors = append(r.Errors, "GameBanana: "+err.Error())
-	} else {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	addErr := func(e string) { mu.Lock(); r.Errors = append(r.Errors, e); mu.Unlock() }
+	var sky []sources.SkyItem
+	var tm []*sources.TMItem
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		gb, err := sources.GBSearch(q, page)
+		if err != nil {
+			addErr("GameBanana: " + err.Error())
+			return
+		}
 		for _, m := range gb {
 			r.GameBanana = append(r.GameBanana, SearchResult{
 				Ref: fmt.Sprintf("gb:%d", m.ID), Source: "GameBanana", Name: m.Name, Author: m.Submitter.Name,
 				Category: m.Category.Name, Date: time.Unix(m.Modified, 0).Format("2006-01-02"), URL: m.URL, Image: m.Thumb(),
 			})
 		}
-	}
-	var sky []sources.SkyItem
-	var err error
-	if strings.TrimSpace(q) == "" {
-		sky, err = sources.SkyLatest(page)
-	} else {
-		sky, err = sources.SkySearch(q, page)
-	}
-	if err != nil {
-		r.Errors = append(r.Errors, "Skymods: "+err.Error())
+	}()
+	go func() {
+		defer wg.Done()
+		var err error
+		if strings.TrimSpace(q) == "" {
+			sky, err = sources.SkyLatest(page)
+		} else {
+			sky, err = sources.SkySearch(q, page)
+		}
+		if err != nil {
+			addErr("Skymods: " + err.Error())
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		var list []sources.TMSummary
+		var err error
+		if strings.TrimSpace(q) == "" {
+			list, err = sources.TMLatest(page)
+		} else {
+			list, err = sources.TMSearch(q, page)
+		}
+		if err != nil {
+			addErr("top-mods: " + err.Error())
+			return
+		}
+		var urls []string
+		for i, s := range list {
+			if i < 12 {
+				urls = append(urls, s.URL)
+			}
+		}
+		tm = tmDetailsAll(urls)
+	}()
+	wg.Wait()
+
+	byWS := map[string]*SearchResult{}
+	var order []string
+	add := func(ws string, mr Mirror) {
+		rememberTitle(ws, mr.Title, func() string {
+			if mr.tm != nil {
+				return mr.tm.URL
+			}
+			return ""
+		}())
+		e := byWS[ws]
+		if e == nil {
+			e = &SearchResult{Ref: "sky:" + ws, Source: "Steam Workshop", Name: mr.Title, Author: mr.Author,
+				URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, AfterCutoff: true}
+			byWS[ws] = e
+			order = append(order, ws)
+		}
+		if mr.Source == "top-mods" && mr.Image != "" {
+			e.Image = mr.Image // hosted by top-mods: still there after Valve's deletion
+		} else if e.Image == "" {
+			e.Image = mr.Image
+		}
+		if e.Author == "" {
+			e.Author = mr.Author
+		}
+		e.Mirrors = append(e.Mirrors, mr.Source+" "+mr.Version)
+		if !mr.AfterCutoff {
+			e.AfterCutoff = false
+		}
+		if e.newest.IsZero() || mr.VersionTime.After(e.newest) {
+			e.newest, e.Date, e.Size = mr.VersionTime, mr.Version, mr.Size
+		}
 	}
 	for _, it := range sky {
-		r.Skymods = append(r.Skymods, SearchResult{
-			Ref: "sky:" + it.WorkshopID, Source: "Skymods", Name: it.Title, Author: it.Author,
-			Date: FmtTime(it.Revision), Size: it.Size, URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + it.WorkshopID, Image: it.Image,
-			AfterCutoff: !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff),
-		})
+		add(it.WorkshopID, skyMirror(it))
+	}
+	for _, it := range tm {
+		if it.WorkshopID != "" {
+			add(it.WorkshopID, tmMirror(it))
+		}
+	}
+	for _, ws := range order {
+		r.Workshop = append(r.Workshop, *byWS[ws])
 	}
 	return r
 }
@@ -165,6 +242,12 @@ func NormalizeRef(ref string) string {
 	if reWorkshopDir.MatchString(ref) {
 		return "sky:" + ref
 	}
+	if strings.Contains(ref, "top-mods.com/mods/people-playground/") {
+		if it, err := sources.TMDetails(ref); err == nil && it.WorkshopID != "" {
+			rememberTitle(it.WorkshopID, it.Title, ref)
+			return "sky:" + it.WorkshopID
+		}
+	}
 	return ref
 }
 
@@ -185,7 +268,7 @@ func (e *NeedsBrowser) Error() string {
 // Workshop URL.
 func (a *App) Install(m *manager.Manager, ref string) error {
 	ref = NormalizeRef(ref)
-	c, err := a.Fetch(ref, m.State.Mods[ref])
+	c, err := a.Fetch(m, ref, m.State.Mods[ref])
 	var nb *NeedsBrowser
 	if errors.As(err, &nb) && a.Opt.BrowserFallback {
 		c, err = a.viaBrowser(nb)
@@ -199,7 +282,7 @@ func (a *App) Install(m *manager.Manager, ref string) error {
 // Fetch downloads (or reuses the cached download of) a mod and returns it as
 // an install candidate. prev is the installed version, if any; for GameBanana
 // a nil candidate with nil error means prev is already the newest file.
-func (a *App) Fetch(ref string, prev *manager.Installed) (*manager.Candidate, error) {
+func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*manager.Candidate, error) {
 	// One download per mod at a time: a preview and an install of the same
 	// mod share the cached file.
 	mu, _ := fetchLocks.LoadOrStore(ref, &sync.Mutex{})
@@ -213,7 +296,7 @@ func (a *App) Fetch(ref string, prev *manager.Installed) (*manager.Candidate, er
 		}
 		return a.fetchGB(id, a.Opt.FileID, prev)
 	case strings.HasPrefix(ref, "sky:"):
-		return a.fetchSky(strings.TrimPrefix(ref, "sky:"))
+		return a.fetchWorkshop(m, strings.TrimPrefix(ref, "sky:"))
 	}
 	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, or a GameBanana/Steam Workshop link", ref)
 }
@@ -318,88 +401,6 @@ func fileMD5(p string) (string, error) {
 type Unavailable struct{ Reason string }
 
 func (e *Unavailable) Error() string { return e.Reason }
-
-// fetchSky gets the Skymods mirror copy of a Workshop item through
-// modsbase.com's own "create download link" step, trying each copy Skymods
-// lists until one downloads.
-func (a *App) fetchSky(ws string) (*manager.Candidate, error) {
-	copies, err := sources.SkyCopies(ws)
-	if err != nil {
-		return nil, err
-	}
-	var browser *NeedsBrowser
-	var gone error
-	for _, it := range copies {
-		a.logf("Skymods: %s by %s (Workshop %s), revision %s, %s", it.Title, it.Author, it.WorkshopID, FmtTime(it.Revision), it.Size)
-		if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) && !a.Opt.Policy.AllowAfterCutoff {
-			if len(copies) == 1 {
-				return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
-			}
-			a.logf("  skipped: revised after the worm cutoff")
-			continue
-		}
-		if it.DownloadURL == "" {
-			gone = fmt.Errorf("Skymods has no download for this item (%s)", it.PageURL)
-			continue
-		}
-		c, err := a.fetchSkyCopy(it)
-		var nb *NeedsBrowser
-		switch {
-		case err == nil:
-			return c, nil
-		case errors.Is(err, sources.ErrGone):
-			gone = err
-			a.logf("  %v", err)
-		case errors.As(err, &nb):
-			browser = nb
-		default:
-			return nil, err
-		}
-	}
-	if browser != nil {
-		return nil, browser
-	}
-	if gone == nil {
-		gone = errors.New("no usable mirror copy")
-	}
-	return nil, &Unavailable{Reason: "This mod can't be downloaded: " + gone.Error() + ". Its mirror copy is broken; ask in the community whether someone kept the file."}
-}
-
-func (a *App) fetchSkyCopy(it sources.SkyItem) (*manager.Candidate, error) {
-	ws := it.WorkshopID
-	dir, err := CacheDir("sky:" + ws)
-	if err != nil {
-		return nil, err
-	}
-	name := filepath.Base(strings.TrimSuffix(it.DownloadURL, ".html"))
-	path := filepath.Join(dir, name)
-	if st, err := os.Stat(path); err != nil || st.Size() == 0 {
-		a.logf("requesting download link from modsbase.com...")
-		link, err := sources.ModsbaseResolve(it.DownloadURL)
-		if err == nil {
-			_, err = sources.ModsbaseDownload(link, it.DownloadURL, path+".part", 1<<30)
-		}
-		if err != nil {
-			os.Remove(path + ".part")
-			if errors.Is(err, sources.ErrGone) {
-				return nil, err
-			}
-			a.logf("modsbase.com: %v", err)
-			return nil, &NeedsBrowser{URL: it.DownloadURL, Reason: err.Error(), WorkshopID: ws}
-		}
-		if err := os.Rename(path+".part", path); err != nil {
-			return nil, err
-		}
-		a.logf("downloaded %s", name)
-	}
-	b := a.with(func(o *Options) {
-		o.WorkshopID, o.Revision = ws, it.Revision
-		if o.Name == "" {
-			o.Name = it.Title
-		}
-	})
-	return b.candidate(path)
-}
 
 // viaBrowser opens the modsbase page in the browser and waits for the file
 // to appear in the Downloads folder.

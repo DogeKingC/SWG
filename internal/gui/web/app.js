@@ -330,8 +330,8 @@ async function search(q, p) {
   errs.textContent = (r.errors || []).join(" · ");
   let items = [];
   if (src !== "sky") items = items.concat(r.gamebanana || []);
-  if (src !== "gb") items = items.concat(r.skymods || []);
-  if (src === "all") items = interleave(r.gamebanana || [], r.skymods || []);
+  if (src !== "gb") items = items.concat(r.workshop || []);
+  if (src === "all") items = interleave(r.gamebanana || [], r.workshop || []);
   if (p === 1) grid.replaceChildren();
   if (!items.length && p === 1) grid.append(el("div", { class: "empty" }, "No mods found."));
   grid.append(...items.map(card));
@@ -424,9 +424,10 @@ function card(m) {
     thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
-      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : "revised ") + m.date + (m.size ? " · " + m.size : "")),
+      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : "version ") + m.date + (m.size ? " · " + m.size : "")),
+      !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
-        el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : "Workshop mirror"),
+        el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : (m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror")),
         m.category ? el("span", { class: "badge" }, m.category) : null,
         m.after_cutoff ? el("span", { class: "badge badge-bad", title: "Revised after the worm started; refused" }, "after cutoff") : null,
         installed ? el("span", { class: "badge badge-ok" }, "installed") : null,
@@ -460,15 +461,18 @@ function markInstalledCards() {
   updateSelection();
 }
 
-function install(ref, name, override) {
-  run({ action: "install", refs: [ref], override }, "Installing " + (name || ref));
+function install(ref, name, override, mirror) {
+  run({ action: "install", refs: [ref], override, mirror: mirror || "" }, "Installing " + (name || ref));
 }
 
 // ---------- details ----------
 let detailsRef = null;
+let detailsMirror = ""; // "" = automatic (newest clean copy)
 
-async function openDetails(m) {
+async function openDetails(m, mirror) {
+  const sameMod = detailsRef === m.ref && $("#details").open;
   detailsRef = m.ref;
+  detailsMirror = mirror || "";
   const d = $("#details");
   const isGB = m.ref.startsWith("gb:");
   $("#detHero").replaceChildren(thumbImg(m, "det-hero"));
@@ -476,15 +480,18 @@ async function openDetails(m) {
   $("#detSub").replaceChildren(
     el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : "Workshop mirror"),
     m.author ? " by " + m.author : "");
-  $("#detFacts").replaceChildren();
-  $("#detDesc").textContent = "Loading description…";
-  $("#detRequired").replaceChildren();
+  if (!sameMod) {
+    $("#detFacts").replaceChildren();
+    $("#detDesc").textContent = "Loading description…";
+    $("#detRequired").replaceChildren();
+    $("#detMirrors").replaceChildren();
+  }
   $("#detCheck").replaceChildren(el("div", { class: "check-wait" }, el("span", { class: "spinner" }), "Downloading and scanning before install…"));
   setDetailActions(m, null);
   if (!d.open) d.showModal();
-  d.querySelector(".det-scroll").scrollTop = 0;
+  if (!sameMod) d.querySelector(".det-scroll").scrollTop = 0;
 
-  api("/api/details?ref=" + encodeURIComponent(m.ref)).then((v) => {
+  if (!sameMod) api("/api/details?ref=" + encodeURIComponent(m.ref) + "&name=" + encodeURIComponent(m.name || "")).then((v) => {
     if (detailsRef !== m.ref) return;
     const facts = [
       [isGB ? "Updated" : "Last revision", v.revision || v.date],
@@ -508,17 +515,45 @@ async function openDetails(m) {
         }, "Install all required mods")));
     }
     $("#detPage").onclick = () => api("/api/open?what=url&url=" + encodeURIComponent(v.page));
+    if (v.mirrors && v.mirrors.length) renderMirrors(m, v.mirrors, null);
   }).catch((e) => { if (detailsRef === m.ref) $("#detDesc").textContent = "Could not load the description: " + e.message; });
 
   try {
-    const p = await api("/api/preview?ref=" + encodeURIComponent(m.ref));
+    const p = await api("/api/preview?ref=" + encodeURIComponent(m.ref) + (detailsMirror ? "&mirror=" + encodeURIComponent(detailsMirror) : ""));
     if (detailsRef !== m.ref) return;
+    if (p.mirrors && p.mirrors.length) renderMirrors(m, p.mirrors, p.chosen);
     showCheck(m, p);
   } catch (e) {
     if (detailsRef !== m.ref) return;
     $("#detCheck").replaceChildren(el("div", { class: "verdict verdict-bad" }, "Could not check this mod: " + e.message));
     setDetailActions(m, { verdict: "error" });
   }
+}
+
+// renderMirrors lists every mirror copy with its version; picking one
+// re-runs the safety check on that copy and installs it.
+function renderMirrors(m, mirrors, chosen) {
+  const name = "mirror-" + m.ref;
+  const row = (id, label, extra, disabled) => {
+    const input = el("input", { type: "radio", name, value: id, disabled });
+    input.checked = (detailsMirror || "") === id;
+    input.onchange = () => openDetails(m, id);
+    return el("label", { class: "mirror" + (disabled ? " mirror-off" : "") }, input, el("span", { class: "mirror-main" }, label), extra);
+  };
+  const newestOK = mirrors.find((x) => !x.after_cutoff);
+  const rows = [row("", "Automatic", el("span", { class: "muted small" }, "newest copy from before the worm, skipping any the scanner flags"), false)];
+  for (const mr of mirrors) {
+    const tags = [];
+    if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, "newest safe date"));
+    if (mr.after_cutoff) tags.push(el("span", { class: "badge badge-bad" }, "after worm cutoff"));
+    if (chosen && mr.id === chosen) tags.push(el("span", { class: "badge" }, "checked below"));
+    rows.push(row(mr.id,
+      el("span", {}, el("b", {}, mr.source), " · version ", el("b", {}, mr.version || "unknown"), mr.size ? " · " + mr.size : ""),
+      el("span", { class: "mirror-tags" }, ...tags,
+        el("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent(mr.page)); } }, "page")),
+      mr.after_cutoff));
+  }
+  $("#detMirrors").replaceChildren(el("h3", {}, mirrors.length > 1 ? `Mirrors (${mirrors.length} copies)` : "Mirror"), el("div", { class: "mirrors" }, rows));
 }
 
 function showCheck(m, p) {
@@ -543,6 +578,10 @@ function showCheck(m, p) {
     box.push(el("ul", { class: "small" }, p.reasons.map((r) => el("li", {}, r.replace(/ \(override: [^)]*\)/, "")))));
   }
   const info = [];
+  if (p.chosen && p.mirrors) {
+    const c = p.mirrors.find((x) => x.id === p.chosen);
+    if (c) info.push(`checked the ${c.source} copy (version ${c.version})`);
+  }
   if (p.files) info.push(`${p.files} files, ${p.scripts} C# scripts`);
   if (p.version) info.push("version " + p.version);
   if (p.author) info.push("mod.json author: " + p.author);
@@ -561,13 +600,13 @@ function setDetailActions(m, p) {
   warn.hidden = true;
   btn.className = "btn btn-primary";
   btn.disabled = jobRunning;
-  btn.onclick = () => { $("#details").close(); install(m.ref, m.name); };
+  btn.onclick = () => { $("#details").close(); install(m.ref, m.name, null, detailsMirror); };
   btn.textContent = installed ? "Reinstall" : "Install";
   if (!p) { btn.textContent = installed ? "Reinstall" : "Install"; return; }
   if (p.verdict === "blocked" || p.verdict === "error" || p.verdict === "unavailable") { btn.disabled = true; return; }
   if (p.verdict === "browser") {
     btn.textContent = "Open download page";
-    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }); };
+    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }, detailsMirror); };
     return;
   }
   if (p.verdict === "review") {
@@ -580,7 +619,7 @@ function setDetailActions(m, p) {
     btn.className = "btn btn-danger";
     btn.textContent = "Install anyway";
     warn.hidden = false;
-    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, over); };
+    btn.onclick = () => { $("#details").close(); install(m.ref, m.name, over, detailsMirror); };
   }
 }
 $("#detClose").onclick = () => { detailsRef = null; $("#details").close(); };

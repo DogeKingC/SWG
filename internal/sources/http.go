@@ -83,3 +83,6 @@ func saveHashed(f *os.File, r io.Reader, maxBytes int64) (string, string, error)
 	}
 	return hex.EncodeToString(m.Sum(nil)), hex.EncodeToString(s.Sum(nil)), nil
 }
+
+func createFile(p string) (*os.File, error) { return os.Create(p) }
+func removeFile(p string)                   { os.Remove(p) }

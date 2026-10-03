@@ -71,6 +71,8 @@ Flags (any command):
   --wait <dur>               how long to wait for a browser download (default 10m)
   --no-watch                 on browser fallback, just open the page
   --dest <dir>               backup-workshop target folder
+  --mirror <id>              install this mirror copy (skymods:<id> / topmods:<id>)
+                             instead of the newest clean one
   --port <n>                 gui: fixed port (default random)
   --no-window                gui: do not open a window, just print the address
 `
@@ -120,6 +122,7 @@ func parseFlags(argv []string) (*app.App, []string, gui.Options, error) {
 	fs.StringVar(&o.Dest, "dest", "", "")
 	fs.StringVar(&o.WorkshopID, "workshop-id", "", "")
 	fs.StringVar(&o.Name, "name", "", "")
+	fs.StringVar(&o.Mirror, "mirror", "", "")
 	fs.IntVar(&o.FileID, "file", 0, "")
 	fs.StringVar(&o.Downloads, "downloads", "", "")
 	fs.DurationVar(&o.Wait, "wait", o.Wait, "")
@@ -295,13 +298,13 @@ func cmdSearch(q string) error {
 	for _, m := range r.GameBanana {
 		fmt.Printf("  %-11s %-45s %-12s by %s, updated %s\n", m.Ref, m.Name, m.Category, m.Author, m.Date)
 	}
-	fmt.Println("Skymods Workshop mirror (ppgmods install sky:<workshop id>)")
-	for _, it := range r.Skymods {
+	fmt.Println("Steam Workshop mirrors: Skymods + top-mods (ppgmods install sky:<workshop id>)")
+	for _, it := range r.Workshop {
 		warn := ""
 		if it.AfterCutoff {
 			warn = "  [after worm cutoff]"
 		}
-		fmt.Printf("  %-15s %-45s by %s, revision %s%s\n", it.Ref, it.Name, it.Author, it.Date, warn)
+		fmt.Printf("  %-15s %-40s by %s; %s%s\n", it.Ref, it.Name, it.Author, strings.Join(it.Mirrors, ", "), warn)
 	}
 	return nil
 }

@@ -21,6 +21,7 @@ type Installed struct {
 	Folders     []string          `json:"folders"` // folder names under Mods/
 	FileID      int               `json:"file_id,omitempty"`
 	Version     string            `json:"version,omitempty"`
+	Mirror      string            `json:"mirror,omitempty"`   // Workshop items: mirror copy installed
 	Revision    time.Time         `json:"revision,omitempty"` // upload/revision time at the source
 	ArchiveSHA  string            `json:"archive_sha256,omitempty"`
 	Files       map[string]string `json:"files"` // "<folder>/<rel>" -> sha256

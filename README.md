@@ -25,7 +25,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 | Local Steam cache | `steamapps/workshop/content/1118200` on your PC | `backup-workshop` | **Best source, and it won't last.** Steam deletes removed items when it syncs. Back the cache up before launching Steam online. |
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
 | [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
-| top-mods.com | Another catalogue | — | Links to the same modsbase.com files as Skymods, so it adds nothing. |
+| [top-mods](https://top-mods.com/mods/people-playground) | Second Workshop mirror, ~11,000 PPG entries. It often has a **newer revision** than Skymods, mods Skymods never copied, and its own copies of the preview images | Automatic | Files are on modsfire.com, with a modsbase.com alternate link. Both are downloaded the way their own buttons do it. |
 
 ## Install
 
@@ -58,8 +58,10 @@ still running. A log is kept in the data folder as `ppgmods.log`.
 
 The window covers everything:
 
-- **Browse mods**: search GameBanana and the Skymods Workshop mirror, paste a
-  link, select several, install. Click a mod to open its details: the
+- **Browse mods**: search GameBanana and both Workshop mirrors, paste a link,
+  select several, install. Results for the same Workshop item are merged
+  across mirrors, and each card shows which mirrors have it and at which
+  version. Click a mod to open its details: the
   description, size and dates, the mods it needs, and a **safety check** that
   downloads and scans it before you install. Install then puts it straight
   into your `Mods` folder (on Linux, usually
@@ -132,6 +134,16 @@ every check below. Anything else is held back and printed.
 - **Windows:** in Task Scheduler, create a daily task that runs
   `ppgmods-windows-amd64.exe update --yes`.
 - **Linux:** add a cron line such as `0 18 * * * /path/to/ppgmods update --yes >> ~/ppgmods.log 2>&1`.
+
+### Choosing between mirrors
+
+Mirrors can hold different revisions of the same Workshop item. By default
+ppgmods installs the **newest copy from before the worm cutoff**. If the
+scanner flags that copy (HIGH or CRITICAL), it falls back to the next-newest
+copy that scans clean. A mod's details view lists every mirror with its
+version and size, and you can pick one; the safety check then runs on that
+copy. From the command line, use `--mirror skymods:<id>` or
+`--mirror topmods:<id>`.
 
 ## Safety model
 
