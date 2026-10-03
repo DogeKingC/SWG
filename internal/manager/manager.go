@@ -388,6 +388,15 @@ func (m *Manager) Rollback(key string) error {
 	return m.State.Save()
 }
 
+func (m *Manager) SetPinned(key string, pinned bool) error {
+	inst := m.State.Mods[key]
+	if inst == nil {
+		return fmt.Errorf("%s is not installed", key)
+	}
+	inst.Pinned = pinned
+	return m.State.Save()
+}
+
 func (m *Manager) Remove(key string) error {
 	inst := m.State.Mods[key]
 	if inst == nil {
@@ -405,8 +414,9 @@ func (m *Manager) Remove(key string) error {
 
 // Problem is a verify result for one Mods/ folder.
 type Problem struct {
-	Folder string
-	Issue  string
+	Folder string `json:"folder"`
+	Issue  string `json:"issue"`
+	Bad    bool   `json:"bad"` // false for informational lines (clean unmanaged folders)
 }
 
 // Verify re-hashes installed mods to detect tampering (the September worm
@@ -418,7 +428,7 @@ func (m *Manager) Verify() ([]Problem, error) {
 		now := map[string]string{}
 		for _, f := range inst.Folders {
 			if _, err := os.Stat(filepath.Join(m.ModsDir, f)); err != nil {
-				probs = append(probs, Problem{f, "missing"})
+				probs = append(probs, Problem{f, "missing", true})
 				continue
 			}
 			if err := hashTree(filepath.Join(m.ModsDir, f), f, now); err != nil {
@@ -427,14 +437,14 @@ func (m *Manager) Verify() ([]Problem, error) {
 		}
 		for p, h := range inst.Files {
 			if g, ok := now[p]; !ok {
-				probs = append(probs, Problem{p, "file deleted since install"})
+				probs = append(probs, Problem{p, "file deleted since install", true})
 			} else if g != h {
-				probs = append(probs, Problem{p, "file CHANGED since install (possible tampering)"})
+				probs = append(probs, Problem{p, "file CHANGED since install (possible tampering)", true})
 			}
 		}
 		for p := range now {
 			if _, ok := inst.Files[p]; !ok {
-				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)"})
+				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true})
 			}
 		}
 	}
@@ -450,11 +460,12 @@ func (m *Manager) Verify() ([]Problem, error) {
 		if err != nil {
 			return nil, err
 		}
-		issue := "not managed by ppgmods; scan clean"
+		pr := Problem{e.Name(), "not managed by ppgmods; scan clean", false}
 		if rep.Max() >= scan.Medium {
-			issue = fmt.Sprintf("not managed by ppgmods; scan max %s (%d findings) - run `ppgmods scan` on it", rep.Max(), len(rep.Findings))
+			pr.Issue = fmt.Sprintf("not managed by ppgmods; scan max %s (%d findings)", rep.Max(), len(rep.Findings))
+			pr.Bad = rep.Max() >= scan.High
 		}
-		probs = append(probs, Problem{e.Name(), issue})
+		probs = append(probs, pr)
 	}
 	return probs, nil
 }

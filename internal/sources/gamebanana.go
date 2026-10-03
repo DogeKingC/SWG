@@ -26,6 +26,27 @@ type GBMod struct {
 	Game struct {
 		ID int `json:"_idRow"`
 	} `json:"_aGame"`
+	Preview struct {
+		Images []struct {
+			Base string `json:"_sBaseUrl"`
+			File string `json:"_sFile"`
+			F220 string `json:"_sFile220"`
+		} `json:"_aImages"`
+	} `json:"_aPreviewMedia"`
+}
+
+// Thumb returns a small preview image URL, or "".
+func (m GBMod) Thumb() string {
+	for _, im := range m.Preview.Images {
+		f := im.F220
+		if f == "" {
+			f = im.File
+		}
+		if im.Base != "" && f != "" {
+			return im.Base + "/" + f
+		}
+	}
+	return ""
 }
 
 type GBFile struct {

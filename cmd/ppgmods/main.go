@@ -1,5 +1,6 @@
 // Command ppgmods recovers, installs and updates People Playground C# mods
 // from community mirrors, scanning every mod before it reaches the Mods folder.
+// Run without arguments it opens the GUI.
 package main
 
 import (
@@ -7,17 +8,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/DogeKingC/SWG/internal/game"
+	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/DogeKingC/SWG/internal/gui"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/DogeKingC/SWG/internal/selfupdate"
 	"github.com/DogeKingC/SWG/internal/sources"
 )
 
@@ -25,15 +24,15 @@ var version = "dev"
 
 const usage = `ppgmods - People Playground mod recovery and update tool
 
+Run without arguments (or "ppgmods gui") to open the window.
+
 Usage: ppgmods <command> [args] [flags]
 
 Find and install:
   search <text>              search GameBanana and Skymods (Workshop mirror)
-  install gb:<id>            download, scan and install a GameBanana mod (id or URL)
-  install sky:<workshop id>  download the Skymods mirror copy of a Workshop item
-                             (falls back to the browser + Downloads folder if
-                             modsbase.com shows a Cloudflare check)
-  install <ref> <ref> ...    queue several mods (gb: and sky: can be mixed)
+  install <ref> [<ref>...]   install gb:<id>, sky:<workshop id>, or a GameBanana /
+                             Steam Workshop link (Workshop items come from the
+                             Skymods mirror via modsbase.com)
   import <file|folder>       scan and install a downloaded archive or mod folder
                              (--workshop-id <id> for Workshop/Skymods copies)
 
@@ -44,6 +43,7 @@ Keep up to date:
   pin|unpin <key>            stop/resume updates for a mod
   rollback <key>             restore the previous version (and pin it)
   remove <key>               uninstall
+  self-update                update ppgmods itself to the latest release
 
 Safety and recovery:
   scan <path>                scan an archive or folder without installing
@@ -63,46 +63,32 @@ Flags (any command):
   --dry-run                  check everything, change nothing
   --offline                  do not refresh the remote blocklist
   --downloads <dir>          browser download folder to watch (default: Downloads)
-  --wait <dur>               how long to wait for each browser download (default 10m)
-  --no-watch                 on fallback, just open the page; import manually
+  --wait <dur>               how long to wait for a browser download (default 10m)
+  --no-watch                 on browser fallback, just open the page
+  --dest <dir>               backup-workshop target folder
+  --port <n>                 gui: fixed port (default random)
+  --no-window                gui: do not open a window, just print the address
 `
 
-type opts struct {
-	game, dest, workshopID, name string
-	downloads                    string
-	wait                         time.Duration
-	noWatch                      bool
-	revision                     time.Time // known revision date (from a backup manifest)
-	yes, offline                 bool
-	fileID                       int
-	policy                       manager.Policy
-}
-
 func main() {
-	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" || os.Args[1] == "help" {
+	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/DogeKingC/SWG)", version)
+	selfupdate.Current = version
+	args := os.Args[1:]
+	if len(args) == 0 {
+		args = []string{"gui"}
+	}
+	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		fmt.Print(usage)
 		return
 	}
-	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/DogeKingC/SWG)", version)
-	cmd := os.Args[1]
-	o, args, err := parseFlags(os.Args[2:])
+	cmd := args[0]
+	a, rest, gopt, err := parseFlags(args[1:])
 	if err != nil {
 		fatal(err)
 	}
-	if err := run(cmd, args, o); err != nil {
+	if err := run(cmd, rest, a, gopt); err != nil {
 		fatal(err)
 	}
-}
-
-func printErr(ref string, err error) {
-	var rej *manager.Rejection
-	if errors.As(err, &rej) {
-		for _, r := range rej.Reasons {
-			logf("  %s REFUSED: %s", ref, r)
-		}
-		return
-	}
-	logf("  %s error: %v", ref, err)
 }
 
 func fatal(err error) {
@@ -118,30 +104,33 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-func parseFlags(argv []string) (*opts, []string, error) {
-	o := &opts{}
+func parseFlags(argv []string) (*app.App, []string, gui.Options, error) {
+	o := app.DefaultOptions()
+	var g gui.Options
 	fs := flag.NewFlagSet("ppgmods", flag.ContinueOnError)
 	fs.Usage = func() { fmt.Print(usage) }
-	fs.StringVar(&o.game, "game", "", "")
-	fs.StringVar(&o.dest, "dest", "", "")
-	fs.StringVar(&o.workshopID, "workshop-id", "", "")
-	fs.StringVar(&o.name, "name", "", "")
-	fs.IntVar(&o.fileID, "file", 0, "")
-	fs.StringVar(&o.downloads, "downloads", "", "")
-	fs.DurationVar(&o.wait, "wait", 10*time.Minute, "")
-	fs.BoolVar(&o.noWatch, "no-watch", false, "")
-	fs.BoolVar(&o.yes, "yes", false, "")
-	fs.BoolVar(&o.offline, "offline", false, "")
-	fs.BoolVar(&o.policy.AllowHigh, "allow-high", false, "")
-	fs.BoolVar(&o.policy.AllowCritical, "allow-critical", false, "")
-	fs.BoolVar(&o.policy.AllowAfterCutoff, "allow-after-cutoff", false, "")
-	fs.BoolVar(&o.policy.AllowNewFindings, "allow-new-findings", false, "")
-	fs.BoolVar(&o.policy.DryRun, "dry-run", false, "")
-	fs.DurationVar(&o.policy.Cooldown, "cooldown", 48*time.Hour, "")
+	fs.StringVar(&o.Game, "game", "", "")
+	fs.StringVar(&o.Dest, "dest", "", "")
+	fs.StringVar(&o.WorkshopID, "workshop-id", "", "")
+	fs.StringVar(&o.Name, "name", "", "")
+	fs.IntVar(&o.FileID, "file", 0, "")
+	fs.StringVar(&o.Downloads, "downloads", "", "")
+	fs.DurationVar(&o.Wait, "wait", o.Wait, "")
+	fs.BoolVar(&o.NoWatch, "no-watch", false, "")
+	fs.BoolVar(&o.Yes, "yes", false, "")
+	fs.BoolVar(&o.Offline, "offline", false, "")
+	fs.BoolVar(&o.Policy.AllowHigh, "allow-high", false, "")
+	fs.BoolVar(&o.Policy.AllowCritical, "allow-critical", false, "")
+	fs.BoolVar(&o.Policy.AllowAfterCutoff, "allow-after-cutoff", false, "")
+	fs.BoolVar(&o.Policy.AllowNewFindings, "allow-new-findings", false, "")
+	fs.BoolVar(&o.Policy.DryRun, "dry-run", false, "")
+	fs.DurationVar(&o.Policy.Cooldown, "cooldown", o.Policy.Cooldown, "")
+	fs.IntVar(&g.Port, "port", 0, "")
+	fs.BoolVar(&g.NoWindow, "no-window", false, "")
 	var pos []string
 	for {
 		if err := fs.Parse(argv); err != nil {
-			return nil, nil, err
+			return nil, nil, g, err
 		}
 		argv = fs.Args()
 		if len(argv) == 0 {
@@ -150,27 +139,10 @@ func parseFlags(argv []string) (*opts, []string, error) {
 		pos = append(pos, argv[0])
 		argv = argv[1:]
 	}
-	return o, pos, nil
+	return &app.App{Opt: o, Logf: logf}, pos, g, nil
 }
 
 func logf(format string, a ...any) { fmt.Printf(format+"\n", a...) }
-
-func newManager(o *opts, needGame bool) (*manager.Manager, error) {
-	st, err := manager.LoadState()
-	if err != nil {
-		return nil, err
-	}
-	m := &manager.Manager{State: st, Policy: o.policy, Log: logf}
-	if needGame {
-		dir, err := game.FindGameDir(o.game)
-		if err != nil {
-			return nil, err
-		}
-		m.ModsDir = game.ModsDir(dir)
-		m.Blocklist = manager.LoadBlocklist(!o.offline, logf)
-	}
-	return m, nil
-}
 
 func need(args []string, n int, what string) error {
 	if len(args) < n {
@@ -179,13 +151,18 @@ func need(args []string, n int, what string) error {
 	return nil
 }
 
-func run(cmd string, args []string, o *opts) error {
+func run(cmd string, args []string, a *app.App, g gui.Options) error {
 	switch cmd {
+	case "gui":
+		g.Version = version
+		return gui.Run(a.Opt, g)
 	case "version":
 		fmt.Println("ppgmods", version)
 		return nil
+	case "self-update":
+		return cmdSelfUpdate()
 	case "paths":
-		return cmdPaths(o)
+		return cmdPaths(a)
 	case "search":
 		if err := need(args, 1, "search text"); err != nil {
 			return err
@@ -195,12 +172,16 @@ func run(cmd string, args []string, o *opts) error {
 		if err := need(args, 1, "path"); err != nil {
 			return err
 		}
-		return cmdScan(args[0], o)
+		return cmdScan(args[0], a)
 	case "backup-workshop":
-		return cmdBackup(o)
+		dest, err := a.Backup()
+		if err == nil {
+			logf("Install the safe ones with: ppgmods restore-workshop %q", dest)
+		}
+		return err
 	}
 
-	m, err := newManager(o, cmd != "list")
+	m, err := a.Manager(cmd != "list" && cmd != "pin" && cmd != "unpin")
 	if err != nil {
 		return err
 	}
@@ -209,32 +190,27 @@ func run(cmd string, args []string, o *opts) error {
 		if err := need(args, 1, "mod reference"); err != nil {
 			return err
 		}
-		var refused int
-		for _, ref := range args {
-			if err := cmdInstall(m, ref, o); err != nil {
-				if len(args) == 1 {
-					return err
-				}
-				refused++
-				printErr(ref, err)
-			}
+		if len(args) == 1 {
+			return a.Install(m, args[0])
 		}
-		if refused > 0 {
-			return fmt.Errorf("%d of %d mods not installed", refused, len(args))
+		if s := a.InstallMany(m, args); s.Refused+s.Failed > 0 {
+			return fmt.Errorf("%d of %d mods not installed", s.Refused+s.Failed, len(args))
 		}
 		return nil
 	case "import":
 		if err := need(args, 1, "file or folder"); err != nil {
 			return err
 		}
-		return cmdImport(m, args[0], o)
+		return a.Import(m, args[0])
 	case "restore-workshop":
 		if err := need(args, 1, "backup folder"); err != nil {
 			return err
 		}
-		return cmdRestore(m, args[0], o)
+		_, err := a.Restore(m, args[0])
+		return err
 	case "update":
-		return cmdUpdate(m, o)
+		a.Update(m)
+		return nil
 	case "list":
 		for _, i := range m.State.Sorted() {
 			pin := ""
@@ -248,12 +224,7 @@ func run(cmd string, args []string, o *opts) error {
 		if err := need(args, 1, "mod key"); err != nil {
 			return err
 		}
-		i := m.State.Mods[args[0]]
-		if i == nil {
-			return fmt.Errorf("%s is not installed", args[0])
-		}
-		i.Pinned = cmd == "pin"
-		return m.State.Save()
+		return m.SetPinned(args[0], cmd == "pin")
 	case "rollback":
 		if err := need(args, 1, "mod key"); err != nil {
 			return err
@@ -270,60 +241,48 @@ func run(cmd string, args []string, o *opts) error {
 	return fmt.Errorf("unknown command %q (see `ppgmods help`)", cmd)
 }
 
-func cmdPaths(o *opts) error {
+func cmdPaths(a *app.App) error {
+	p := a.Paths()
 	fmt.Println("Steam libraries:")
-	for _, l := range game.Libraries() {
+	for _, l := range p.Libraries {
 		fmt.Println("  " + l)
 	}
-	if dir, err := game.FindGameDir(o.game); err == nil {
-		fmt.Println("Game:   " + dir)
-		fmt.Println("Mods:   " + game.ModsDir(dir))
+	if p.GameError != "" {
+		fmt.Println("Game:   " + p.GameError)
 	} else {
-		fmt.Println("Game:   " + err.Error())
+		fmt.Println("Game:   " + p.Game)
+		fmt.Println("Mods:   " + p.Mods)
 	}
 	fmt.Println("Workshop cache:")
-	for _, w := range game.WorkshopDirs() {
+	for _, w := range p.Workshop {
 		fmt.Println("  " + w)
 	}
-	if d, err := manager.ConfigDir(); err == nil {
-		fmt.Println("ppgmods data: " + d)
-	}
+	fmt.Println("ppgmods data: " + p.Data)
 	return nil
 }
 
 func cmdSearch(q string) error {
-	gb, gerr := sources.GBSearch(q, 1)
+	r := app.Search(q, 1)
+	for _, e := range r.Errors {
+		fmt.Println("error:", e)
+	}
 	fmt.Println("GameBanana (install with: ppgmods install gb:<id>)")
-	if gerr != nil {
-		fmt.Println("  error:", gerr)
+	for _, m := range r.GameBanana {
+		fmt.Printf("  %-11s %-45s %-12s by %s, updated %s\n", m.Ref, m.Name, m.Category, m.Author, m.Date)
 	}
-	for _, m := range gb {
-		fmt.Printf("  gb:%-8d %-45s %-12s by %s, updated %s\n", m.ID, m.Name, m.Category.Name, m.Submitter.Name, time.Unix(m.Modified, 0).Format("2006-01-02"))
-	}
-	sky, serr := sources.SkySearch(q, 1)
 	fmt.Println("Skymods Workshop mirror (ppgmods install sky:<workshop id>)")
-	if serr != nil {
-		fmt.Println("  error:", serr)
-	}
-	for _, it := range sky {
+	for _, it := range r.Skymods {
 		warn := ""
-		if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) {
+		if it.AfterCutoff {
 			warn = "  [after worm cutoff]"
 		}
-		fmt.Printf("  sky:%-11s %-45s by %s, revision %s%s\n", it.WorkshopID, it.Title, it.Author, fmtTime(it.Revision), warn)
+		fmt.Printf("  %-15s %-45s by %s, revision %s%s\n", it.Ref, it.Name, it.Author, it.Date, warn)
 	}
 	return nil
 }
 
-func fmtTime(t time.Time) string {
-	if t.IsZero() {
-		return "unknown"
-	}
-	return t.Format("2006-01-02")
-}
-
-func cmdScan(p string, o *opts) error {
-	m := &manager.Manager{Log: logf, Blocklist: manager.LoadBlocklist(!o.offline, logf)}
+func cmdScan(p string, a *app.App) error {
+	m := &manager.Manager{Log: logf, Blocklist: manager.LoadBlocklist(!a.Opt.Offline, logf)}
 	dir, rep, err := m.Stage(&manager.Candidate{Name: p, Path: p})
 	if err != nil {
 		return err
@@ -336,380 +295,14 @@ func cmdScan(p string, o *opts) error {
 		}
 		fmt.Printf("[%s] %s %s: %s\n", f.Severity, f.Rule, loc, f.Detail)
 	}
-	fmt.Printf("%d files, %d C# scripts, highest: %s\n", rep.Files, rep.Scripts, sevName(rep))
+	max := "none"
+	if rep.Max() >= 0 {
+		max = rep.Max().String()
+	}
+	fmt.Printf("%d files, %d C# scripts, highest: %s\n", rep.Files, rep.Scripts, max)
 	if rep.Max() >= scan.High {
 		os.Exit(3)
 	}
-	return nil
-}
-
-func sevName(r *scan.Report) string {
-	if r.Max() < 0 {
-		return "none"
-	}
-	return r.Max().String()
-}
-
-var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
-
-func cmdInstall(m *manager.Manager, ref string, o *opts) error {
-	if mm := reGBURL.FindStringSubmatch(ref); mm != nil {
-		ref = "gb:" + mm[1]
-	}
-	switch {
-	case strings.HasPrefix(ref, "gb:"):
-		id, err := strconv.Atoi(strings.TrimPrefix(ref, "gb:"))
-		if err != nil {
-			return fmt.Errorf("bad GameBanana id %q", ref)
-		}
-		return installGB(m, id, o.fileID, nil)
-	case strings.HasPrefix(ref, "sky:"):
-		return installSky(m, strings.TrimPrefix(ref, "sky:"), o)
-	}
-	return fmt.Errorf("unknown reference %q; use gb:<id>, a GameBanana URL, or sky:<workshop id>", ref)
-}
-
-// installGB downloads and installs a GameBanana file. prev is non-nil for updates.
-func installGB(m *manager.Manager, id, fileID int, prev *manager.Installed) error {
-	mod, err := sources.GBGetMod(id)
-	if err != nil {
-		return err
-	}
-	files, err := sources.GBFiles(id)
-	if err != nil {
-		return err
-	}
-	if len(files) == 0 {
-		return fmt.Errorf("gb:%d has no files", id)
-	}
-	f := files[0]
-	if fileID != 0 {
-		found := false
-		for _, x := range files {
-			if x.ID == fileID {
-				f, found = x, true
-			}
-		}
-		if !found {
-			return fmt.Errorf("file %d not found in gb:%d", fileID, id)
-		}
-	}
-	if prev != nil && prev.FileID == f.ID {
-		return nil
-	}
-	if !f.Clean() {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("GameBanana malware analysis for %s is %q/%q/%q, not clean", f.Name, f.AVState, f.AVResult, f.Analysis)}}
-	}
-	logf("gb:%d %s - file %s (%s, uploaded %s)", id, mod.Name, f.Name, humanSize(f.Size), f.AddedTime().Format("2006-01-02 15:04"))
-	dl, err := downloadsDir()
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dl, fmt.Sprintf("gb-%d-%d-%s", id, f.ID, filepath.Base(f.Name)))
-	md5hex, shahex, err := sources.Download(f.DownloadURL, path, 1<<30)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(path)
-	if f.MD5 != "" && !strings.EqualFold(md5hex, f.MD5) {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("checksum mismatch: GameBanana says %s, got %s", f.MD5, md5hex)}}
-	}
-	return m.Install(&manager.Candidate{
-		Key: fmt.Sprintf("gb:%d", id), Name: mod.Name, Source: mod.URL, Path: path,
-		FileID: f.ID, Version: f.Version, Revision: f.AddedTime(), ArchiveSHA: shahex,
-	})
-}
-
-func downloadsDir() (string, error) {
-	d, err := manager.ConfigDir()
-	if err != nil {
-		return "", err
-	}
-	p := filepath.Join(d, "downloads")
-	return p, os.MkdirAll(p, 0o755)
-}
-
-func humanSize(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.0f KB", float64(n)/(1<<10))
-	}
-	return fmt.Sprintf("%d B", n)
-}
-
-// installSky looks up a Skymods mirror copy, opens its modsbase.com page in
-// the browser (the site sits behind a Cloudflare check, so it cannot be
-// downloaded directly) and imports the file as soon as it lands in the
-// Downloads folder.
-func installSky(m *manager.Manager, ws string, o *opts) error {
-	it, err := sources.SkyByWorkshopID(ws)
-	if err != nil {
-		return err
-	}
-	logf("Skymods: %s by %s (Workshop %s), revision %s, %s", it.Title, it.Author, it.WorkshopID, fmtTime(it.Revision), it.Size)
-	if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) && !o.policy.AllowAfterCutoff {
-		return &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
-	}
-	if it.DownloadURL == "" {
-		return fmt.Errorf("no download link on %s", it.PageURL)
-	}
-	oo := *o
-	oo.workshopID = ws
-	if oo.name == "" {
-		oo.name = it.Title
-	}
-	if file, err := skyDirect(it); err == nil {
-		defer os.Remove(file)
-		return cmdImport(m, file, &oo)
-	} else {
-		logf("direct download not possible (%v); using the browser instead", err)
-	}
-
-	dl := o.downloads
-	if dl == "" {
-		dl = downloadFolder()
-	}
-	logf("Opening the download page in your browser: %s", it.DownloadURL)
-	logf("Click the real download button (ignore ads; never run an .exe).")
-	if o.noWatch || dl == "" {
-		logf("Then run: ppgmods import <downloaded file> --workshop-id %s", ws)
-		openBrowser(it.DownloadURL)
-		return nil
-	}
-	since := time.Now()
-	openBrowser(it.DownloadURL)
-	logf("Waiting for %s_* in %s (up to %s, Ctrl+C to stop)...", ws, dl, o.wait)
-	file, err := waitForDownload(dl, ws, since, o.wait)
-	if err != nil {
-		return fmt.Errorf("%v; when you have the file run: ppgmods import <file> --workshop-id %s", err, ws)
-	}
-	logf("got %s", filepath.Base(file))
-	return cmdImport(m, file, &oo)
-}
-
-// skyDirect fetches a Skymods copy through modsbase's own "create download
-// link" step. It fails with sources.ErrChallenge when Cloudflare asks for a
-// browser check, which ppgmods leaves to the browser.
-func skyDirect(it *sources.SkyItem) (string, error) {
-	logf("requesting download link from modsbase.com...")
-	link, err := sources.ModsbaseResolve(it.DownloadURL)
-	if err != nil {
-		return "", err
-	}
-	dir, err := downloadsDir()
-	if err != nil {
-		return "", err
-	}
-	name := filepath.Base(strings.TrimSuffix(it.DownloadURL, ".html"))
-	path := filepath.Join(dir, "sky-"+it.WorkshopID+"-"+name)
-	if _, err := sources.ModsbaseDownload(link, it.DownloadURL, path, 1<<30); err != nil {
-		return "", err
-	}
-	logf("downloaded %s", name)
-	return path, nil
-}
-
-// downloadFolder returns the user's browser download folder.
-func downloadFolder() string {
-	if runtime.GOOS != "windows" {
-		if out, err := exec.Command("xdg-user-dir", "DOWNLOAD").Output(); err == nil {
-			if d := strings.TrimSpace(string(out)); d != "" {
-				if st, err := os.Stat(d); err == nil && st.IsDir() {
-					return d
-				}
-			}
-		}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	d := filepath.Join(home, "Downloads")
-	if st, err := os.Stat(d); err == nil && st.IsDir() {
-		return d
-	}
-	return ""
-}
-
-var partialExt = map[string]bool{".crdownload": true, ".part": true, ".partial": true, ".download": true, ".tmp": true}
-
-// waitForDownload polls dir for an archive named "<workshop id>_..." (the
-// naming modsbase uses) that appeared after since and has stopped growing.
-func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (string, error) {
-	deadline := time.Now().Add(timeout)
-	sizes := map[string]int64{}
-	for time.Now().Before(deadline) {
-		ents, _ := os.ReadDir(dir)
-		for _, e := range ents {
-			name := e.Name()
-			ext := strings.ToLower(filepath.Ext(name))
-			if e.IsDir() || !strings.HasPrefix(name, ws) || partialExt[ext] {
-				continue
-			}
-			if ext != ".zip" && ext != ".rar" && ext != ".7z" {
-				continue
-			}
-			info, err := e.Info()
-			if err != nil || info.ModTime().Before(since.Add(-2*time.Second)) || info.Size() == 0 {
-				continue
-			}
-			p := filepath.Join(dir, name)
-			if prev, ok := sizes[p]; ok && prev == info.Size() {
-				return p, nil
-			}
-			sizes[p] = info.Size()
-		}
-		time.Sleep(2 * time.Second)
-	}
-	return "", fmt.Errorf("no download for %s appeared in %s", ws, dir)
-}
-
-func openBrowser(u string) {
-	var c *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
-	case "darwin":
-		c = exec.Command("open", u)
-	default:
-		c = exec.Command("xdg-open", u)
-	}
-	_ = c.Start()
-}
-
-func cmdImport(m *manager.Manager, p string, o *opts) error {
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return err
-	}
-	st, err := os.Stat(abs)
-	if err != nil {
-		return err
-	}
-	ws := o.workshopID
-	if ws == "" && st.IsDir() && regexp.MustCompile(`^\d{6,12}$`).MatchString(filepath.Base(abs)) {
-		ws = filepath.Base(abs) // a folder copied from steamapps/workshop/content/1118200
-	}
-	c := &manager.Candidate{Path: abs, Name: o.name}
-	if !st.IsDir() {
-		if c.ArchiveSHA, err = manager.FileSHA(abs); err != nil {
-			return err
-		}
-	}
-	if ws != "" {
-		c.Key, c.SteamOrig, c.Source = "sky:"+ws, true, "https://steamcommunity.com/sharedfiles/filedetails/?id="+ws
-		if it, err := sources.SkyByWorkshopID(ws); err == nil && !it.Revision.IsZero() && !st.IsDir() {
-			c.Revision = it.Revision
-			if c.Name == "" {
-				c.Name = it.Title
-			}
-			logf("Skymods lists Workshop %s revision %s", ws, it.Revision.Format("2006-01-02 15:04"))
-		} else if st.IsDir() {
-			c.Revision = o.revision
-			if c.Revision.IsZero() {
-				c.Revision = manager.NewestMtime(abs)
-			}
-			logf("using newest file time %s as the revision date", fmtTime(c.Revision))
-		}
-	} else {
-		if c.ArchiveSHA == "" {
-			h, err := manager.TreeSHA(abs)
-			if err != nil {
-				return err
-			}
-			c.ArchiveSHA = h
-		}
-		c.Key, c.Source = "local:"+c.ArchiveSHA[:12], abs
-	}
-	if c.Name == "" {
-		c.Name = strings.TrimSuffix(filepath.Base(abs), filepath.Ext(abs))
-	}
-	return m.Install(c)
-}
-
-func cmdRestore(m *manager.Manager, dir string, o *opts) error {
-	ents, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	dates := manager.ReadBackupDates(dir)
-	if dates == nil {
-		logf("warning: no manifest.json in %s; dating items by file times, which may be the copy time", dir)
-	}
-	var ok, refused, failed int
-	for _, e := range ents {
-		if !e.IsDir() {
-			continue
-		}
-		oo := *o
-		oo.workshopID = e.Name()
-		oo.revision = dates[e.Name()]
-		logf("== %s", e.Name())
-		err := cmdImport(m, filepath.Join(dir, e.Name()), &oo)
-		var rej *manager.Rejection
-		switch {
-		case err == nil:
-			ok++
-		case errors.As(err, &rej):
-			refused++
-			for _, r := range rej.Reasons {
-				logf("  REFUSED: %s", r)
-			}
-		default:
-			failed++
-			logf("  error: %v", err)
-		}
-	}
-	logf("restore finished: %d installed, %d refused, %d errors", ok, refused, failed)
-	return nil
-}
-
-func cmdUpdate(m *manager.Manager, o *opts) error {
-	if !o.yes {
-		m.Policy.DryRun = true
-		logf("dry run (add --yes to apply updates that pass every check)")
-	}
-	var updated, held, current int
-	for _, inst := range m.State.Sorted() {
-		if !strings.HasPrefix(inst.Key, "gb:") {
-			continue // Workshop copies are frozen: Steam no longer hosts them
-		}
-		if inst.Pinned {
-			logf("%s pinned, skipped", inst.Key)
-			continue
-		}
-		id, _ := strconv.Atoi(strings.TrimPrefix(inst.Key, "gb:"))
-		files, err := sources.GBFiles(id)
-		if err != nil {
-			logf("%s: %v", inst.Key, err)
-			continue
-		}
-		if len(files) == 0 || files[0].ID == inst.FileID {
-			current++
-			continue
-		}
-		err = installGB(m, id, 0, inst)
-		var rej *manager.Rejection
-		switch {
-		case err == nil:
-			updated++
-		case errors.As(err, &rej):
-			held++
-			for _, r := range rej.Reasons {
-				logf("  HELD: %s", r)
-			}
-		default:
-			held++
-			logf("  error: %v", err)
-		}
-	}
-	verb := "updated"
-	if m.Policy.DryRun {
-		verb = "would update"
-	}
-	logf("%d up to date, %d %s, %d held back", current, updated, verb, held)
 	return nil
 }
 
@@ -721,7 +314,7 @@ func cmdVerify(m *manager.Manager) error {
 	bad := 0
 	for _, p := range probs {
 		fmt.Printf("%-50s %s\n", p.Folder, p.Issue)
-		if !strings.HasSuffix(p.Issue, "scan clean") {
+		if p.Bad {
 			bad++
 		}
 	}
@@ -733,27 +326,19 @@ func cmdVerify(m *manager.Manager) error {
 	return nil
 }
 
-func cmdBackup(o *opts) error {
-	src := game.WorkshopDirs()
-	if len(src) == 0 {
-		return errors.New("no People Playground Workshop cache found (steamapps/workshop/content/1118200)")
-	}
-	dest := o.dest
-	if dest == "" {
-		dest = "ppg-workshop-backup-" + time.Now().Format("20060102")
-	}
-	logf("backing up %s -> %s", strings.Join(src, ", "), dest)
-	items, err := manager.BackupWorkshop(src, dest, logf)
+func cmdSelfUpdate() error {
+	rel, err := selfupdate.Latest()
 	if err != nil {
 		return err
 	}
-	after := 0
-	for _, it := range items {
-		if it.AfterCutoff {
-			after++
-		}
+	if !rel.Newer {
+		fmt.Printf("ppgmods %s is the latest version\n", version)
+		return nil
 	}
-	logf("backed up %d items (%d modified after the worm cutoff). Manifest: %s", len(items), after, filepath.Join(dest, "manifest.json"))
-	logf("Install the safe ones with: ppgmods restore-workshop %s", dest)
+	fmt.Printf("updating ppgmods %s -> %s\n", version, rel.Version)
+	if err := selfupdate.Apply(rel, logf); err != nil {
+		return err
+	}
+	fmt.Println("done; run ppgmods again to use the new version")
 	return nil
 }

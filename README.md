@@ -31,15 +31,46 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 
 1. Install a loader that runs C# mods again, such as
    [RE_PPG](https://github.com/AlibardaWasTaken/RE_PPG/releases).
-2. Download `ppgmods` for your system from this repository's Releases page:
+2. Download the latest build from this repository's
+   [Releases](https://github.com/DogeKingC/SWG/releases/latest) page:
    `ppgmods-windows-amd64.exe` or `ppgmods-linux-amd64`. Check it against
    `SHA256SUMS.txt`.
-3. Run it from a terminal. It finds the game through your Steam libraries.
-   If it can't, pass `--game "<People Playground folder>"` or set `PPG_DIR`.
+3. **Double-click it.** A window opens. It uses Edge or Chrome in app mode,
+   or your default browser if neither is installed. The program serves the
+   window only to your own PC (127.0.0.1) with a random per-session key. A
+   console window stays open beside it, and closing that quits ppgmods.
 
-Build from source: `go build ./cmd/ppgmods` (Go 1.25+).
+The window covers everything:
 
-## Usage
+- **Browse mods**: search GameBanana and the Skymods Workshop mirror, paste a
+  link, select several, install.
+- **Installed**: check for and apply safe updates, verify files, rollback,
+  pin, remove.
+- **Recover Workshop**: back up the Steam cache, restore the safe copies, or
+  import a downloaded archive.
+- **Safety**: what is checked and why.
+- **Settings**: game folder (found through Steam automatically), cooldown,
+  blocklist.
+
+When a mod is refused, the window shows the scanner's findings. HIGH findings
+and the cooldown can be overridden for that one install with
+**Install anyway**. CRITICAL findings and the worm cutoff can't be overridden
+from the window.
+
+### Always the latest version
+
+Every push to `main` builds Windows and Linux binaries with GitHub Actions and
+publishes them as a new release, `v0.1.<build number>`. ppgmods checks for a
+newer release when it starts and shows an **Update now** banner. Updating
+downloads the new build, checks it against the release's `SHA256SUMS.txt`
+and replaces the program. From a terminal, run `ppgmods self-update`.
+Updates can only be found while the repository is public. A private
+repository's releases aren't visible to users.
+
+Build from source: `go build ./cmd/ppgmods` (Go 1.25+). Run `ppgmods help`
+for the command line, which does the same things for scripting.
+
+## Command line
 
 ```sh
 # 1. Save whatever Steam still has cached, BEFORE Steam syncs

@@ -24,6 +24,7 @@ type SkyItem struct {
 	RevisionRaw string    `json:"revision_raw"`
 	Mirrored    time.Time `json:"mirrored"`
 	Size        string    `json:"size"`
+	Image       string    `json:"image"`
 }
 
 var (
@@ -37,6 +38,7 @@ var (
 	reMirrored = regexp.MustCompile(`datetime="(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)"`)
 	reSize     = regexp.MustCompile(`skymods-item-file-size"[^>]*>([^<]*)<`)
 	reAppCat   = regexp.MustCompile(`\?app=(\d+)`)
+	reImage    = regexp.MustCompile(`<img src="(https://[^"?]+)`)
 )
 
 // SkySearch searches the Skymods People Playground catalogue. Searching for a
@@ -101,6 +103,7 @@ func ParseSkyPage(page string) []SkyItem {
 			Author:      html.UnescapeString(first(reAuthor, a)),
 			RevisionRaw: strings.TrimSpace(first(reRevision, a)),
 			Size:        strings.TrimSpace(first(reSize, a)),
+			Image:       first(reImage, a),
 		}
 		if t, err := time.Parse("2006-01-02 15:04:05", first(reMirrored, a)); err == nil {
 			it.Mirrored = t.UTC()
