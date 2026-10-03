@@ -98,6 +98,9 @@ func WorkshopDirs() []string {
 
 func ModsDir(gameDir string) string { return filepath.Join(gameDir, "Mods") }
 
+// ContraptionsDir is where the game keeps saved contraptions.
+func ContraptionsDir(gameDir string) string { return filepath.Join(gameDir, "Contraptions") }
+
 func existing(ps []string) []string {
 	var out []string
 	for _, p := range ps {

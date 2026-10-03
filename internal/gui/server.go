@@ -345,8 +345,9 @@ func (s *server) newApp(over map[string]bool) *app.App {
 
 type installedView struct {
 	*manager.Installed
-	Kind string `json:"kind"`
-	Link string `json:"link"`
+	Kind     string `json:"kind"`      // source label
+	ItemKind string `json:"item_kind"` // mod or contraption
+	Link     string `json:"link"`
 }
 
 func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +356,7 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	var mods []installedView
 	if st, err := manager.LoadState(); err == nil {
 		for _, m := range st.Sorted() {
-			v := installedView{Installed: m, Link: m.Source}
+			v := installedView{Installed: m, Link: m.Source, ItemKind: m.Kind}
 			switch {
 			case strings.HasPrefix(m.Key, "gb:"):
 				v.Kind = "GameBanana"
@@ -584,10 +585,13 @@ func (s *server) do(j *job, req actionReq) error {
 		if len(req.Refs) == 0 {
 			return errors.New("nothing selected")
 		}
-		j.Data = map[string]string{"mods_dir": m.ModsDir}
+		j.Data = map[string]string{"mods_dir": m.ModsDir, "contraptions_dir": m.ContraptionsDir}
 		if len(req.Refs) == 1 {
 			err := a.Install(m, req.Refs[0])
 			s.offerRetry(j, err, req)
+			if inst := m.State.Mods[app.NormalizeRef(req.Refs[0])]; err == nil && inst != nil {
+				j.Data["kind"] = inst.Kind
+			}
 			return err
 		}
 		sum := a.InstallMany(m, req.Refs)
@@ -761,6 +765,8 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 	switch target {
 	case "mods":
 		path = p.Mods
+	case "contraptions":
+		path = p.Contraptions
 	case "data":
 		path = p.Data
 	case "backup":

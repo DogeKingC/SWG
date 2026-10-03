@@ -23,7 +23,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 | Source | What it is | Downloads | Notes |
 |---|---|---|---|
 | Local Steam cache | `steamapps/workshop/content/1118200` on your PC | `backup-workshop` | **Best source, and it won't last.** Steam deletes removed items when it syncs. Back the cache up before launching Steam online. |
-| [True Workshop](https://ppgworkshop.onrender.com/) | Community archive of uploaded PPG mods (~140). Uploads pass the site's scanner and most are **reviewed by its maintainers** | Automatic | Files are on a public Hugging Face dataset; each item lists its SHA-256, which ppgmods checks. Reviewed items show "✓ reviewed" and skip the cooldown; unreviewed ones are marked "not reviewed" and wait out the cooldown. Updates are detected when an item's file changes. Contraptions are listed by the site but not installed yet. |
+| [True Workshop](https://ppgworkshop.onrender.com/) | Community archive of uploaded PPG mods (~140). Uploads pass the site's scanner and most are **reviewed by its maintainers** | Automatic | Files are on a public Hugging Face dataset; each item lists its SHA-256, which ppgmods checks. Reviewed items show "✓ reviewed" and skip the cooldown; unreviewed ones are marked "not reviewed" and wait out the cooldown. Updates are detected when an item's file changes. |
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
 | [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
 | [top-mods](https://top-mods.com/mods/people-playground) | Second Workshop mirror, ~11,000 PPG entries. It often has a **newer revision** than Skymods, mods Skymods never copied, and its own copies of the preview images | Automatic | Files are on modsfire.com, with a modsbase.com alternate link. Both are downloaded the way their own buttons do it. |
@@ -135,6 +135,16 @@ every check below. Anything else is held back and printed.
 - **Windows:** in Task Scheduler, create a daily task that runs
   `ppgmods-windows-amd64.exe update --yes`.
 - **Linux:** add a cron line such as `0 18 * * * /path/to/ppgmods update --yes >> ~/ppgmods.log 2>&1`.
+
+### Contraptions
+
+Contraptions (saved builds) from GameBanana, True Workshop and the Workshop
+mirrors are installed too. They go into the game's `Contraptions` folder as
+`Contraptions/<name>/<name>.jaap`, with the `.json`, `.outline` and `.png` that
+belong to it. Only those four file types are copied, since contraptions
+contain no code. A contraption you saved yourself under the same name is never
+overwritten. The Installed view has an **Open Contraptions folder** button,
+and verify, rollback and remove work for contraptions the same way as for mods.
 
 ### Choosing between mirrors
 

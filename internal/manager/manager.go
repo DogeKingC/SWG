@@ -39,11 +39,12 @@ type Policy struct {
 }
 
 type Manager struct {
-	ModsDir   string
-	State     *State
-	Policy    Policy
-	Blocklist *Blocklist
-	Log       func(format string, a ...any)
+	ModsDir         string
+	ContraptionsDir string
+	State           *State
+	Policy          Policy
+	Blocklist       *Blocklist
+	Log             func(format string, a ...any)
 }
 
 // Candidate is a downloaded archive or folder waiting to be installed.
@@ -245,21 +246,32 @@ func (m *Manager) Install(c *Candidate) error {
 	if err := m.Check(c, rep, prev); err != nil {
 		return err
 	}
+	kind := KindMod
 	roots, err := modRoots(dir)
 	if err != nil {
 		return err
 	}
+	var names []string
 	if len(roots) == 0 {
-		return &Rejection{[]string{"no mod.json found; this is not a C# mod (contraptions and skins go in other folders)"}}
+		if roots, names, err = contraptionRoots(dir); err != nil {
+			return err
+		}
+		kind = KindContraption
+	}
+	if len(roots) == 0 {
+		return &Rejection{[]string{"found neither a mod (mod.json) nor a contraption (.jaap); skins and other content are not supported"}}
+	}
+	if kind == KindContraption && m.ContraptionsDir == "" {
+		return errors.New("Contraptions folder unknown")
 	}
 	if m.Policy.DryRun {
-		m.logf("dry run: would install %d mod folder(s) for %s", len(roots), c.Key)
+		m.logf("dry run: would install %d %s folder(s) for %s", len(roots), kind, c.Key)
 		return nil
 	}
 
 	inst := &Installed{
 		Key: c.Key, Name: c.Name, Source: c.Source, FileID: c.FileID, Version: c.Version, Mirror: c.Mirror,
-		Revision: c.Revision, ArchiveSHA: c.ArchiveSHA, Files: map[string]string{}, InstalledAt: time.Now().UTC(),
+		Revision: c.Revision, ArchiveSHA: c.ArchiveSHA, Files: map[string]string{}, InstalledAt: time.Now().UTC(), Kind: kind,
 	}
 	if prev != nil {
 		inst.Pinned = prev.Pinned
@@ -268,17 +280,27 @@ func (m *Manager) Install(c *Candidate) error {
 		inst.Findings = append(inst.Findings, k)
 	}
 	used := map[string]bool{}
-	for _, root := range roots {
-		name := folderName(root, c.Key)
-		for i := 2; used[name]; i++ {
-			name = fmt.Sprintf("%s %d", folderName(root, c.Key), i)
+	for i, root := range roots {
+		var name string
+		if kind == KindContraption {
+			// The game expects Contraptions/<name>/<name>.jaap.
+			name = names[i]
+			if used[name] {
+				continue
+			}
+		} else {
+			name = folderName(root, c.Key)
+			for i := 2; used[name]; i++ {
+				name = fmt.Sprintf("%s %d", folderName(root, c.Key), i)
+			}
 		}
 		used[name] = true
-		if owner := m.State.OwnerOf(name); owner != nil && owner.Key != c.Key {
-			return fmt.Errorf("folder %q belongs to %s", name, owner.Key)
+		if owner := m.State.OwnerOf(kind, name); owner != nil && owner.Key != c.Key {
+			return fmt.Errorf("%s folder %q belongs to %s", kind, name, owner.Key)
 		}
 		inst.Folders = append(inst.Folders, name)
 	}
+	roots = roots[:len(inst.Folders)]
 	if prev != nil {
 		if err := m.backup(prev); err != nil {
 			return fmt.Errorf("backing up previous version: %w", err)
@@ -286,7 +308,7 @@ func (m *Manager) Install(c *Candidate) error {
 	}
 	if placed, err := m.place(roots, inst); err != nil {
 		for _, f := range inst.Folders[:placed] {
-			os.RemoveAll(filepath.Join(m.ModsDir, f))
+			os.RemoveAll(filepath.Join(m.dirFor(inst), f))
 		}
 		if prev != nil {
 			if rerr := m.Rollback(c.Key); rerr != nil {
@@ -302,19 +324,21 @@ func (m *Manager) Install(c *Candidate) error {
 	return m.State.Save()
 }
 
-// place moves staged mod roots into Mods/ and returns how many it placed.
+// place moves staged roots into Mods/ or Contraptions/ and returns how
+// many it placed.
 func (m *Manager) place(roots []string, inst *Installed) (int, error) {
+	base := m.dirFor(inst)
 	for i, root := range roots {
-		target := filepath.Join(m.ModsDir, inst.Folders[i])
+		target := filepath.Join(base, inst.Folders[i])
 		if _, err := os.Stat(target); err == nil {
-			if m.State.OwnerOf(inst.Folders[i]) == nil {
+			if m.State.OwnerOf(inst.Kind, inst.Folders[i]) == nil {
 				return i, fmt.Errorf("%s already exists and was not installed by ppgmods; move it away first", target)
 			}
 			if err := os.RemoveAll(target); err != nil {
 				return i, err
 			}
 		}
-		if err := os.MkdirAll(m.ModsDir, 0o755); err != nil {
+		if err := os.MkdirAll(base, 0o755); err != nil {
 			return i, err
 		}
 		if err := moveTree(root, target); err != nil {
@@ -339,7 +363,7 @@ func (m *Manager) backup(prev *Installed) error {
 		return err
 	}
 	for _, f := range prev.Folders {
-		src := filepath.Join(m.ModsDir, f)
+		src := filepath.Join(m.dirFor(prev), f)
 		if _, err := os.Stat(src); err != nil {
 			continue
 		}
@@ -373,13 +397,13 @@ func (m *Manager) Rollback(key string) error {
 	}
 	if cur := m.State.Mods[key]; cur != nil {
 		for _, f := range cur.Folders {
-			if err := os.RemoveAll(filepath.Join(m.ModsDir, f)); err != nil {
+			if err := os.RemoveAll(filepath.Join(m.dirFor(cur), f)); err != nil {
 				return err
 			}
 		}
 	}
 	for _, f := range prev.Folders {
-		if err := moveTree(filepath.Join(latest, f), filepath.Join(m.ModsDir, f)); err != nil {
+		if err := moveTree(filepath.Join(latest, f), filepath.Join(m.dirFor(&prev), f)); err != nil {
 			return err
 		}
 	}
@@ -407,7 +431,7 @@ func (m *Manager) Remove(key string) error {
 		return fmt.Errorf("%s is not installed", key)
 	}
 	for _, f := range inst.Folders {
-		if err := os.RemoveAll(filepath.Join(m.ModsDir, f)); err != nil {
+		if err := os.RemoveAll(filepath.Join(m.dirFor(inst), f)); err != nil {
 			return err
 		}
 	}
@@ -431,11 +455,11 @@ func (m *Manager) Verify() ([]Problem, error) {
 	for _, inst := range m.State.Sorted() {
 		now := map[string]string{}
 		for _, f := range inst.Folders {
-			if _, err := os.Stat(filepath.Join(m.ModsDir, f)); err != nil {
+			if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err != nil {
 				probs = append(probs, Problem{f, "missing", true})
 				continue
 			}
-			if err := hashTree(filepath.Join(m.ModsDir, f), f, now); err != nil {
+			if err := hashTree(filepath.Join(m.dirFor(inst), f), f, now); err != nil {
 				return nil, err
 			}
 		}
@@ -457,7 +481,7 @@ func (m *Manager) Verify() ([]Problem, error) {
 		return nil, err
 	}
 	for _, e := range ents {
-		if !e.IsDir() || m.State.OwnerOf(e.Name()) != nil {
+		if !e.IsDir() || m.State.OwnerOf(KindMod, e.Name()) != nil {
 			continue
 		}
 		rep, err := scan.Dir(filepath.Join(m.ModsDir, e.Name()))
@@ -517,4 +541,68 @@ func maxName(rep *scan.Report) string {
 // the blocklist, failed source checks and checksum mismatches never can be.
 func Overridable(reason string) bool {
 	return strings.Contains(reason, "--allow-high") || strings.Contains(reason, "--cooldown") || strings.Contains(reason, "--allow-new-findings")
+}
+
+const (
+	KindMod         = "mod"
+	KindContraption = "contraption"
+)
+
+// dirFor is the game folder an installed item lives in.
+func (m *Manager) dirFor(inst *Installed) string {
+	if inst.Kind == KindContraption {
+		return m.ContraptionsDir
+	}
+	return m.ModsDir
+}
+
+// contraptionFiles are the files a saved contraption consists of. Nothing
+// else from a contraption archive is installed.
+var contraptionFiles = map[string]bool{".jaap": true, ".json": true, ".outline": true, ".png": true, ".jpg": true}
+
+// contraptionRoots finds contraptions (<name>.jaap plus <name>.json,
+// .outline and .png) under dir and stages each in its own folder named
+// after it, the layout Contraptions/<name>/<name>.jaap the game uses.
+func contraptionRoots(dir string) (roots, names []string, err error) {
+	var jaaps []string
+	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.EqualFold(filepath.Ext(p), ".jaap") {
+			jaaps = append(jaaps, p)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	stage := filepath.Join(dir, ".ppgmods-contraptions")
+	for i, j := range jaaps {
+		base := strings.TrimSuffix(filepath.Base(j), filepath.Ext(j))
+		name := strings.TrimSpace(reUnsafeName.ReplaceAllString(base, "_"))
+		if name == "" || name == "." || name == ".." {
+			name = fmt.Sprintf("contraption %d", i+1)
+		}
+		unit := filepath.Join(stage, fmt.Sprint(i), name)
+		if err := os.MkdirAll(unit, 0o755); err != nil {
+			return nil, nil, err
+		}
+		ents, err := os.ReadDir(filepath.Dir(j))
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, e := range ents {
+			ext := strings.ToLower(filepath.Ext(e.Name()))
+			stem := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+			if e.IsDir() || !contraptionFiles[ext] || !strings.EqualFold(stem, base) {
+				continue
+			}
+			if err := copyTree(filepath.Join(filepath.Dir(j), e.Name()), filepath.Join(unit, name+ext)); err != nil {
+				return nil, nil, err
+			}
+		}
+		roots, names = append(roots, unit), append(names, name)
+	}
+	return roots, names, nil
 }

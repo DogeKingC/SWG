@@ -73,6 +73,7 @@ func (a *App) Manager(needGame bool) (*manager.Manager, error) {
 			return nil, err
 		}
 		m.ModsDir = game.ModsDir(dir)
+		m.ContraptionsDir = game.ContraptionsDir(dir)
 		m.Blocklist = manager.LoadBlocklist(!a.Opt.Offline, a.logf)
 	}
 	return m, nil
@@ -110,6 +111,7 @@ type SearchResult struct {
 	AfterCutoff bool     `json:"after_cutoff,omitempty"` // Workshop: every known copy is after the cutoff
 	Reviewed    bool     `json:"reviewed,omitempty"`     // True Workshop: reviewed by the site's maintainers
 	Downloads   int      `json:"download_count,omitempty"`
+	Kind        string   `json:"kind,omitempty"`    // "contraption" when known
 	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 19.09.2026", ...
 
 	newest time.Time
@@ -744,19 +746,20 @@ func (a *App) Backup() (string, error) {
 
 // Paths describes where ppgmods looks for things.
 type Paths struct {
-	Libraries []string `json:"libraries"`
-	Game      string   `json:"game"`
-	Mods      string   `json:"mods"`
-	GameError string   `json:"game_error,omitempty"`
-	Workshop  []string `json:"workshop"`
-	Data      string   `json:"data"`
-	Downloads string   `json:"downloads"`
+	Libraries    []string `json:"libraries"`
+	Game         string   `json:"game"`
+	Mods         string   `json:"mods"`
+	Contraptions string   `json:"contraptions"`
+	GameError    string   `json:"game_error,omitempty"`
+	Workshop     []string `json:"workshop"`
+	Data         string   `json:"data"`
+	Downloads    string   `json:"downloads"`
 }
 
 func (a *App) Paths() Paths {
 	p := Paths{Libraries: game.Libraries(), Workshop: game.WorkshopDirs(), Downloads: DownloadFolder()}
 	if dir, err := game.FindGameDir(a.Opt.Game); err == nil {
-		p.Game, p.Mods = dir, game.ModsDir(dir)
+		p.Game, p.Mods, p.Contraptions = dir, game.ModsDir(dir), game.ContraptionsDir(dir)
 	} else {
 		p.GameError = err.Error()
 	}

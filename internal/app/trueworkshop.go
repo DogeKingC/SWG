@@ -18,8 +18,8 @@ func (a *App) fetchTW(id int, prev *manager.Installed) (*manager.Candidate, erro
 	if err != nil {
 		return nil, err
 	}
-	if it.Type != "mod" {
-		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("%q is a %s; only C# mods are supported", it.Title, it.Type)}}
+	if it.Type != "mod" && it.Type != "contraption" {
+		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("%q is a %s, which ppgmods does not install", it.Title, it.Type)}}
 	}
 	if it.Scan != "" && it.Scan != "clean" {
 		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("True Workshop's own scanner status for this item is %q, not clean", it.Scan)}}
@@ -63,6 +63,6 @@ func TWResult(it sources.TWItem) SearchResult {
 	return SearchResult{
 		Ref: "tw:" + strconv.Itoa(it.ID), Source: "True Workshop", Name: it.Title, Author: it.Author,
 		Category: strings.Join(it.Tags, ", "), Date: FmtTime(it.CreatedTime()), Size: HumanSize(it.Size),
-		URL: it.Page(), Image: it.Thumb(), Reviewed: it.Reviewed(), Downloads: it.Downloads,
+		URL: it.Page(), Image: it.Thumb(), Reviewed: it.Reviewed(), Downloads: it.Downloads, Kind: it.Type,
 	}
 }

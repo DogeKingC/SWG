@@ -16,22 +16,24 @@ import (
 // Preview is the pre-install check shown in the GUI's overview: what is in
 // the archive, what the scanner found, and whether ppgmods would install it.
 type Preview struct {
-	Ref         string        `json:"ref"`
-	Name        string        `json:"name"`
-	Author      string        `json:"author,omitempty"`
-	Version     string        `json:"version,omitempty"`
-	Description string        `json:"description,omitempty"` // from mod.json
-	Mods        int           `json:"mods"`                  // mod.json files in the archive
-	Files       int           `json:"files"`
-	Scripts     int           `json:"scripts"`
-	ScanMax     string        `json:"scan_max"`
-	Findings    []string      `json:"findings,omitempty"`
-	Verdict     string        `json:"verdict"` // ok, review (overridable), blocked
-	Reasons     []string      `json:"reasons,omitempty"`
-	Thumb       bool          `json:"thumb"`
-	Browser     *NeedsBrowser `json:"browser,omitempty"`
-	Mirrors     []Mirror      `json:"mirrors,omitempty"` // Workshop items: every mirror copy, newest first
-	Chosen      string        `json:"chosen,omitempty"`  // the copy this preview checked
+	Ref          string        `json:"ref"`
+	Name         string        `json:"name"`
+	Author       string        `json:"author,omitempty"`
+	Version      string        `json:"version,omitempty"`
+	Description  string        `json:"description,omitempty"` // from mod.json
+	Mods         int           `json:"mods"`                  // mod.json files in the archive
+	Files        int           `json:"files"`
+	Scripts      int           `json:"scripts"`
+	ScanMax      string        `json:"scan_max"`
+	Findings     []string      `json:"findings,omitempty"`
+	Verdict      string        `json:"verdict"` // ok, review (overridable), blocked
+	Reasons      []string      `json:"reasons,omitempty"`
+	Thumb        bool          `json:"thumb"`
+	Kind         string        `json:"kind"`
+	Contraptions []string      `json:"contraptions,omitempty"`
+	Browser      *NeedsBrowser `json:"browser,omitempty"`
+	Mirrors      []Mirror      `json:"mirrors,omitempty"` // Workshop items: every mirror copy, newest first
+	Chosen       string        `json:"chosen,omitempty"`  // the copy this preview checked
 }
 
 type modJSON struct {
@@ -111,9 +113,15 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 			return nil, err
 		}
 	}
+	p.Kind = manager.KindMod
 	if len(roots) == 0 {
-		p.Verdict = "blocked"
-		p.Reasons = append(p.Reasons, "no mod.json found: this is not a C# mod (contraptions and skins are not supported yet)")
+		if cs, err := contraptions(dir); err == nil && len(cs) > 0 {
+			p.Kind, p.Contraptions = manager.KindContraption, cs
+			p.Thumb = saveContraptionThumb(dir, c.Key)
+		} else {
+			p.Verdict = "blocked"
+			p.Reasons = append(p.Reasons, "found neither a mod (mod.json) nor a contraption (.jaap); skins and other content are not supported")
+		}
 	}
 	return p, nil
 }
@@ -186,4 +194,29 @@ func ThumbPath(ref string) string {
 		return ""
 	}
 	return p
+}
+
+// contraptions lists the contraption names (.jaap files) in a staged archive.
+func contraptions(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.EqualFold(filepath.Ext(p), ".jaap") {
+			out = append(out, strings.TrimSuffix(d.Name(), filepath.Ext(d.Name())))
+		}
+		return err
+	})
+	return out, err
+}
+
+// saveContraptionThumb caches the first contraption's .png as the thumbnail.
+func saveContraptionThumb(dir, key string) bool {
+	found := false
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if found || err != nil || d.IsDir() || !strings.EqualFold(filepath.Ext(p), ".png") {
+			return err
+		}
+		found = saveThumb(filepath.Dir(p), d.Name(), key)
+		return nil
+	})
+	return found
 }

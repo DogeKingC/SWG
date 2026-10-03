@@ -22,6 +22,7 @@ type Installed struct {
 	FileID      int               `json:"file_id,omitempty"`
 	Version     string            `json:"version,omitempty"`
 	Mirror      string            `json:"mirror,omitempty"`   // Workshop items: mirror copy installed
+	Kind        string            `json:"kind,omitempty"`     // "mod" (default) or "contraption"
 	Revision    time.Time         `json:"revision,omitempty"` // upload/revision time at the source
 	ArchiveSHA  string            `json:"archive_sha256,omitempty"`
 	Files       map[string]string `json:"files"` // "<folder>/<rel>" -> sha256
@@ -90,9 +91,16 @@ func (s *State) Sorted() []*Installed {
 	return out
 }
 
-// OwnerOf returns the entry that installed a Mods/ folder, if any.
-func (s *State) OwnerOf(folder string) *Installed {
+// OwnerOf returns the entry that installed a Mods/ or Contraptions/ folder.
+func (s *State) OwnerOf(kind, folder string) *Installed {
 	for _, m := range s.Mods {
+		k := m.Kind
+		if k == "" {
+			k = "mod"
+		}
+		if k != kind {
+			continue
+		}
 		for _, f := range m.Folders {
 			if f == folder {
 				return m

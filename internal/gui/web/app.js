@@ -118,6 +118,7 @@ async function refreshState() {
   $("#pathsInfo").textContent = [
     "Game:          " + (p.game || "not found"),
     "Mods folder:   " + (p.mods || "-"),
+    "Contraptions:  " + (p.contraptions || "-"),
     "Steam libraries:\n  " + ((p.libraries || []).join("\n  ") || "none found"),
     "Workshop cache:\n  " + ((p.workshop || []).join("\n  ") || "none found"),
     "Downloads:     " + (p.downloads || "-"),
@@ -147,7 +148,9 @@ function renderInstalled() {
     );
     return el("div", { class: "item" },
       el("div", {},
-        el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind), m.pinned ? el("span", { class: "badge" }, " pinned") : null),
+        el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind),
+          m.item_kind === "contraption" ? el("span", { class: "badge badge-kind" }, " contraption") : null,
+          m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
           m.key, " · installed ", (m.installed_at || "").slice(0, 10),
           m.revision && !m.revision.startsWith("0001") ? " · source date " + m.revision.slice(0, 10) : "",
@@ -227,7 +230,9 @@ function jobDone(j) {
     if (sum) { toast(`${sum.OK} installed, ${sum.Refused} refused, ${sum.Failed} errors`, 6000); return; }
     if (j.name === "backup" && j.data) { $("#restorePath").value = j.data.dest; toast("Backup saved. Now restore the safe copies (step 2)."); return; }
     if (j.name === "install") {
-      toast("Installed into " + ((j.data && j.data.mods_dir) || "your Mods folder"), 7000, { label: "Open Mods folder", run: () => api("/api/open?what=mods") });
+      const c = j.data && j.data.kind === "contraption";
+      toast("Installed into " + ((j.data && (c ? j.data.contraptions_dir : j.data.mods_dir)) || (c ? "your Contraptions folder" : "your Mods folder")), 7000,
+        { label: c ? "Open Contraptions folder" : "Open Mods folder", run: () => api("/api/open?what=" + (c ? "contraptions" : "mods")) });
       return;
     }
     toast(j.name + " finished");
@@ -436,6 +441,7 @@ function card(m) {
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
         ...sourceBadges(m),
+        m.kind === "contraption" ? el("span", { class: "badge badge-kind" }, "contraption") : null,
         m.category ? el("span", { class: "badge" }, m.category) : null,
         m.after_cutoff ? el("span", { class: "badge badge-bad", title: "Revised after the worm started; refused" }, "after cutoff") : null,
         installed ? el("span", { class: "badge badge-ok" }, "installed") : null,
@@ -589,7 +595,8 @@ function showCheck(m, p) {
     const c = p.mirrors.find((x) => x.id === p.chosen);
     if (c) info.push(`checked the ${c.source} copy (version ${c.version})`);
   }
-  if (p.files) info.push(`${p.files} files, ${p.scripts} C# scripts`);
+  if (p.kind === "contraption") info.push("contraption: " + (p.contraptions || []).join(", ") + " (goes in your Contraptions folder)");
+  else if (p.files) info.push(`${p.files} files, ${p.scripts} C# scripts`);
   if (p.version) info.push("version " + p.version);
   if (p.author) info.push("mod.json author: " + p.author);
   if (p.scan_max) info.push("scanner: " + (p.scan_max === "none" ? "nothing found" : "highest " + p.scan_max));
@@ -649,6 +656,7 @@ $("#checkUpdates").onclick = () => { $("#applyUpdates").dataset.last = "check"; 
 $("#applyUpdates").onclick = () => { $("#applyUpdates").dataset.last = "apply"; run({ action: "update", apply: true }, "Applying safe updates"); };
 $("#verifyBtn").onclick = () => run({ action: "verify" }, "Verifying files");
 $("#openMods").onclick = () => api("/api/open?what=mods").catch((e) => toast(e.message));
+$("#openContraptions").onclick = () => api("/api/open?what=contraptions").catch((e) => toast(e.message));
 $("#openData").onclick = () => api("/api/open?what=data").catch((e) => toast(e.message));
 ["checkUpdates", "applyUpdates", "verifyBtn", "backupBtn", "restoreBtn", "importBtn"].forEach((id) => $("#" + id).setAttribute("data-busy", ""));
 
