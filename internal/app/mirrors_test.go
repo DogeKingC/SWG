@@ -94,3 +94,76 @@ func asRejection(err error, r **manager.Rejection) bool {
 	*r = x
 	return ok
 }
+
+func TestCompareVersions(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"4.0", "3.2", 1}, {"1.75.2", "1.70.8", 1}, {"1.2", "1.10", -1}, {"v2", "1.9.9", 1},
+		{"1.0", "1", 0}, {"", "0.1", -1}, {"", "", 0},
+	}
+	for _, c := range cases {
+		if got := CompareVersions(c.a, c.b); got != c.want {
+			t.Errorf("CompareVersions(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestSameMod(t *testing.T) {
+	if !sameMod("Quick Draw Mod", "51804", "Quick Draw Mod", "51804") {
+		t.Error("identical")
+	}
+	if !sameMod("Science Hazard Minus V:3.1", "Zkryhn", "Science Hazard Minus", "") {
+		t.Error("trailing version")
+	}
+	if sameMod("Quick Draw Mod", "someone", "Quick Draw Mod", "51804") {
+		t.Error("different authors matched")
+	}
+	if sameMod("Melee Pack", "", "Melee Pack 2 Ultimate", "") {
+		t.Error("different names matched")
+	}
+}
+
+func writeVersionedZip(t *testing.T, path, version, ugc string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	w, _ := zw.Create("Mod/mod.json")
+	w.Write([]byte(`{"Name":"Quick Draw Mod","ModVersion":"` + version + `","CreatorUGCIdentity":"` + ugc + `","Scripts":["s.cs"]}`))
+	w, _ = zw.Create("Mod/s.cs")
+	w.Write([]byte(`class A {}`))
+	zw.Close()
+	f.Close()
+}
+
+// Like Quick Draw: the True Workshop upload is newer by date but carries an
+// older ModVersion than the Skymods copy; a copy whose mod.json names a
+// different Workshop item is ignored.
+func TestFetchWorkshopPicksHighestModVersion(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	const ws = "3801154351"
+	dir, _ := CacheDir("sky:" + ws)
+	writeVersionedZip(t, filepath.Join(dir, "trueworkshop-153-tw.zip"), "3.2", ws)
+	writeVersionedZip(t, filepath.Join(dir, "skymods-478284-sky.zip"), "4.0", ws)
+	writeVersionedZip(t, filepath.Join(dir, "topmods-9-other.zip"), "9.9", "1111111111")
+	mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: []Mirror{
+		{ID: "topmods:9", Source: "top-mods", VersionTime: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC), tm: &sources.TMItem{}},
+		{ID: "skymods:478284", Source: "Skymods", VersionTime: time.Date(2026, 9, 20, 12, 4, 0, 0, time.UTC), sky: &sources.SkyItem{}},
+		{ID: "trueworkshop:153", Source: "True Workshop", Reviewed: true,
+			tw: &sources.TWItem{ID: 153, Created: "2026-10-02 07:03:50", Trust: "dev"}},
+	}}
+	defer delete(mirrorMemo, ws)
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
+	c, err := (&App{Opt: DefaultOptions()}).fetchWorkshop(m, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Mirror != "skymods:478284" || c.Version != "4.0" {
+		t.Fatalf("picked %s version %s, want skymods:478284 version 4.0", c.Mirror, c.Version)
+	}
+}

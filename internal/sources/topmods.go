@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -299,4 +302,137 @@ func TMItemID(s string) string {
 		}
 	}
 	return tmID(s)
+}
+
+// ---- sitemap index ----
+//
+// top-mods' own search spans every game and needs every word to match, so
+// ppgmods also reads the site's sitemap (every item URL, slug = title) and
+// matches names locally. The sitemap is cached on disk for 12 hours.
+
+// IndexCacheDir is where downloaded indexes are cached (set by the app).
+var IndexCacheDir string
+
+var (
+	tmIndexMu sync.Mutex
+	tmIndex   []TMSummary
+	tmIndexAt time.Time
+	reSMLoc   = regexp.MustCompile(`<loc>(https://top-mods\.com/mods/people-playground/[a-z0-9-]+/(\d+)-([^<]+)\.html)</loc>`)
+	reSlugSep = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+)
+
+// TMIndex returns every People Playground item listed in top-mods' sitemap.
+func TMIndex() ([]TMSummary, error) {
+	tmIndexMu.Lock()
+	defer tmIndexMu.Unlock()
+	if tmIndex != nil && time.Since(tmIndexAt) < 12*time.Hour {
+		return tmIndex, nil
+	}
+	var body string
+	cache := ""
+	if IndexCacheDir != "" {
+		cache = filepath.Join(IndexCacheDir, "topmods-sitemap.xml")
+		if st, err := os.Stat(cache); err == nil && time.Since(st.ModTime()) < 12*time.Hour {
+			if b, err := os.ReadFile(cache); err == nil {
+				body = string(b)
+			}
+		}
+	}
+	if body == "" {
+		var err error
+		if body, err = tmGetLimit(tmBase+"/sitemap_content_mods.xml", 64<<20); err != nil {
+			return nil, err
+		}
+		if cache != "" {
+			os.MkdirAll(IndexCacheDir, 0o755)
+			os.WriteFile(cache, []byte(body), 0o644)
+		}
+	}
+	tmIndex = ParseTMSitemap(body)
+	tmIndexAt = time.Now()
+	return tmIndex, nil
+}
+
+func ParseTMSitemap(body string) []TMSummary {
+	var out []TMSummary
+	for _, m := range reSMLoc.FindAllStringSubmatch(body, -1) {
+		out = append(out, TMSummary{URL: m[1], ID: m[2], Title: strings.ReplaceAll(m[3], "-", " ")})
+	}
+	return out
+}
+
+func tmGetLimit(u string, max int64) (string, error) {
+	resp, err := get(u)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, max))
+	return string(b), err
+}
+
+// SlugWords lowercases a title into the words top-mods uses in its URLs.
+func SlugWords(s string) []string {
+	var out []string
+	for _, w := range reSlugSep.Split(strings.ToLower(s), -1) {
+		if w != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// TMFind matches query words against every top-mods item name (from the
+// sitemap). Items containing all words come first, exact names before
+// longer ones, newest first.
+func TMFind(query string, limit int) ([]TMSummary, error) {
+	idx, err := TMIndex()
+	if err != nil {
+		return nil, err
+	}
+	q := SlugWords(query)
+	if len(q) == 0 {
+		return nil, nil
+	}
+	type hit struct {
+		s     TMSummary
+		extra int
+		id    int
+	}
+	var hits []hit
+	for _, s := range idx {
+		words := SlugWords(s.Title)
+		ok := true
+		for _, w := range q {
+			found := false
+			for _, x := range words {
+				if x == w || len(w) >= 3 && strings.HasPrefix(x, w) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			id, _ := strconv.Atoi(s.ID)
+			hits = append(hits, hit{s, len(words) - len(q), id})
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].extra != hits[j].extra {
+			return hits[i].extra < hits[j].extra
+		}
+		return hits[i].id > hits[j].id
+	})
+	var out []TMSummary
+	for i, h := range hits {
+		if i >= limit {
+			break
+		}
+		out = append(out, h.s)
+	}
+	return out, nil
 }

@@ -301,3 +301,4 @@ dialog.details:not([open]) { display: none; }
 .mirror-main { flex: 1; min-width: 180px; }
 .mirror-tags { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .mirror-off { opacity: .55; cursor: not-allowed; }
+.search-status { padding: 18px 0; font-size: 13px; }

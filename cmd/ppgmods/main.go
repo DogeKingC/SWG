@@ -45,6 +45,8 @@ Keep up to date:
   pin|unpin <key>            stop/resume updates for a mod
   rollback <key>             restore the previous version (and pin it)
   remove <key>               uninstall
+  find-installed             track mods/contraptions already in the game folders
+                             (installed by hand or from the sites)
   self-update                update ppgmods itself to the latest release
   install-app [no-desktop]   install as a desktop app (Start menu / app menu,
                              desktop shortcut); no admin rights needed
@@ -266,6 +268,12 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 		return m.Remove(args[0])
 	case "verify":
 		return cmdVerify(m)
+	case "find-installed":
+		found, err := a.FindExisting(m)
+		if err == nil {
+			logf("%d already-installed item(s) are now tracked", len(found))
+		}
+		return err
 	}
 	return fmt.Errorf("unknown command %q (see `ppgmods help`)", cmd)
 }

@@ -146,15 +146,46 @@ contain no code. A contraption you saved yourself under the same name is never
 overwritten. The Installed view has an **Open Contraptions folder** button,
 and verify, rollback and remove work for contraptions the same way as for mods.
 
-### Choosing between mirrors
+### Finding mods, and duplicates across sites
 
-Mirrors can hold different revisions of the same Workshop item. By default
-ppgmods installs the **newest copy from before the worm cutoff**. If the
-scanner flags that copy (HIGH or CRITICAL), it falls back to the next-newest
-copy that scans clean. A mod's details view lists every mirror with its
-version and size, and you can pick one; the safety check then runs on that
-copy. From the command line, use `--mirror skymods:<id>` or
-`--mirror topmods:<id>`.
+- **top-mods** is searched through its sitemap (every People Playground item,
+  cached for 12 hours), not the site's own search, which covers every game.
+  This finds mods the site search misses.
+- The same Workshop item found on several sites shows as **one card**:
+  Skymods, top-mods, and True Workshop uploads with the same name and author.
+  Each card lists every site that has it.
+- Search results appear per source as they arrive. Skymods can take 10–20 s.
+
+### Choosing the newest copy
+
+Mirrors and uploads can hold different versions of the same mod, and their
+dates mislead: True Workshop shows upload dates, and top-mods' date is not
+always the newest. ppgmods downloads each copy (at most four) and compares
+the **`ModVersion` in its `mod.json`**. Quick Draw, for example: Skymods v4.0,
+True Workshop v3.2 (uploaded later), top-mods v1.0. It installs the highest
+version from before the worm cutoff, skipping copies the scanner flags.
+
+A copy whose `mod.json` names a different Workshop item (`CreatorUGCIdentity`)
+is ignored. The details view lists every copy with its date, `mod.json`
+version and size, and you can pick one. From the command line, use
+`--mirror skymods:<id>`, `--mirror topmods:<id>` or
+`--mirror trueworkshop:<id>`.
+
+### Mods you already installed
+
+Mods and contraptions already in the game folders, put there by hand or
+downloaded from the sites, are found and tracked automatically when the window
+opens. **Find already-installed** in Installed, or `ppgmods find-installed`,
+does the same on demand. Each one is identified by:
+
+- the Workshop ID in its `mod.json` (`CreatorUGCIdentity`), or
+- a True Workshop upload with the same name and author, or
+- if neither, its folder (as a local copy).
+
+Each one is scanned and fingerprinted, so it shows as installed on every card
+that refers to it, gets update checks, and is covered by Verify. Nothing is
+moved. Installing it again from any site replaces that copy instead of adding
+a second one.
 
 ## Safety model
 

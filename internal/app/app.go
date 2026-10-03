@@ -122,11 +122,20 @@ type SearchResults struct {
 	TrueWS     []SearchResult `json:"trueworkshop"` // True Workshop uploads (maintainer-reviewed archive)
 	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
 	Errors     []string       `json:"errors,omitempty"`
+	MergedTW   []string       `json:"merged_tw,omitempty"` // True Workshop refs shown inside a Workshop card
 }
 
 // Search queries GameBanana and both Workshop mirrors. Skymods and top-mods
 // results for the same Workshop item are merged into one entry.
 func Search(q string, page int) SearchResults {
+	return SearchParts(q, page, map[string]bool{"gb": true, "tw": true, "ws": true})
+}
+
+// SearchParts runs only some sources (gb, tw, ws = Workshop mirrors), so a
+// window can show each as soon as it answers instead of waiting for the
+// slowest site.
+func SearchParts(q string, page int, parts map[string]bool) SearchResults {
+	useIndexCache()
 	var r SearchResults
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -136,6 +145,9 @@ func Search(q string, page int) SearchResults {
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
+		if !parts["tw"] && !parts["ws"] {
+			return
+		}
 		sort := "popular"
 		if strings.TrimSpace(q) == "" {
 			sort = "newest"
@@ -151,6 +163,9 @@ func Search(q string, page int) SearchResults {
 	}()
 	go func() {
 		defer wg.Done()
+		if !parts["gb"] {
+			return
+		}
 		gb, err := sources.GBSearch(q, page)
 		if err != nil {
 			addErr("GameBanana: " + err.Error())
@@ -165,6 +180,9 @@ func Search(q string, page int) SearchResults {
 	}()
 	go func() {
 		defer wg.Done()
+		if !parts["ws"] {
+			return
+		}
 		var err error
 		if strings.TrimSpace(q) == "" {
 			sky, err = sources.SkyLatest(page)
@@ -177,12 +195,21 @@ func Search(q string, page int) SearchResults {
 	}()
 	go func() {
 		defer wg.Done()
+		if !parts["ws"] {
+			return
+		}
 		var list []sources.TMSummary
 		var err error
 		if strings.TrimSpace(q) == "" {
 			list, err = sources.TMLatest(page)
+		} else if list, err = sources.TMFind(q, page*12); err == nil {
+			if len(list) > (page-1)*12 {
+				list = list[(page-1)*12:]
+			} else {
+				list = nil
+			}
 		} else {
-			list, err = sources.TMSearch(q, page)
+			list, err = sources.TMSearch(q, page) // sitemap unavailable
 		}
 		if err != nil {
 			addErr("top-mods: " + err.Error())
@@ -238,6 +265,35 @@ func Search(q string, page int) SearchResults {
 			add(it.WorkshopID, tmMirror(it))
 		}
 	}
+	// A True Workshop upload of a Workshop item found here joins its card
+	// instead of showing up twice.
+	var keepTW []SearchResult
+	for _, t := range r.TrueWS {
+		merged := false
+		if t.Kind != "contraption" {
+			for _, ws := range order {
+				e := byWS[ws]
+				if sameMod(t.Name, t.Author, e.Name, e.Author) {
+					label := "True Workshop"
+					if t.Reviewed {
+						label += " (reviewed)"
+					}
+					e.Mirrors = append(e.Mirrors, label)
+					merged = true
+					break
+				}
+			}
+		}
+		if merged {
+			r.MergedTW = append(r.MergedTW, t.Ref)
+		} else {
+			keepTW = append(keepTW, t)
+		}
+	}
+	r.TrueWS = keepTW
+	if !parts["tw"] {
+		r.TrueWS = nil
+	}
 	for _, ws := range order {
 		r.Workshop = append(r.Workshop, *byWS[ws])
 	}
@@ -292,13 +348,28 @@ func (e *NeedsBrowser) Error() string {
 // Workshop URL.
 func (a *App) Install(m *manager.Manager, ref string) error {
 	ref = NormalizeRef(ref)
-	c, err := a.Fetch(m, ref, m.State.Mods[ref])
+	c, err := a.Fetch(m, ref, m.State.Find(ref))
 	var nb *NeedsBrowser
 	if errors.As(err, &nb) && a.Opt.BrowserFallback {
 		c, err = a.viaBrowser(nb)
 	}
 	if err != nil || c == nil {
 		return err
+	}
+	// Already installed under another ref (e.g. found by its Workshop ID
+	// and now installed from True Workshop): replace that copy instead of
+	// adding a second one next to it.
+	if ex := m.State.Find(ref); ex != nil && ex.Key != c.Key {
+		c.Aliases = append(c.Aliases, c.Key)
+		for _, a := range ex.Aliases {
+			if a != ex.Key {
+				c.Aliases = append(c.Aliases, a)
+			}
+		}
+		c.Key = ex.Key
+	} else if ex := m.State.Find(c.Key); ex != nil && ex.Key != c.Key {
+		c.Aliases = append(c.Aliases, c.Key)
+		c.Key = ex.Key
 	}
 	return m.Install(c)
 }
@@ -626,6 +697,16 @@ func (a *App) Update(m *manager.Manager) Summary {
 			if err == nil && c == nil {
 				s.Current++
 				continue
+			}
+			if err == nil && inst.Adopted && inst.ArchiveSHA == "" {
+				// Found already installed: we never saw its archive, so compare
+				// mod.json versions instead of file checksums.
+				if ver, _, _, _ := inspect(m, c); CompareVersions(ver, inst.Version) <= 0 {
+					inst.ArchiveSHA = c.ArchiveSHA
+					m.State.Save()
+					s.Current++
+					continue
+				}
 			}
 			if err == nil {
 				err = m.Install(c)

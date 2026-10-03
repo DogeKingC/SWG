@@ -158,6 +158,16 @@ func Run(opt app.Options, g Options) error {
 	} else {
 		fmt.Println(url)
 	}
+	// Track mods already in the game folders (installed by hand or from the
+	// sites) so they show as installed.
+	go func() {
+		a := s.newApp(nil)
+		if m, err := a.Manager(true); err == nil {
+			if found, err := a.FindExisting(m); err == nil && len(found) > 0 {
+				s.logf("now tracking %d mod(s)/contraption(s) that were already installed", len(found))
+			}
+		}
+	}()
 	go func() {
 		for {
 			s.checkRelease(true)
@@ -423,7 +433,11 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	writeJSON(w, app.Search(r.URL.Query().Get("q"), page))
+	parts := map[string]bool{"gb": true, "tw": true, "ws": true}
+	if p := r.URL.Query().Get("part"); p != "" {
+		parts = map[string]bool{p: true}
+	}
+	writeJSON(w, app.SearchParts(r.URL.Query().Get("q"), page, parts))
 }
 
 func (s *server) handleJob(w http.ResponseWriter, r *http.Request) {
@@ -589,7 +603,7 @@ func (s *server) do(j *job, req actionReq) error {
 		if len(req.Refs) == 1 {
 			err := a.Install(m, req.Refs[0])
 			s.offerRetry(j, err, req)
-			if inst := m.State.Mods[app.NormalizeRef(req.Refs[0])]; err == nil && inst != nil {
+			if inst := m.State.Find(app.NormalizeRef(req.Refs[0])); err == nil && inst != nil {
 				j.Data["kind"] = inst.Kind
 			}
 			return err
@@ -616,6 +630,10 @@ func (s *server) do(j *job, req actionReq) error {
 	case "restore":
 		sum, err := a.Restore(m, req.Path)
 		j.Summary = &sum
+		return err
+	case "find-installed":
+		found, err := a.FindExisting(m)
+		j.Data = map[string]string{"found": strconv.Itoa(len(found))}
 		return err
 	case "verify":
 		probs, err := m.Verify()
@@ -896,7 +914,7 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if st, err := manager.LoadState(); err == nil {
-		v.Installed = st.Mods[ref] != nil
+		v.Installed = st.Find(ref) != nil
 	}
 	writeJSON(w, v)
 }

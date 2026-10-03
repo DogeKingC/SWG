@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -29,9 +31,12 @@ type Mirror struct {
 	Page        string    `json:"page"`
 	Image       string    `json:"image,omitempty"`
 	AfterCutoff bool      `json:"after_cutoff"`
+	ModVersion  string    `json:"mod_version,omitempty"` // from the copy's mod.json, once downloaded
+	Reviewed    bool      `json:"reviewed,omitempty"`    // True Workshop: reviewed by its maintainers
 
 	sky *sources.SkyItem
 	tm  *sources.TMItem
+	tw  *sources.TWItem
 }
 
 var reSkyArchive = regexp.MustCompile(`/archives/(\d+)`)
@@ -50,6 +55,94 @@ func tmMirror(it *sources.TMItem) Mirror {
 		Version: it.Version, VersionTime: it.VersionTime, Size: it.Size, Page: it.URL, Image: it.Image,
 		AfterCutoff: !it.VersionTime.IsZero() && !it.VersionTime.Before(manager.WormCutoff), tm: it,
 	}
+}
+
+// twMirror is a True Workshop upload of a Workshop item. Its date is the
+// upload date, not the Steam revision, so copies are compared by the
+// ModVersion in mod.json instead.
+func twMirror(it sources.TWItem) Mirror {
+	return Mirror{
+		ID: fmt.Sprintf("trueworkshop:%d", it.ID), Source: "True Workshop", Title: it.Title, Author: it.Author,
+		Version: "uploaded " + FmtTime(it.CreatedTime()), Size: HumanSize(it.Size), Page: it.Page(), Image: it.Thumb(),
+		Reviewed: it.Reviewed(), tw: &it,
+	}
+}
+
+var reTrailingVersion = regexp.MustCompile(`(?i)^(.*?)[\s:_-]*(?:v(?:er(?:sion)?)?)?[\s:._-]*\d+(?:\.\d+)*[a-z]?$`)
+
+// normTitle reduces a mod name to lowercase letters and digits.
+func normTitle(s string) string { return strings.Join(sources.SlugWords(s), "") }
+
+// sameMod reports whether two listings name the same mod: equal names (or
+// equal apart from a trailing version number) and, when both have one, the
+// same author.
+func sameMod(titleA, authorA, titleB, authorB string) bool {
+	if authorA != "" && authorB != "" && normTitle(authorA) != normTitle(authorB) {
+		return false
+	}
+	a, b := normTitle(titleA), normTitle(titleB)
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	strip := func(t string) string {
+		if m := reTrailingVersion.FindStringSubmatch(t); m != nil && m[1] != "" {
+			return normTitle(m[1])
+		}
+		return normTitle(t)
+	}
+	return strip(titleA) == strip(titleB)
+}
+
+// CompareVersions compares mod.json ModVersion strings numerically
+// ("4.0" > "3.2", "1.75.2" > "1.70.8"). Unknown versions sort lowest.
+func CompareVersions(a, b string) int {
+	pa, pb := versionParts(a), versionParts(b)
+	if pa == nil || pb == nil {
+		switch {
+		case pa == nil && pb == nil:
+			return 0
+		case pa == nil:
+			return -1
+		default:
+			return 1
+		}
+	}
+	for i := 0; i < len(pa) || i < len(pb); i++ {
+		var x, y int
+		if i < len(pa) {
+			x = pa[i]
+		}
+		if i < len(pb) {
+			y = pb[i]
+		}
+		if x != y {
+			if x > y {
+				return 1
+			}
+			return -1
+		}
+	}
+	return 0
+}
+
+var reDigits = regexp.MustCompile(`\d+`)
+
+func versionParts(v string) []int {
+	var out []int
+	for _, d := range reDigits.FindAllString(v, 6) {
+		n := 0
+		for _, c := range d {
+			n = n*10 + int(c-'0')
+			if n > 1e8 {
+				break
+			}
+		}
+		out = append(out, n)
+	}
+	return out
 }
 
 func first(re *regexp.Regexp, s string) string {
@@ -92,6 +185,7 @@ func rememberTitle(ws, title, tmURL string) {
 // WorkshopMirrors finds every mirror copy of a Workshop item, newest
 // revision first. titleHint helps find it on top-mods.
 func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
+	useIndexCache()
 	mirrorMu.Lock()
 	if e, ok := mirrorMemo[ws]; ok && time.Since(e.at) < 15*time.Minute {
 		mirrorMu.Unlock()
@@ -120,27 +214,25 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 		tmURLs[u] = true
 	}
 	knownMu.Unlock()
-	// top-mods search matches whole words, so retry with a shorter title
-	// ("Greenbrick Industries(R E U P L O A D)" -> "Greenbrick").
-	for _, q := range titleQueries(titleHint) {
-		res, err := sources.TMSearch(q, 1)
-		if err != nil {
-			errs = append(errs, "top-mods: "+err.Error())
-			break
+	// top-mods: match the name against the site's sitemap (every PPG item);
+	// fall back to the site's own search if the sitemap is unavailable.
+	if titleHint != "" {
+		res, err := sources.TMFind(titleHint, 8)
+		if err != nil || len(res) == 0 {
+			for _, q := range titleQueries(titleHint) {
+				if r2, err2 := sources.TMSearch(q, 1); err2 == nil && len(r2) > 0 {
+					res = r2
+					break
+				} else if err2 != nil {
+					errs = append(errs, "top-mods: "+err2.Error())
+					break
+				}
+			}
 		}
 		for i, r := range res {
 			if i < 8 {
 				tmURLs[r.URL] = true
 			}
-		}
-		found := false
-		for _, it := range tmDetailsAll(keys(tmURLs)) {
-			if it.WorkshopID == ws {
-				found = true
-			}
-		}
-		if found {
-			break
 		}
 	}
 	for _, it := range tmDetailsAll(keys(tmURLs)) {
@@ -148,13 +240,33 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 			list = append(list, tmMirror(it))
 		}
 	}
+	// True Workshop uploads carry no Workshop ID in the listing: match by
+	// name and author here, and confirm with mod.json's CreatorUGCIdentity
+	// once downloaded.
+	if titleHint != "" {
+		author := ""
+		for _, mr := range list {
+			if mr.Author != "" {
+				author = mr.Author
+				break
+			}
+		}
+		if all, err := sources.TWAll(); err == nil {
+			for _, it := range all {
+				if it.Type == "mod" && sameMod(it.Title, it.Author, titleHint, author) && !ugcMismatch(fmt.Sprintf("trueworkshop:%d", it.ID), ws) {
+					list = append(list, twMirror(it))
+				}
+			}
+		}
+	}
 	sort.SliceStable(list, func(i, j int) bool {
 		a, b := list[i].VersionTime, list[j].VersionTime
 		if !a.Equal(b) {
-			return a.After(b)
+			return a.After(b) // unknown revision (True Workshop) last
 		}
 		return list[i].Source == "Skymods" && list[j].Source != "Skymods" // exact time over day-only
 	})
+	fillModVersions(list)
 	if len(list) == 0 {
 		if len(errs) > 0 {
 			return nil, errors.New(strings.Join(errs, "; "))
@@ -182,6 +294,40 @@ func titleQueries(title string) []string {
 		out = append(out, words[0])
 	}
 	return out
+}
+
+// What downloaded copies' mod.json said, per mirror copy id.
+var (
+	modInfoMu sync.Mutex
+	modInfo   = map[string]copyInfo{}
+)
+
+type copyInfo struct{ version, ugc string }
+
+func fillModVersions(list []Mirror) {
+	modInfoMu.Lock()
+	defer modInfoMu.Unlock()
+	for i := range list {
+		list[i].ModVersion = modInfo[list[i].ID].version
+	}
+}
+
+// ugcMismatch reports whether a downloaded copy turned out to belong to a
+// different Workshop item.
+func ugcMismatch(id, ws string) bool {
+	modInfoMu.Lock()
+	defer modInfoMu.Unlock()
+	u := modInfo[id].ugc
+	return u != "" && u != ws
+}
+
+// useIndexCache points the sources' on-disk index cache at ppgmods' data.
+func useIndexCache() {
+	if sources.IndexCacheDir == "" {
+		if d, err := manager.ConfigDir(); err == nil {
+			sources.IndexCacheDir = filepath.Join(d, "cache")
+		}
+	}
 }
 
 func keys(m map[string]bool) []string {
@@ -252,11 +398,24 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("every mirror copy was revised on/after the worm cutoff %s; it may contain the worm (override: --allow-after-cutoff)", manager.WormCutoff.Format("2006-01-02"))}}
 	}
 
+	// Download the copies (newest revision first; at most four), read each
+	// one's mod.json, then rank by ModVersion: mirror dates can mislead
+	// (True Workshop dates are upload dates).
+	type copyC struct {
+		mr      Mirror
+		c       *manager.Candidate
+		version string
+		clean   bool
+		max     string
+	}
+	var copies []copyC
 	var browser *NeedsBrowser
 	var gone []string
-	var flagged *manager.Candidate
-	for i, mr := range usable {
-		a.logf("%s: %s by %s (Workshop %s), version %s, %s", mr.Source, mr.Title, mr.Author, ws, mr.Version, mr.Size)
+	for _, mr := range usable {
+		if len(copies) == 4 {
+			break
+		}
+		a.logf("%s: %s by %s (Workshop %s), %s, %s", mr.Source, mr.Title, mr.Author, ws, mr.Version, mr.Size)
 		path, err := a.downloadMirror(mr, ws)
 		var nb *NeedsBrowser
 		switch {
@@ -276,6 +435,9 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		}
 		b := a.with(func(o *Options) {
 			o.WorkshopID, o.Revision = ws, mr.VersionTime
+			if mr.tw != nil {
+				o.Revision = mr.tw.CreatedTime()
+			}
 			if o.Name == "" {
 				o.Name = mr.Title
 			}
@@ -285,30 +447,95 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			return nil, err
 		}
 		c.Mirror, c.Version, c.Source = mr.ID, mr.Version, mr.Page
+		if mr.tw != nil {
+			// A reviewed upload, not a Steam download: the worm-cutoff date
+			// check does not apply; the cooldown applies unless reviewed.
+			c.SteamOrig, c.Reviewed, c.Revision = false, mr.Reviewed, mr.tw.CreatedTime()
+		}
+		version, ugc, clean, max := inspect(m, c)
+		modInfoMu.Lock()
+		modInfo[mr.ID] = copyInfo{version, ugc}
+		modInfoMu.Unlock()
+		if ugc != "" && ugc != ws {
+			a.logf("  this copy's mod.json belongs to Workshop item %s, not %s; skipped", ugc, ws)
+			continue
+		}
+		if version != "" {
+			c.Version = version
+			a.logf("  mod.json version %s", version)
+		}
 		if a.Opt.Mirror != "" {
 			return c, nil // the user picked this copy; the install policy still applies
 		}
-		ok, max := scansClean(m, c)
-		if ok {
-			if flagged != nil {
-				a.logf("  using this older copy because the newer one was flagged by the scanner")
+		copies = append(copies, copyC{mr, c, version, clean, max})
+	}
+	if len(copies) == 0 {
+		if browser != nil {
+			return nil, browser
+		}
+		return nil, &Unavailable{Reason: "This mod can't be downloaded from any mirror (" + strings.Join(gone, "; ") + ")."}
+	}
+	sort.SliceStable(copies, func(i, j int) bool {
+		if c := CompareVersions(copies[i].version, copies[j].version); c != 0 {
+			return c > 0
+		}
+		if !copies[i].mr.VersionTime.Equal(copies[j].mr.VersionTime) {
+			return copies[i].mr.VersionTime.After(copies[j].mr.VersionTime)
+		}
+		return copies[i].mr.Reviewed && !copies[j].mr.Reviewed
+	})
+	for i, cc := range copies {
+		if cc.clean {
+			if i > 0 {
+				a.logf("using the %s copy (version %s): newer copies were flagged by the scanner", cc.mr.Source, orUnknown(cc.version))
+			} else if len(copies) > 1 {
+				a.logf("using the %s copy: highest version (%s)", cc.mr.Source, orUnknown(cc.version))
 			}
-			return c, nil
+			return cc.c, nil
 		}
-		if i < len(usable)-1 {
-			a.logf("  scanner flagged this copy (%s); trying an older copy", max)
+		a.logf("  %s copy (version %s) flagged by the scanner (%s)", cc.mr.Source, orUnknown(cc.version), cc.max)
+	}
+	return copies[0].c, nil // every copy is flagged: let the install policy report the newest
+}
+
+func orUnknown(s string) string {
+	if s == "" {
+		return "unknown"
+	}
+	return s
+}
+
+// inspect stages a copy and returns its mod.json ModVersion and
+// CreatorUGCIdentity (the Workshop ID) and whether it scans clean.
+func inspect(m *manager.Manager, c *manager.Candidate) (version, ugc string, clean bool, max string) {
+	if m == nil {
+		return "", "", true, ""
+	}
+	dir, rep, err := m.Stage(c)
+	if err != nil {
+		return "", "", false, err.Error()
+	}
+	defer os.RemoveAll(dir)
+	if roots, _ := modRoots(dir); len(roots) > 0 {
+		var mj struct {
+			ModVersion         string `json:"ModVersion"`
+			CreatorUGCIdentity any    `json:"CreatorUGCIdentity"`
 		}
-		if flagged == nil {
-			flagged = c
+		if b, err := os.ReadFile(filepath.Join(roots[0], "mod.json")); err == nil {
+			json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj)
+		}
+		version = strings.TrimSpace(mj.ModVersion)
+		if mj.CreatorUGCIdentity != nil {
+			ugc = strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
+			if ugc == "0" || ugc == "<nil>" {
+				ugc = ""
+			}
 		}
 	}
-	if flagged != nil {
-		return flagged, nil
+	if rep.Max() >= scan.High {
+		return version, ugc, false, rep.Max().String()
 	}
-	if browser != nil {
-		return nil, browser
-	}
-	return nil, &Unavailable{Reason: "This mod can't be downloaded from any mirror (" + strings.Join(gone, "; ") + ")."}
+	return version, ugc, true, ""
 }
 
 // scansClean reports whether a candidate has no HIGH or CRITICAL findings.
@@ -353,6 +580,21 @@ func (a *App) downloadMirror(mr Mirror, ws string) (string, error) {
 		links = []string{mr.sky.DownloadURL}
 	case mr.tm != nil:
 		links = mr.tm.Downloads
+	case mr.tw != nil:
+		name := strings.ReplaceAll(filepath.Base(mr.tw.FileURL), " ", "_")
+		path := filepath.Join(dir, prefix+name)
+		a.logf("  downloading from True Workshop (Hugging Face)...")
+		_, sha, err := sources.Download(mr.tw.DownloadURL(), path+".part", 1<<30)
+		if err != nil {
+			os.Remove(path + ".part")
+			return "", err
+		}
+		if !strings.EqualFold(sha, mr.tw.SHA256) {
+			os.Remove(path + ".part")
+			return "", fmt.Errorf("checksum mismatch: True Workshop says %s, got %s", mr.tw.SHA256, sha)
+		}
+		go sources.TWTrackDownload(mr.tw.ID)
+		return path, os.Rename(path+".part", path)
 	}
 	if len(links) == 0 {
 		return "", fmt.Errorf("%w: no download link", sources.ErrGone)

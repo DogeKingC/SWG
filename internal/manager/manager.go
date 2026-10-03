@@ -56,9 +56,10 @@ type Candidate struct {
 	FileID     int
 	Version    string
 	Revision   time.Time
-	SteamOrig  bool   // came from the Steam Workshop (mirror, cache or backup)
-	Mirror     string // which mirror copy, e.g. topmods:4482
-	Reviewed   bool   // a person at the source reviewed it (True Workshop "dev" trust)
+	SteamOrig  bool     // came from the Steam Workshop (mirror, cache or backup)
+	Mirror     string   // which mirror copy, e.g. topmods:4482
+	Reviewed   bool     // a person at the source reviewed it (True Workshop "dev" trust)
+	Aliases    []string // other refs for the same mod
 	ArchiveSHA string
 }
 
@@ -272,6 +273,7 @@ func (m *Manager) Install(c *Candidate) error {
 	inst := &Installed{
 		Key: c.Key, Name: c.Name, Source: c.Source, FileID: c.FileID, Version: c.Version, Mirror: c.Mirror,
 		Revision: c.Revision, ArchiveSHA: c.ArchiveSHA, Files: map[string]string{}, InstalledAt: time.Now().UTC(), Kind: kind,
+		ScanMax: maxName(rep),
 	}
 	if prev != nil {
 		inst.Pinned = prev.Pinned
@@ -319,6 +321,19 @@ func (m *Manager) Install(c *Candidate) error {
 		}
 		return err
 	}
+	if ugc := workshopIDIn(filepath.Join(m.dirFor(inst), inst.Folders[0])); ugc != "" && c.Key != "sky:"+ugc {
+		inst.Aliases = append(inst.Aliases, "sky:"+ugc) // shows as installed on its Workshop card too
+	}
+	inst.Aliases = append(inst.Aliases, c.Aliases...)
+	seen := map[string]bool{c.Key: true}
+	var aliases []string
+	for _, a := range inst.Aliases {
+		if !seen[a] {
+			seen[a] = true
+			aliases = append(aliases, a)
+		}
+	}
+	inst.Aliases = aliases
 	m.State.Mods[c.Key] = inst
 	m.logf("installed %s -> %s", c.Key, strings.Join(inst.Folders, ", "))
 	return m.State.Save()
@@ -605,4 +620,58 @@ func contraptionRoots(dir string) (roots, names []string, err error) {
 		roots, names = append(roots, unit), append(names, name)
 	}
 	return roots, names, nil
+}
+
+// Adopt starts tracking a folder that is already in Mods/ or Contraptions/
+// (installed by hand or by another tool): it is scanned and fingerprinted
+// but not moved or changed.
+func (m *Manager) Adopt(key, name, source, version, kind, folder string, aliases ...string) (*scan.Report, error) {
+	base := m.ModsDir
+	if kind == KindContraption {
+		base = m.ContraptionsDir
+	}
+	dir := filepath.Join(base, folder)
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return nil, fmt.Errorf("%s is not a folder", dir)
+	}
+	if owner := m.State.OwnerOf(kind, folder); owner != nil {
+		return nil, fmt.Errorf("%s is already tracked as %s", folder, owner.Key)
+	}
+	if prev := m.State.Mods[key]; prev != nil {
+		return nil, fmt.Errorf("%s is already installed (in %s)", key, strings.Join(prev.Folders, ", "))
+	}
+	rep, err := scan.Dir(dir)
+	if err != nil {
+		return nil, err
+	}
+	inst := &Installed{
+		Key: key, Name: name, Source: source, Version: version, Kind: kind, Folders: []string{folder},
+		Files: map[string]string{}, InstalledAt: time.Now().UTC(), Adopted: true, ScanMax: maxName(rep), Aliases: aliases,
+	}
+	for k := range rep.Keys() {
+		inst.Findings = append(inst.Findings, k)
+	}
+	if err := hashTree(dir, folder, inst.Files); err != nil {
+		return nil, err
+	}
+	m.State.Mods[key] = inst
+	return rep, m.State.Save()
+}
+
+// workshopIDIn returns the Steam Workshop ID (mod.json CreatorUGCIdentity)
+// of the mod in dir, if it has one.
+func workshopIDIn(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "mod.json"))
+	if err != nil {
+		return ""
+	}
+	var mj struct{ CreatorUGCIdentity any }
+	if json.Unmarshal(trimBOM(b), &mj) != nil || mj.CreatorUGCIdentity == nil {
+		return ""
+	}
+	u := strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
+	if len(u) < 6 || len(u) > 12 || strings.Trim(u, "0123456789") != "" {
+		return ""
+	}
+	return u
 }

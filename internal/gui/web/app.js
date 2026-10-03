@@ -150,6 +150,8 @@ function renderInstalled() {
       el("div", {},
         el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind),
           m.item_kind === "contraption" ? el("span", { class: "badge badge-kind" }, " contraption") : null,
+          m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
+          m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
           m.key, " · installed ", (m.installed_at || "").slice(0, 10),
@@ -213,6 +215,10 @@ function jobDone(j) {
       dialog("Updated to " + j.data.version, el("p", {}, "Restart PPG Mod Manager to use the new version."),
         { label: "Restart now", run: () => restartApp("") });
       $("#dlgExtra").className = "btn btn-primary";
+      return;
+    }
+    if (j.name === "find-installed") {
+      toast(j.data && j.data.found !== "0" ? `Now tracking ${j.data.found} mod(s) that were already installed` : "No untracked mods found");
       return;
     }
     if (j.name === "install-app") {
@@ -322,23 +328,54 @@ $("#linkForm").onsubmit = (e) => {
   $("#link").value = "";
 };
 
+// search asks each source separately and shows results as they arrive:
+// Skymods can take 10-20 s, GameBanana and True Workshop about one.
+let searchSeq = 0;
+let pageLists = null; // this page's results per source, for re-rendering
+
 async function search(q, p) {
   lastQuery = q;
   page = p;
+  const seq = ++searchSeq;
   const grid = $("#results");
-  if (p === 1) grid.replaceChildren(el("div", { class: "empty" }, "Searching…"));
-  let r;
-  try { r = await api("/api/search?q=" + encodeURIComponent(q) + "&page=" + p); }
-  catch (e) { grid.replaceChildren(el("div", { class: "empty" }, e.message)); return; }
   const errs = $("#searchErrors");
-  errs.hidden = !(r.errors && r.errors.length);
-  errs.textContent = (r.errors || []).join(" · ");
-  const lists = { gb: r.gamebanana || [], tw: r.trueworkshop || [], sky: r.workshop || [] };
-  const items = src === "all" ? interleave(lists.tw, lists.gb, lists.sky) : lists[src];
+  const parts = src === "all" ? ["tw", "gb", "ws"] : [src === "sky" ? "ws" : src];
+  const pending = new Set(parts);
+  const lists = { gb: [], tw: [], ws: [] };
+  const merged = new Set();
+  const errors = [];
+  const start = p === 1 ? 0 : grid.querySelectorAll(".mod").length;
   if (p === 1) grid.replaceChildren();
-  if (!items.length && p === 1) grid.append(el("div", { class: "empty" }, "No mods found."));
-  grid.append(...items.map(card));
-  $("#moreBtn").hidden = !items.length;
+  const status = el("div", { class: "empty search-status" });
+  grid.append(status);
+  const render = () => {
+    if (seq !== searchSeq) return;
+    pageLists = lists;
+    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, lists.ws);
+    [...grid.querySelectorAll(".mod")].slice(start).forEach((c) => c.remove());
+    status.before(...shown.map(card));
+    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)" }[x]));
+    status.textContent = waiting.length ? "Still searching: " + waiting.join(", ") + "…" : (!shown.length && p === 1 ? "No mods found." : "");
+    status.hidden = !status.textContent;
+    errs.hidden = !errors.length;
+    errs.textContent = errors.join(" · ");
+    $("#moreBtn").hidden = pending.size > 0 || !shown.length;
+    markInstalledCards();
+  };
+  render();
+  await Promise.all(parts.map(async (part) => {
+    try {
+      const r = await api("/api/search?q=" + encodeURIComponent(q) + "&page=" + p + "&part=" + part);
+      if (part === "gb") lists.gb = r.gamebanana || [];
+      if (part === "tw") lists.tw = r.trueworkshop || [];
+      if (part === "ws") { lists.ws = r.workshop || []; (r.merged_tw || []).forEach((x) => merged.add(x)); }
+      errors.push(...(r.errors || []));
+    } catch (e) {
+      errors.push(e.message);
+    }
+    pending.delete(part);
+    render();
+  }));
 }
 
 function interleave(...lists) {
@@ -429,7 +466,7 @@ async function pumpThumbs() {
 
 function card(m) {
   const isGB = m.ref.startsWith("gb:");
-  const installed = (state?.installed || []).some((i) => i.key === m.ref);
+  const installed = installedKeys().has(m.ref);
   const pick = el("input", { type: "checkbox", class: "pick", title: "Select", "aria-label": "Select " + m.name });
   pick.checked = selected.has(m.ref);
   pick.disabled = m.after_cutoff || installed;
@@ -460,8 +497,14 @@ function card(m) {
   return c;
 }
 
+function installedKeys() {
+  const keys = new Set();
+  for (const i of state?.installed || []) { keys.add(i.key); (i.aliases || []).forEach((a) => keys.add(a)); }
+  return keys;
+}
+
 function markInstalledCards() {
-  const keys = new Set((state?.installed || []).map((i) => i.key));
+  const keys = installedKeys();
   $$(".mod[data-ref]").forEach((c) => {
     if (!keys.has(c.dataset.ref) || c.querySelector(".badge-ok")) return;
     const foot = c.querySelector(".mod-foot");
@@ -553,20 +596,36 @@ function renderMirrors(m, mirrors, chosen) {
     input.onchange = () => openDetails(m, id);
     return el("label", { class: "mirror" + (disabled ? " mirror-off" : "") }, input, el("span", { class: "mirror-main" }, label), extra);
   };
-  const newestOK = mirrors.find((x) => !x.after_cutoff);
-  const rows = [row("", "Automatic", el("span", { class: "muted small" }, "newest copy from before the worm, skipping any the scanner flags"), false)];
+  // Once the copies were downloaded, rank by mod.json version (dates can
+  // mislead: True Workshop dates are upload dates).
+  const versioned = mirrors.filter((x) => !x.after_cutoff && x.mod_version);
+  const best = versioned.length ? versioned.reduce((a, b) => (cmpVer(b.mod_version, a.mod_version) > 0 ? b : a)) : null;
+  const newestOK = best || mirrors.find((x) => !x.after_cutoff);
+  const rows = [row("", "Automatic", el("span", { class: "muted small" }, "highest mod.json version from before the worm, skipping any the scanner flags"), false)];
   for (const mr of mirrors) {
     const tags = [];
-    if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, "newest safe date"));
+    if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, best ? "highest version" : "newest safe date"));
+    if (mr.reviewed) tags.push(el("span", { class: "badge badge-tw" }, "reviewed"));
     if (mr.after_cutoff) tags.push(el("span", { class: "badge badge-bad" }, "after worm cutoff"));
     if (chosen && mr.id === chosen) tags.push(el("span", { class: "badge" }, "checked below"));
     rows.push(row(mr.id,
-      el("span", {}, el("b", {}, mr.source), " · version ", el("b", {}, mr.version || "unknown"), mr.size ? " · " + mr.size : ""),
+      el("span", {}, el("b", {}, mr.source), " · ", mr.version || "date unknown",
+        mr.mod_version ? el("span", {}, " · mod ", el("b", {}, "v" + mr.mod_version)) : "",
+        mr.size ? " · " + mr.size : ""),
       el("span", { class: "mirror-tags" }, ...tags,
         el("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent(mr.page)); } }, "page")),
       mr.after_cutoff));
   }
   $("#detMirrors").replaceChildren(el("h3", {}, mirrors.length > 1 ? `Mirrors (${mirrors.length} copies)` : "Mirror"), el("div", { class: "mirrors" }, rows));
+}
+
+function cmpVer(a, b) {
+  const pa = (a.match(/\d+/g) || []).map(Number), pb = (b.match(/\d+/g) || []).map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
 }
 
 function showCheck(m, p) {
@@ -608,7 +667,7 @@ function showCheck(m, p) {
 }
 
 function setDetailActions(m, p) {
-  const installed = (state?.installed || []).some((i) => i.key === m.ref);
+  const installed = installedKeys().has(m.ref);
   const btn = $("#detInstall");
   const warn = $("#detWarn");
   warn.hidden = true;
@@ -655,10 +714,11 @@ $("#clearSelected").onclick = () => { selected.clear(); $$(".pick").forEach((p) 
 $("#checkUpdates").onclick = () => { $("#applyUpdates").dataset.last = "check"; run({ action: "update", apply: false }, "Checking for updates"); };
 $("#applyUpdates").onclick = () => { $("#applyUpdates").dataset.last = "apply"; run({ action: "update", apply: true }, "Applying safe updates"); };
 $("#verifyBtn").onclick = () => run({ action: "verify" }, "Verifying files");
+$("#findBtn").onclick = () => run({ action: "find-installed" }, "Looking for mods installed without this app");
 $("#openMods").onclick = () => api("/api/open?what=mods").catch((e) => toast(e.message));
 $("#openContraptions").onclick = () => api("/api/open?what=contraptions").catch((e) => toast(e.message));
 $("#openData").onclick = () => api("/api/open?what=data").catch((e) => toast(e.message));
-["checkUpdates", "applyUpdates", "verifyBtn", "backupBtn", "restoreBtn", "importBtn"].forEach((id) => $("#" + id).setAttribute("data-busy", ""));
+["checkUpdates", "applyUpdates", "verifyBtn", "findBtn", "backupBtn", "restoreBtn", "importBtn"].forEach((id) => $("#" + id).setAttribute("data-busy", ""));
 
 // ---------- recovery ----------
 $("#backupBtn").onclick = () => run({ action: "backup" }, "Backing up the Workshop cache");

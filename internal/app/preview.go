@@ -49,10 +49,14 @@ type modJSON struct {
 func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 	ref = NormalizeRef(ref)
 	p := &Preview{Ref: ref}
-	if strings.HasPrefix(ref, "sky:") {
-		p.Mirrors, _ = WorkshopMirrors(strings.TrimPrefix(ref, "sky:"), a.Opt.Name)
-	}
 	c, err := a.Fetch(m, ref, nil)
+	if strings.HasPrefix(ref, "sky:") {
+		// After the download, so each copy's mod.json version is known.
+		if list, merr := WorkshopMirrors(strings.TrimPrefix(ref, "sky:"), a.Opt.Name); merr == nil {
+			p.Mirrors = append([]Mirror(nil), list...)
+			fillModVersions(p.Mirrors)
+		}
+	}
 	var nb *NeedsBrowser
 	var rej *manager.Rejection
 	var un *Unavailable

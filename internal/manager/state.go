@@ -23,6 +23,9 @@ type Installed struct {
 	Version     string            `json:"version,omitempty"`
 	Mirror      string            `json:"mirror,omitempty"`   // Workshop items: mirror copy installed
 	Kind        string            `json:"kind,omitempty"`     // "mod" (default) or "contraption"
+	Adopted     bool              `json:"adopted,omitempty"`  // found already installed, not installed by ppgmods
+	ScanMax     string            `json:"scan_max,omitempty"` // highest scanner finding at install/adoption
+	Aliases     []string          `json:"aliases,omitempty"`  // other refs for the same mod, e.g. tw:30 for sky:2516131949
 	Revision    time.Time         `json:"revision,omitempty"` // upload/revision time at the source
 	ArchiveSHA  string            `json:"archive_sha256,omitempty"`
 	Files       map[string]string `json:"files"` // "<folder>/<rel>" -> sha256
@@ -89,6 +92,21 @@ func (s *State) Sorted() []*Installed {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
+}
+
+// Find returns the entry installed under key or under one of its aliases.
+func (s *State) Find(key string) *Installed {
+	if m := s.Mods[key]; m != nil {
+		return m
+	}
+	for _, m := range s.Mods {
+		for _, a := range m.Aliases {
+			if a == key {
+				return m
+			}
+		}
+	}
+	return nil
 }
 
 // OwnerOf returns the entry that installed a Mods/ or Contraptions/ folder.

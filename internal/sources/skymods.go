@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -96,7 +97,35 @@ func SkyByWorkshopID(id string) (*SkyItem, error) {
 	return nil, fmt.Errorf("workshop item %s not found on Skymods", id)
 }
 
+var (
+	skyCacheMu sync.Mutex
+	skyCache   = map[string]skyCached{}
+)
+
+type skyCached struct {
+	items []SkyItem
+	at    time.Time
+}
+
+// skyList fetches a catalogue page. Skymods can take 10-20 s to answer, so
+// pages are kept for 10 minutes.
 func skyList(u string) ([]SkyItem, error) {
+	skyCacheMu.Lock()
+	if c, ok := skyCache[u]; ok && time.Since(c.at) < 10*time.Minute {
+		skyCacheMu.Unlock()
+		return c.items, nil
+	}
+	skyCacheMu.Unlock()
+	items, err := skyFetch(u)
+	if err == nil {
+		skyCacheMu.Lock()
+		skyCache[u] = skyCached{items, time.Now()}
+		skyCacheMu.Unlock()
+	}
+	return items, err
+}
+
+func skyFetch(u string) ([]SkyItem, error) {
 	resp, err := get(u)
 	if err != nil {
 		return nil, err
