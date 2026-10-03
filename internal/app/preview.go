@@ -100,6 +100,9 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 			p.Name = mj.Name
 		}
 		p.Author, p.Version, p.Description = mj.Author, mj.ModVersion, strings.TrimSpace(mj.Description)
+		if strings.HasPrefix(ref, "sky:") {
+			learnAuthor(strings.TrimPrefix(ref, "sky:"), mj.Author)
+		}
 		p.Thumb = saveThumb(roots[0], mj.ThumbnailPath, c.Key)
 	}
 

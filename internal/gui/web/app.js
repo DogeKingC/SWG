@@ -147,14 +147,15 @@ function renderInstalled() {
       el("button", { class: "btn btn-sm", onclick: () => confirmRemove(m) }, "Remove"),
     );
     return el("div", { class: "item" },
-      el("div", {},
+      thumbImg({ ref: m.key, name: m.name, image: "" }, "item-thumb"),
+      el("div", { class: "item-main" },
         el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind),
           m.item_kind === "contraption" ? el("span", { class: "badge badge-kind" }, " contraption") : null,
           m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
           m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
-          m.key, " · installed ", (m.installed_at || "").slice(0, 10),
+          m.author ? "by " + m.author + " · " : "", m.key, " · installed ", (m.installed_at || "").slice(0, 10),
           m.revision && !m.revision.startsWith("0001") ? " · source date " + m.revision.slice(0, 10) : "",
           " · ", (m.folders || []).join(", "))),
       actions);
@@ -454,6 +455,7 @@ async function pumpThumbs() {
   try {
     if (document.querySelector(`.mod[data-ref="${CSS.escape(m.ref)}"]`)) {
       const p = await api("/api/preview?ref=" + encodeURIComponent(m.ref));
+      fillAuthor(m, p.author);
       if (p.thumb) {
         thumbBust[m.ref] = Date.now();
         $$(`.mod[data-ref="${CSS.escape(m.ref)}"] .thumb`).forEach((t) => t.replaceWith(thumbImg({ ...m, image: "" }, "thumb")));
@@ -462,6 +464,14 @@ async function pumpThumbs() {
   } catch { /* leave the placeholder */ }
   thumbBusy = false;
   setTimeout(pumpThumbs, 500);
+}
+
+// fillAuthor adds an author learned from the mod's own mod.json to a card
+// whose listing had none (Skymods and top-mods often omit it).
+function fillAuthor(m, author) {
+  if (!author || m.author) return;
+  m.author = author;
+  $$(`.mod[data-ref="${CSS.escape(m.ref)}"] .mod-meta`).forEach((d) => d.prepend("by " + author + " · "));
 }
 
 function card(m) {
@@ -494,6 +504,7 @@ function card(m) {
   };
   c.onclick = () => openDetails(m);
   c.onkeydown = (e) => { if (e.key === "Enter" && e.target === c) openDetails(m); };
+  if (!m.author) queueThumb(m); // the mod.json inside names the author
   return c;
 }
 
@@ -606,15 +617,17 @@ function renderMirrors(m, mirrors, chosen) {
     const tags = [];
     if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, best ? "highest version" : "newest safe date"));
     if (mr.reviewed) tags.push(el("span", { class: "badge badge-tw" }, "reviewed"));
+    if (mr.gone) tags.push(el("span", { class: "badge badge-bad", title: "This mirror no longer has the file" }, "file gone"));
     if (mr.after_cutoff) tags.push(el("span", { class: "badge badge-bad" }, "after worm cutoff"));
     if (chosen && mr.id === chosen) tags.push(el("span", { class: "badge" }, "checked below"));
     rows.push(row(mr.id,
       el("span", {}, el("b", {}, mr.source), " · ", mr.version || "date unknown",
-        mr.mod_version ? el("span", {}, " · mod ", el("b", {}, "v" + mr.mod_version)) : "",
+        mr.mod_version ? el("span", {}, " · mod ", el("b", {}, "v" + mr.mod_version))
+          : mr.title_version ? el("span", { title: "Version from the title; mod.json not checked yet" }, " · title v" + mr.title_version) : "",
         mr.size ? " · " + mr.size : ""),
       el("span", { class: "mirror-tags" }, ...tags,
         el("button", { type: "button", class: "btn btn-ghost btn-sm", onclick: (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent(mr.page)); } }, "page")),
-      mr.after_cutoff));
+      mr.after_cutoff || mr.gone));
   }
   $("#detMirrors").replaceChildren(el("h3", {}, mirrors.length > 1 ? `Mirrors (${mirrors.length} copies)` : "Mirror"), el("div", { class: "mirrors" }, rows));
 }
@@ -629,6 +642,7 @@ function cmpVer(a, b) {
 }
 
 function showCheck(m, p) {
+  fillAuthor(m, p.author);
   if (p.thumb) {
     thumbBust[m.ref] = Date.now();
     $("#detHero").replaceChildren(thumbImg({ ...m, image: m.image }, "det-hero"));

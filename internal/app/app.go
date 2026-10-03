@@ -295,7 +295,11 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 		r.TrueWS = nil
 	}
 	for _, ws := range order {
-		r.Workshop = append(r.Workshop, *byWS[ws])
+		e := byWS[ws]
+		if e.Author == "" {
+			e.Author = knownAuthor(ws) // from a copy's mod.json
+		}
+		r.Workshop = append(r.Workshop, *e)
 	}
 	return r
 }
@@ -371,7 +375,11 @@ func (a *App) Install(m *manager.Manager, ref string) error {
 		c.Aliases = append(c.Aliases, c.Key)
 		c.Key = ex.Key
 	}
-	return m.Install(c)
+	if err := m.Install(c); err != nil {
+		return err
+	}
+	installedThumb(m, c.Key)
+	return nil
 }
 
 // Fetch downloads (or reuses the cached download of) a mod and returns it as

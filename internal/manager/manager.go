@@ -321,6 +321,7 @@ func (m *Manager) Install(c *Candidate) error {
 		}
 		return err
 	}
+	inst.Author = modJSONAuthor(filepath.Join(m.dirFor(inst), inst.Folders[0]))
 	if ugc := workshopIDIn(filepath.Join(m.dirFor(inst), inst.Folders[0])); ugc != "" && c.Key != "sky:"+ugc {
 		inst.Aliases = append(inst.Aliases, "sky:"+ugc) // shows as installed on its Workshop card too
 	}
@@ -625,7 +626,7 @@ func contraptionRoots(dir string) (roots, names []string, err error) {
 // Adopt starts tracking a folder that is already in Mods/ or Contraptions/
 // (installed by hand or by another tool): it is scanned and fingerprinted
 // but not moved or changed.
-func (m *Manager) Adopt(key, name, source, version, kind, folder string, aliases ...string) (*scan.Report, error) {
+func (m *Manager) Adopt(key, name, author, source, version, kind, folder string, aliases ...string) (*scan.Report, error) {
 	base := m.ModsDir
 	if kind == KindContraption {
 		base = m.ContraptionsDir
@@ -645,7 +646,7 @@ func (m *Manager) Adopt(key, name, source, version, kind, folder string, aliases
 		return nil, err
 	}
 	inst := &Installed{
-		Key: key, Name: name, Source: source, Version: version, Kind: kind, Folders: []string{folder},
+		Key: key, Name: name, Author: author, Source: source, Version: version, Kind: kind, Folders: []string{folder},
 		Files: map[string]string{}, InstalledAt: time.Now().UTC(), Adopted: true, ScanMax: maxName(rep), Aliases: aliases,
 	}
 	for k := range rep.Keys() {
@@ -674,4 +675,15 @@ func workshopIDIn(dir string) string {
 		return ""
 	}
 	return u
+}
+
+// modJSONAuthor returns the Author field of the mod.json in dir, if any.
+func modJSONAuthor(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "mod.json"))
+	if err != nil {
+		return ""
+	}
+	var mj struct{ Author string }
+	json.Unmarshal(trimBOM(b), &mj)
+	return strings.TrimSpace(mj.Author)
 }

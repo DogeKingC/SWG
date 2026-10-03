@@ -31,8 +31,10 @@ type Mirror struct {
 	Page        string    `json:"page"`
 	Image       string    `json:"image,omitempty"`
 	AfterCutoff bool      `json:"after_cutoff"`
-	ModVersion  string    `json:"mod_version,omitempty"` // from the copy's mod.json, once downloaded
-	Reviewed    bool      `json:"reviewed,omitempty"`    // True Workshop: reviewed by its maintainers
+	ModVersion  string    `json:"mod_version,omitempty"`   // from the copy's mod.json, once downloaded
+	TitleVer    string    `json:"title_version,omitempty"` // version written in the listing's title, e.g. "V:2.8"
+	Gone        bool      `json:"gone,omitempty"`          // the mirror no longer has the file
+	Reviewed    bool      `json:"reviewed,omitempty"`      // True Workshop: reviewed by its maintainers
 
 	sky *sources.SkyItem
 	tm  *sources.TMItem
@@ -302,14 +304,52 @@ var (
 	modInfo   = map[string]copyInfo{}
 )
 
-type copyInfo struct{ version, ugc string }
+type copyInfo struct {
+	version, ugc string
+	gone         bool
+}
+
+// Authors learned from downloaded copies' mod.json, by Workshop ID, for
+// listings that do not name one.
+var (
+	authorMu      sync.Mutex
+	learnedAuthor = map[string]string{}
+)
+
+func learnAuthor(ws, author string) {
+	if ws == "" || strings.TrimSpace(author) == "" {
+		return
+	}
+	authorMu.Lock()
+	learnedAuthor[ws] = strings.TrimSpace(author)
+	authorMu.Unlock()
+}
+
+func knownAuthor(ws string) string {
+	authorMu.Lock()
+	defer authorMu.Unlock()
+	return learnedAuthor[ws]
+}
 
 func fillModVersions(list []Mirror) {
 	modInfoMu.Lock()
 	defer modInfoMu.Unlock()
 	for i := range list {
-		list[i].ModVersion = modInfo[list[i].ID].version
+		ci := modInfo[list[i].ID]
+		list[i].ModVersion, list[i].Gone = ci.version, ci.gone
+		list[i].TitleVer = TitleVersion(list[i].Title)
 	}
+}
+
+var reTitleVersion = regexp.MustCompile(`(?i)(?:\bv(?:er(?:sion)?)?\s*[:.]?\s*|\s)(\d+(?:\.\d+)*[a-z]?)\s*\)?\s*$`)
+
+// TitleVersion returns a version number written at the end of a title
+// ("Science Hazard Minus V:2.8" -> "2.8", "Mod 1.2.3" -> "1.2.3").
+func TitleVersion(title string) string {
+	if m := reTitleVersion.FindStringSubmatch(strings.TrimSpace(title)); m != nil && strings.ContainsAny(m[0], "vV.") {
+		return m[1]
+	}
+	return ""
 }
 
 // ugcMismatch reports whether a downloaded copy turned out to belong to a
@@ -422,6 +462,9 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		case errors.Is(err, sources.ErrGone):
 			gone = append(gone, mr.Source+": "+err.Error())
 			a.logf("  %v", err)
+			modInfoMu.Lock()
+			modInfo[mr.ID] = copyInfo{gone: true}
+			modInfoMu.Unlock()
 			continue
 		case errors.As(err, &nb):
 			if browser == nil {
@@ -454,7 +497,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		}
 		version, ugc, clean, max := inspect(m, c)
 		modInfoMu.Lock()
-		modInfo[mr.ID] = copyInfo{version, ugc}
+		modInfo[mr.ID] = copyInfo{version: version, ugc: ugc}
 		modInfoMu.Unlock()
 		if ugc != "" && ugc != ws {
 			a.logf("  this copy's mod.json belongs to Workshop item %s, not %s; skipped", ugc, ws)
@@ -475,8 +518,19 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		}
 		return nil, &Unavailable{Reason: "This mod can't be downloaded from any mirror (" + strings.Join(gone, "; ") + ")."}
 	}
+	// Rank by mod.json version; when that is missing or equal (some authors
+	// never bump it), by the version in the title, then by date.
+	effective := func(cc copyC) string {
+		if cc.version != "" {
+			return cc.version
+		}
+		return TitleVersion(cc.mr.Title)
+	}
 	sort.SliceStable(copies, func(i, j int) bool {
-		if c := CompareVersions(copies[i].version, copies[j].version); c != 0 {
+		if c := CompareVersions(effective(copies[i]), effective(copies[j])); c != 0 {
+			return c > 0
+		}
+		if c := CompareVersions(TitleVersion(copies[i].mr.Title), TitleVersion(copies[j].mr.Title)); c != 0 {
 			return c > 0
 		}
 		if !copies[i].mr.VersionTime.Equal(copies[j].mr.VersionTime) {
@@ -519,6 +573,7 @@ func inspect(m *manager.Manager, c *manager.Candidate) (version, ugc string, cle
 	if roots, _ := modRoots(dir); len(roots) > 0 {
 		var mj struct {
 			ModVersion         string `json:"ModVersion"`
+			Author             string `json:"Author"`
 			CreatorUGCIdentity any    `json:"CreatorUGCIdentity"`
 		}
 		if b, err := os.ReadFile(filepath.Join(roots[0], "mod.json")); err == nil {
@@ -531,6 +586,7 @@ func inspect(m *manager.Manager, c *manager.Candidate) (version, ugc string, cle
 				ugc = ""
 			}
 		}
+		learnAuthor(ugc, mj.Author)
 	}
 	if rep.Max() >= scan.High {
 		return version, ugc, false, rep.Max().String()

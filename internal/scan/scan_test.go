@@ -43,8 +43,11 @@ func TestDetections(t *testing.T) {
 		"steam-friends":             `SteamFriends.ReplyToFriendMessage(f, msg);`,
 		"file-delete":               `Directory.Delete(path, true);`,
 		"native-interop":            `[DllImport("kernel32")] static extern IntPtr LoadLibrary(string s);`,
-		"self-replication":          `foreach (var f in found) File.WriteAllText(Path.Combine(f, "script.cs"), payload);`,
-		"game-path-tamper":          `File.Copy(me, Path.Combine(root, "workshop/content/1118200", d));`,
+		"self-replication":          `foreach (var f in Directory.GetDirectories(root)) File.WriteAllText(Path.Combine(f, "script.cs"), payload);`,
+		"game-path-tamper":          `foreach (var d in Directory.GetDirectories(root)) File.Copy(me, Path.Combine(root, "workshop/content/1118200", d));`,
+		"writes-scripts":            `File.WriteAllText(Path.Combine(dir, "script.cs"), text);`,
+		"game-path-write":           `File.Copy(me, Path.Combine(root, "workshop/content/1118200"));`,
+		"mass-delete":               `foreach (var f in Directory.GetFiles(p)) File.Delete(f);`,
 		"reflection-sensitive-type": `var t = Type.GetType("Process"); t.GetMethod("Start").Invoke(null, null);`,
 		"encoded-blob":              `var p = "` + longB64() + `";`,
 	}

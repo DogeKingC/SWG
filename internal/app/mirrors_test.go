@@ -167,3 +167,14 @@ func TestFetchWorkshopPicksHighestModVersion(t *testing.T) {
 		t.Fatalf("picked %s version %s, want skymods:478284 version 4.0", c.Mirror, c.Version)
 	}
 }
+
+func TestTitleVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"Science Hazard Minus V:2.8": "2.8", "Science Hazard Minus V:3.1": "3.1", "AURA MOD BETA 1.2": "1.2",
+		"Boneworks Pack: Melee v1.3.0": "1.3.0", "Tiger I 2.0 (German Tank)": "", "Melee Pack 2": "", "Quick Draw Mod": "",
+	} {
+		if got := TitleVersion(in); got != want {
+			t.Errorf("TitleVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

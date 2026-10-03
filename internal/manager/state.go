@@ -17,6 +17,7 @@ import (
 type Installed struct {
 	Key         string            `json:"key"` // gb:<modid>, sky:<workshopid>, local:<sha256 prefix>
 	Name        string            `json:"name"`
+	Author      string            `json:"author,omitempty"`
 	Source      string            `json:"source"`
 	Folders     []string          `json:"folders"` // folder names under Mods/
 	FileID      int               `json:"file_id,omitempty"`

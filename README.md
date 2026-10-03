@@ -164,6 +164,9 @@ always the newest. ppgmods downloads each copy (at most four) and compares
 the **`ModVersion` in its `mod.json`**. Quick Draw, for example: Skymods v4.0,
 True Workshop v3.2 (uploaded later), top-mods v1.0. It installs the highest
 version from before the worm cutoff, skipping copies the scanner flags.
+Before a copy is downloaded, the version in its title ("V:2.8", "v3.1") is
+shown instead; a copy whose file host says the file is gone is marked
+"file gone" and skipped.
 
 A copy whose `mod.json` names a different Workshop item (`CreatorUGCIdentity`)
 is ignored. The details view lists every copy with its date, `mod.json`
@@ -187,6 +190,11 @@ that refers to it, gets update checks, and is covered by Verify. Nothing is
 moved. Installing it again from any site replaces that copy instead of adding
 a second one.
 
+The Installed list shows each item's author and thumbnail, taken from its
+own `mod.json` and files (Valve deleted the Workshop images of removed mods).
+Search cards with no author on the mirror page get it from `mod.json` once
+the mod has been previewed.
+
 ## Safety model
 
 The worm spread because the Workshop pushed code to every subscriber
@@ -206,18 +214,29 @@ automatically, within hours. Each layer here targets part of that:
 | Update adds findings the installed version did not have | held | `--allow-new-findings` |
 | Unsafe archives: path traversal, symlinks, >2 GiB unpacked, >20,000 entries | refused | none |
 
-The scanner checks C# source after removing comments and decoding `\uXXXX`
-identifier escapes:
+The scanner tokenizes C# source like the compiler does, so comments, line
+breaks, `\uXXXX` escapes, verbatim/interpolated/raw strings, `#if` blocks,
+`using` aliases, `using static` and `global::` cannot hide a call. Every name
+is resolved through the file's imports before the rules see it. Namespaces
+work on an allowlist: Unity, the game's own types and plain `System` are
+fine, anything else must be explained by a rule or is HIGH.
 
 - **CRITICAL**:
-  - starting processes, network access, native interop and `unsafe`
+  - starting processes, network access, native interop (`DllImport`, `extern`), the Windows registry
   - the Steam Workshop upload API (how the worm spread), Steam friends/chat (how it spammed), Steam auth tickets
-  - deleting files, the Windows registry
-  - self-replication: writing `.cs` files, or writing under Mods, Workshop or Steam paths
+  - reflection on a sensitive name (`"Assembly"`, `"Process"`, `"SteamUGC"`…), including names built from fragments
+  - combinations the worm used: listing folders + deleting files; writing `.cs`/`mod.json` while listing folders or naming game paths (self-replication); deleting under game/Steam paths; base64 + loading code at runtime
   - shipped executables (`.dll`, `.exe` and similar) or binaries disguised with another extension
   - `mod.json` script paths that point outside the mod
-- **HIGH**: any other Steamworks use, loading assemblies or code at runtime, looking up types by string name, base64 blobs, character-code or split-string obfuscation, reading user folders or environment variables, nested archives.
-- **MEDIUM** (shown, not blocking): writing or listing files, opening URLs.
+- **HIGH**: deleting files, any other Steamworks use, loading assemblies or code at runtime, `unsafe` code, namespaces outside the allowlist, reading user folders or environment variables, strings naming a shell or download tool (`cmd.exe`, `powershell`, `curl`…), writing `.cs`/`mod.json` files or under game paths, character-code or split-string obfuscation, nested archives.
+- **MEDIUM** (shown, not blocking): writing or listing files, reflection by name, base64, long encoded strings (usually embedded images), opening URLs.
+
+Measured on the 116 maintainer-reviewed True Workshop mods (500 `.cs` files,
+16 MB): the old regex scanner flagged 25 of them in 20.6 s; this one flags 8
+in 3.3 s, each doing something worth reading (native calls, loading
+assemblies, deleting files after listing folders, writing into game paths).
+Scanning is not the slow part of an install: downloading from modsbase takes
+about 7 s per file and a Skymods page 12 to 17 s.
 
 Visual Studio build output (`bin/`, `obj/`, `.vs/`) that some authors ship by
 accident is removed before scanning. The game builds mods from the `.cs`

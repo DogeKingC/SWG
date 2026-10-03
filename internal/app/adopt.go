@@ -96,11 +96,12 @@ func (a *App) FindExisting(m *manager.Manager) ([]Found, error) {
 				}
 				f.Key = "local:" + kind[:1] + "-" + strings.Trim(reLocalKey.ReplaceAllString(strings.ToLower(e.Name()), "-"), "-")
 			}
-			rep, err := m.Adopt(f.Key, f.Name, source, f.Version, kind, e.Name(), aliases...)
+			rep, err := m.Adopt(f.Key, f.Name, author, source, f.Version, kind, e.Name(), aliases...)
 			if err != nil {
 				a.logf("  %s: %v", e.Name(), err)
 				continue
 			}
+			thumbFromFolder(kind, dir, f.Key)
 			f.ScanMax = "none"
 			if rep.Max() >= 0 {
 				f.ScanMax = rep.Max().String()
@@ -117,6 +118,7 @@ func (a *App) FindExisting(m *manager.Manager) ([]Found, error) {
 }
 
 type modJSONInfo struct {
+	ThumbnailPath      string `json:"ThumbnailPath"`
 	Name               string `json:"Name"`
 	Author             string `json:"Author"`
 	ModVersion         string `json:"ModVersion"`
@@ -177,3 +179,58 @@ func contraptionName(dir string) (string, bool) {
 
 // twCatalogue is the True Workshop catalogue (replaced in tests).
 var twCatalogue = sources.TWAll
+
+// thumbFromFolder caches the thumbnail of an installed mod or contraption
+// for the Installed list, from its own files.
+func thumbFromFolder(kind, dir, key string) bool {
+	if kind == manager.KindContraption {
+		return saveContraptionThumb(dir, key)
+	}
+	if root, mj, ok := modRootIn(dir); ok {
+		return saveThumb(root, mj.ThumbnailPath, key)
+	}
+	return false
+}
+
+// installedThumb makes sure an installed item has a cached thumbnail.
+func installedThumb(m *manager.Manager, key string) {
+	inst := m.State.Find(key)
+	if inst == nil || ThumbPath(inst.Key) != "" {
+		return
+	}
+	base := m.ModsDir
+	if inst.Kind == manager.KindContraption {
+		base = m.ContraptionsDir
+	}
+	for _, f := range inst.Folders {
+		if thumbFromFolder(inst.Kind, filepath.Join(base, f), inst.Key) {
+			return
+		}
+	}
+}
+
+// modRootIn returns the folder holding mod.json (dir or one level below).
+func modRootIn(dir string) (string, modJSONInfo, bool) {
+	for _, c := range append([]string{dir}, subdirs(dir)...) {
+		b, err := os.ReadFile(filepath.Join(c, "mod.json"))
+		if err != nil {
+			continue
+		}
+		var mj modJSONInfo
+		if json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj) == nil {
+			return c, mj, true
+		}
+	}
+	return "", modJSONInfo{}, false
+}
+
+func subdirs(dir string) []string {
+	var out []string
+	ents, _ := os.ReadDir(dir)
+	for _, e := range ents {
+		if e.IsDir() {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	return out
+}
