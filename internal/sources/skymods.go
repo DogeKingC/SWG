@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,26 @@ func SkyLatest(page int) ([]SkyItem, error) {
 		u += fmt.Sprintf("page/%d/", page)
 	}
 	return skyList(u)
+}
+
+// SkyCopies returns every mirrored copy of a Workshop item (Skymods sometimes
+// lists an item more than once), newest revision first.
+func SkyCopies(id string) ([]SkyItem, error) {
+	items, err := SkySearch(id, 1)
+	if err != nil {
+		return nil, err
+	}
+	var out []SkyItem
+	for _, it := range items {
+		if it.WorkshopID == id {
+			out = append(out, it)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("workshop item %s not found on Skymods", id)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Revision.After(out[j].Revision) })
+	return out, nil
 }
 
 // SkyByWorkshopID returns the mirrored copy of a Workshop item, if any.

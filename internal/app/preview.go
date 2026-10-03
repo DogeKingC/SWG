@@ -48,6 +48,7 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 	c, err := a.Fetch(ref, nil)
 	var nb *NeedsBrowser
 	var rej *manager.Rejection
+	var un *Unavailable
 	switch {
 	case errors.As(err, &nb):
 		p.Verdict, p.Browser = "browser", nb
@@ -55,6 +56,9 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 		return p, nil
 	case errors.As(err, &rej):
 		p.Verdict, p.Reasons = "blocked", rej.Reasons
+		return p, nil
+	case errors.As(err, &un):
+		p.Verdict, p.Reasons = "unavailable", []string{un.Reason}
 		return p, nil
 	case err != nil:
 		return nil, err

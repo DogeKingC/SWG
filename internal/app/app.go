@@ -314,20 +314,59 @@ func fileMD5(p string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// Unavailable means no mirror still has the file.
+type Unavailable struct{ Reason string }
+
+func (e *Unavailable) Error() string { return e.Reason }
+
 // fetchSky gets the Skymods mirror copy of a Workshop item through
-// modsbase.com's own "create download link" step.
+// modsbase.com's own "create download link" step, trying each copy Skymods
+// lists until one downloads.
 func (a *App) fetchSky(ws string) (*manager.Candidate, error) {
-	it, err := sources.SkyByWorkshopID(ws)
+	copies, err := sources.SkyCopies(ws)
 	if err != nil {
 		return nil, err
 	}
-	a.logf("Skymods: %s by %s (Workshop %s), revision %s, %s", it.Title, it.Author, it.WorkshopID, FmtTime(it.Revision), it.Size)
-	if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) && !a.Opt.Policy.AllowAfterCutoff {
-		return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
+	var browser *NeedsBrowser
+	var gone error
+	for _, it := range copies {
+		a.logf("Skymods: %s by %s (Workshop %s), revision %s, %s", it.Title, it.Author, it.WorkshopID, FmtTime(it.Revision), it.Size)
+		if !it.Revision.IsZero() && !it.Revision.Before(manager.WormCutoff) && !a.Opt.Policy.AllowAfterCutoff {
+			if len(copies) == 1 {
+				return nil, &manager.Rejection{Reasons: []string{fmt.Sprintf("mirrored copy was revised %s, on/after the worm cutoff; it may contain the worm (override: --allow-after-cutoff)", it.Revision.Format("2006-01-02 15:04"))}}
+			}
+			a.logf("  skipped: revised after the worm cutoff")
+			continue
+		}
+		if it.DownloadURL == "" {
+			gone = fmt.Errorf("Skymods has no download for this item (%s)", it.PageURL)
+			continue
+		}
+		c, err := a.fetchSkyCopy(it)
+		var nb *NeedsBrowser
+		switch {
+		case err == nil:
+			return c, nil
+		case errors.Is(err, sources.ErrGone):
+			gone = err
+			a.logf("  %v", err)
+		case errors.As(err, &nb):
+			browser = nb
+		default:
+			return nil, err
+		}
 	}
-	if it.DownloadURL == "" {
-		return nil, fmt.Errorf("Skymods has no download for this item (%s)", it.PageURL)
+	if browser != nil {
+		return nil, browser
 	}
+	if gone == nil {
+		gone = errors.New("no usable mirror copy")
+	}
+	return nil, &Unavailable{Reason: "This mod can't be downloaded: " + gone.Error() + ". Its mirror copy is broken; ask in the community whether someone kept the file."}
+}
+
+func (a *App) fetchSkyCopy(it sources.SkyItem) (*manager.Candidate, error) {
+	ws := it.WorkshopID
 	dir, err := CacheDir("sky:" + ws)
 	if err != nil {
 		return nil, err
@@ -342,6 +381,9 @@ func (a *App) fetchSky(ws string) (*manager.Candidate, error) {
 		}
 		if err != nil {
 			os.Remove(path + ".part")
+			if errors.Is(err, sources.ErrGone) {
+				return nil, err
+			}
 			a.logf("modsbase.com: %v", err)
 			return nil, &NeedsBrowser{URL: it.DownloadURL, Reason: err.Error(), WorkshopID: ws}
 		}

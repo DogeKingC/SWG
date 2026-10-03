@@ -27,6 +27,13 @@
   <button id="updateBtn" class="btn btn-primary btn-sm">Update now</button>
 </div>
 
+<div id="installBanner" class="banner banner-info" hidden>
+  <span id="installText">Install PPG Mod Manager on this PC so you can start it from the menu and it keeps itself up to date.</span>
+  <label class="check-inline"><input id="installDesktop" type="checkbox" checked> desktop shortcut</label>
+  <button id="installAppBtn" class="btn btn-primary btn-sm">Install</button>
+  <button id="installLater" class="btn btn-ghost btn-sm">Not now</button>
+</div>
+
 <div class="layout">
   <nav class="sidebar" aria-label="Sections">
     <button class="nav active" data-view="browse"><span class="nav-ico">⌕</span>Browse mods</button>
@@ -156,6 +163,12 @@
       <h2>Folders</h2>
       <div id="pathsInfo" class="mono small"></div>
       <div class="toolbar"><button id="openData" class="btn btn-ghost">Open ppgmods data folder</button></div>
+      <h2>This app</h2>
+      <p id="appInfo" class="small muted"></p>
+      <div class="toolbar">
+        <button id="appInstallBtn2" class="btn">Install on this PC</button>
+        <button id="appUninstallBtn" class="btn btn-ghost">Uninstall from this PC</button>
+      </div>
       <h2>About</h2>
       <p>ppgmods <span id="aboutVersion"></span>. <span id="aboutRelease"></span></p>
       <div class="toolbar"><button id="checkRelease" class="btn">Check for a new version</button></div>

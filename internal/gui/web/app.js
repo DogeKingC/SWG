@@ -125,6 +125,7 @@ async function refreshState() {
   ].join("\n");
   renderInstalled();
   markInstalledCards();
+  renderDesktop(state.desktop);
   if (state.job && state.job.running && !lastJobId) lastJobId = state.job.id;
   if (!lastJobId) setJob(state.job);
 }
@@ -206,7 +207,17 @@ function jobDone(j) {
   if (j.name === "verify") return showVerify(j.problems || []);
   if (j.ok) {
     if (j.data && j.data.restart) {
-      dialog("Updated to " + j.data.version, el("p", {}, "Close ppgmods and start it again to use the new version."));
+      dialog("Updated to " + j.data.version, el("p", {}, "Restart PPG Mod Manager to use the new version."),
+        { label: "Restart now", run: () => restartApp("") });
+      $("#dlgExtra").className = "btn btn-primary";
+      return;
+    }
+    if (j.name === "install-app") {
+      const running = state?.desktop?.installed;
+      dialog("Installed", [el("p", {}, "PPG Mod Manager is installed at " + ((j.data && j.data.exe) || "") + "."),
+        el("p", {}, state?.desktop?.platform === "windows" ? "Start it from the Start menu or the desktop shortcut. You can delete the file you downloaded." : "Start it from your application menu or the desktop shortcut. You can delete the file you downloaded.")],
+        running ? null : { label: "Switch to the installed copy", run: () => restartApp("installed") });
+      $("#dlgExtra").className = "btn btn-primary";
       return;
     }
     if (sum && j.name === "update") {
@@ -522,6 +533,7 @@ function showCheck(m, p) {
     review: ["verdict-warn", "⚠ Needs your review before installing."],
     blocked: ["verdict-bad", "✕ ppgmods will not install this mod."],
     browser: ["verdict-warn", "modsbase.com didn't hand ppgmods the file from this connection."],
+    unavailable: ["verdict-bad", "✕ This mod's mirror copy is gone."],
   }[p.verdict] || ["verdict-bad", p.verdict];
   box.push(el("div", { class: "verdict " + text[0] }, text[1]));
   if (p.verdict === "browser") {
@@ -552,7 +564,7 @@ function setDetailActions(m, p) {
   btn.onclick = () => { $("#details").close(); install(m.ref, m.name); };
   btn.textContent = installed ? "Reinstall" : "Install";
   if (!p) { btn.textContent = installed ? "Reinstall" : "Install"; return; }
-  if (p.verdict === "blocked" || p.verdict === "error") { btn.disabled = true; return; }
+  if (p.verdict === "blocked" || p.verdict === "error" || p.verdict === "unavailable") { btn.disabled = true; return; }
   if (p.verdict === "browser") {
     btn.textContent = "Open download page";
     btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }); };
@@ -629,6 +641,36 @@ $("#settingsForm").onsubmit = async (e) => {
   } catch (err) { toast(err.message); }
 };
 
+// ---------- desktop install ----------
+function renderDesktop(d) {
+  if (!d) return;
+  const where = d.platform === "windows" ? "the Start menu" : "your application menu";
+  let dismissed = false;
+  try { dismissed = localStorage.getItem("ppgm-install-dismissed") === "1"; } catch {}
+  const banner = $("#installBanner");
+  banner.hidden = d.installed || dismissed;
+  if (!d.installed) {
+    $("#installText").textContent = d.copy_exists
+      ? "PPG Mod Manager is installed on this PC, but you are running another copy. Install this copy over it, or switch to the installed one."
+      : `Install PPG Mod Manager on this PC: it goes in ${where}, keeps itself up to date, and you can delete this download.`;
+  }
+  $("#appInfo").textContent = d.installed
+    ? `Installed at ${d.install_path}. Start it from ${where}.`
+    : `Running from ${d.running_from}. ${d.copy_exists ? "An installed copy exists at " + d.install_path + "." : "Not installed."}`;
+  $("#appInstallBtn2").textContent = d.installed ? "Repair shortcuts" : "Install on this PC";
+  $("#appUninstallBtn").hidden = !d.installed && !d.copy_exists;
+}
+function installApp() {
+  run({ action: "install-app", apply: $("#installDesktop").checked }, "Installing PPG Mod Manager");
+}
+$("#installAppBtn").onclick = installApp;
+$("#appInstallBtn2").onclick = installApp;
+$("#installLater").onclick = () => { try { localStorage.setItem("ppgm-install-dismissed", "1"); } catch {} $("#installBanner").hidden = true; };
+$("#appUninstallBtn").onclick = () => dialog("Uninstall PPG Mod Manager?", [
+  el("p", {}, "This removes the program, its menu entry and its shortcuts, then closes this window."),
+  el("p", {}, "Your installed mods, backups and settings stay where they are."),
+], { label: "Uninstall", run: () => run({ action: "uninstall-app" }, "Uninstalling") });
+
 // ---------- self update ----------
 async function checkRelease(force) {
   let r;
@@ -653,6 +695,11 @@ $("#quitBtn").onclick = async () => {
   document.body.replaceChildren(el("div", { class: "empty", style: "margin:auto" }, "ppgmods has stopped. You can close this window."));
 };
 
+async function restartApp(which) {
+  await api("/api/action", { body: { action: "restart", key: which } }).catch(() => {});
+  document.body.replaceChildren(el("div", { class: "empty", style: "margin:auto" }, "Restarting PPG Mod Manager… a new window will open. You can close this one."));
+}
+
 // ---------- start ----------
 (async function start() {
   await refreshState();
@@ -662,4 +709,8 @@ $("#quitBtn").onclick = async () => {
   setInterval(pollLog, 1000);
   setInterval(pollJob, 800);
   setInterval(() => { if (!jobRunning) refreshState(); }, 15000);
+  const ping = () => api("/api/ping").catch(() => {});
+  ping();
+  setInterval(ping, 20000);
+  setInterval(() => checkRelease(false), 30 * 60 * 1000);
 })();

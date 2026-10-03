@@ -16,13 +16,17 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/DogeKingC/SWG/internal/desktop"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/selfupdate"
 	"github.com/DogeKingC/SWG/internal/sources"
@@ -55,6 +59,13 @@ type server struct {
 	rel     *selfupdate.Release
 	relErr  string
 	relTime time.Time
+
+	pingMu   sync.Mutex
+	lastPing time.Time
+
+	logFile  *os.File
+	relaunch string // executable to start after shutting down
+	quitOnce sync.Once
 }
 
 type job struct {
@@ -87,17 +98,34 @@ func (s *server) logf(format string, a ...any) {
 		s.logs = s.logs[drop:]
 		s.base += drop
 	}
+	if s.logFile != nil {
+		fmt.Fprintln(s.logFile, time.Now().Format("2006-01-02 ")+line)
+	}
 	s.logMu.Unlock()
 	fmt.Println(line)
 }
 
-// Run starts the GUI and blocks until the window's Quit button is used or
-// the process is interrupted.
+func (s *server) stop(relaunch string) {
+	s.quitOnce.Do(func() {
+		s.relaunch = relaunch
+		close(s.quit)
+	})
+}
+
+// Run starts the GUI and blocks until the window is closed (the page stops
+// sending heartbeats), Quit is pressed, or the process is interrupted. If
+// another ppgmods window is already running, it is brought up instead.
 func Run(opt app.Options, g Options) error {
 	selfupdate.Cleanup()
 	app.PruneCache(14 * 24 * time.Hour)
 	if st, err := loadSettings(); err == nil {
 		st.apply(&opt)
+	}
+	if !g.NoWindow && g.Port == 0 {
+		if url := runningInstance(); url != "" {
+			fmt.Println("ppgmods is already running; opening its window")
+			return openWindow(url)
+		}
 	}
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -108,21 +136,130 @@ func Run(opt app.Options, g Options) error {
 		return err
 	}
 	s := &server{opt: opt, version: g.Version, token: hex.EncodeToString(b), host: ln.Addr().String(), quit: make(chan struct{})}
+	if d, err := manager.ConfigDir(); err == nil {
+		lp := filepath.Join(d, "ppgmods.log")
+		if st, err := os.Stat(lp); err == nil && st.Size() > 2<<20 {
+			os.Rename(lp, lp+".1")
+		}
+		s.logFile, _ = os.OpenFile(lp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	}
 	srv := &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
 
 	url := fmt.Sprintf("http://%s/#%s", s.host, s.token)
-	s.logf("ppgmods %s GUI running at http://%s (keep this window open; closing it quits ppgmods)", g.Version, s.host)
+	writeInstance(s.host, s.token)
+	defer removeInstance(s.token)
+	s.logf("ppgmods %s started (window address http://%s)", g.Version, s.host)
 	if !g.NoWindow {
 		if err := openWindow(url); err != nil {
 			s.logf("could not open a window (%v); open this address in your browser: %s", err, url)
 		}
+		go s.watchdog()
 	} else {
 		fmt.Println(url)
 	}
-	go s.checkRelease(false)
-	<-s.quit
-	return srv.Close()
+	go func() {
+		for {
+			s.checkRelease(true)
+			select {
+			case <-time.After(6 * time.Hour):
+			case <-s.quit:
+				return
+			}
+		}
+	}()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-s.quit:
+	case <-sig:
+	}
+	srv.Close()
+	if s.logFile != nil {
+		s.logFile.Close()
+	}
+	removeInstance(s.token)
+	if s.relaunch != "" {
+		return desktop.Launch(s.relaunch, "gui")
+	}
+	return nil
+}
+
+// watchdog quits once the window has been closed: the page sends a
+// heartbeat every 20 s (browsers slow background timers to once a minute,
+// hence the generous limit). Nothing runs in the background after the
+// window is gone, except a task still in progress.
+func (s *server) watchdog() {
+	started := time.Now()
+	for {
+		select {
+		case <-s.quit:
+			return
+		case <-time.After(15 * time.Second):
+		}
+		s.pingMu.Lock()
+		last := s.lastPing
+		s.pingMu.Unlock()
+		s.jobMu.Lock()
+		busy := s.job != nil && s.job.Running
+		s.jobMu.Unlock()
+		if busy {
+			continue
+		}
+		if last.IsZero() && time.Since(started) > 10*time.Minute || !last.IsZero() && time.Since(last) > 3*time.Minute {
+			s.logf("window closed; quitting")
+			s.stop("")
+			return
+		}
+	}
+}
+
+type instance struct {
+	Host  string `json:"host"`
+	Token string `json:"token"`
+}
+
+func instancePath() string {
+	d, err := manager.ConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(d, "instance.json")
+}
+
+func writeInstance(host, token string) {
+	if p := instancePath(); p != "" {
+		b, _ := json.Marshal(instance{host, token})
+		os.WriteFile(p, b, 0o600)
+	}
+}
+
+func removeInstance(token string) {
+	p := instancePath()
+	var in instance
+	if b, err := os.ReadFile(p); err == nil && json.Unmarshal(b, &in) == nil && in.Token == token {
+		os.Remove(p)
+	}
+}
+
+// runningInstance returns the window address of a live ppgmods, or "".
+func runningInstance() string {
+	var in instance
+	b, err := os.ReadFile(instancePath())
+	if err != nil || json.Unmarshal(b, &in) != nil || in.Host == "" {
+		return ""
+	}
+	req, _ := http.NewRequest("GET", "http://"+in.Host+"/api/ping", nil)
+	req.Header.Set("X-Token", in.Token)
+	resp, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
+	if err != nil {
+		return ""
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	return fmt.Sprintf("http://%s/#%s", in.Host, in.Token)
 }
 
 func (s *server) routes() http.Handler {
@@ -143,7 +280,13 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/thumb", s.handleThumb)
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
-		go func() { time.Sleep(200 * time.Millisecond); close(s.quit) }()
+		go func() { time.Sleep(200 * time.Millisecond); s.stop("") }()
+	})
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		s.pingMu.Lock()
+		s.lastPing = time.Now()
+		s.pingMu.Unlock()
+		writeJSON(w, map[string]bool{"ok": true})
 	})
 	return s.guard(mux)
 }
@@ -236,6 +379,13 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		"settings":   settingsFrom(s.opt),
 		"cutoff":     manager.WormCutoff.Format("2006-01-02"),
 		"lastBackup": lastBackup(paths.Data),
+		"desktop": map[string]any{
+			"installed":    desktop.IsInstalled(),
+			"copy_exists":  desktop.InstalledCopyExists(),
+			"install_path": desktop.InstallPath(),
+			"running_from": desktop.Executable(),
+			"platform":     runtime.GOOS,
+		},
 	})
 }
 
@@ -402,6 +552,23 @@ func (s *server) do(j *job, req actionReq) error {
 		dest, err := a.Backup()
 		j.Data = map[string]string{"dest": dest}
 		return err
+	case "install-app":
+		exe, err := desktop.Install(desktop.Options{DesktopShortcut: req.Apply, Version: s.version}, s.logf)
+		j.Data = map[string]string{"exe": exe}
+		return err
+	case "uninstall-app":
+		if err := desktop.Uninstall(s.logf); err != nil {
+			return err
+		}
+		go func() { time.Sleep(time.Second); s.stop("") }()
+		return nil
+	case "restart":
+		exe := desktop.StartedAs()
+		if req.Key == "installed" {
+			exe = desktop.InstallPath()
+		}
+		go func() { time.Sleep(500 * time.Millisecond); s.stop(exe) }()
+		return nil
 	}
 
 	m, err := a.Manager(true)

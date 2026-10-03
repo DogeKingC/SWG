@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/DogeKingC/SWG/internal/desktop"
 	"github.com/DogeKingC/SWG/internal/gui"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/scan"
@@ -44,6 +45,10 @@ Keep up to date:
   rollback <key>             restore the previous version (and pin it)
   remove <key>               uninstall
   self-update                update ppgmods itself to the latest release
+  install-app [no-desktop]   install as a desktop app (Start menu / app menu,
+                             desktop shortcut); no admin rights needed
+  uninstall-app              remove the app, its shortcuts and menu entries
+                             (your mods and settings stay)
 
 Safety and recovery:
   scan <path>                scan an archive or folder without installing
@@ -76,6 +81,8 @@ func main() {
 	args := os.Args[1:]
 	if len(args) == 0 {
 		args = []string{"gui"}
+	} else {
+		attachConsole()
 	}
 	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		fmt.Print(usage)
@@ -145,6 +152,15 @@ func parseFlags(argv []string) (*app.App, []string, gui.Options, error) {
 
 func logf(format string, a ...any) { fmt.Printf(format+"\n", a...) }
 
+func hasFlag(args []string, name string) bool {
+	for _, a := range args {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
 func need(args []string, n int, what string) error {
 	if len(args) < n {
 		return fmt.Errorf("missing %s (see `ppgmods help`)", what)
@@ -160,6 +176,14 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 	case "version":
 		fmt.Println("ppgmods", version)
 		return nil
+	case "install-app":
+		exe, err := desktop.Install(desktop.Options{DesktopShortcut: !hasFlag(args, "no-desktop"), Version: version}, logf)
+		if err == nil {
+			logf("%s is installed: start it from the Start menu / application menu (%s)", desktop.AppName, exe)
+		}
+		return err
+	case "uninstall-app":
+		return desktop.Uninstall(logf)
 	case "self-update":
 		return cmdSelfUpdate()
 	case "paths":

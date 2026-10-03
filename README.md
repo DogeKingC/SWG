@@ -31,14 +31,30 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 
 1. Install a loader that runs C# mods again, such as
    [RE_PPG](https://github.com/AlibardaWasTaken/RE_PPG/releases).
-2. Download the latest build from this repository's
-   [Releases](https://github.com/DogeKingC/SWG/releases/latest) page:
-   `ppgmods-windows-amd64.exe` or `ppgmods-linux-amd64`. Check it against
-   `SHA256SUMS.txt`.
-3. **Double-click it.** A window opens. It uses Edge or Chrome in app mode,
-   or your default browser if neither is installed. The program serves the
-   window only to your own PC (127.0.0.1) with a random per-session key. A
-   console window stays open beside it, and closing that quits ppgmods.
+2. Download the latest release from
+   [Releases](https://github.com/DogeKingC/SWG/releases/latest):
+   - **Windows:** `ppgmods-windows-amd64.exe`. Double-click it. SmartScreen
+     may warn because the program isn't code-signed; choose *More info → Run
+     anyway*.
+   - **Linux:** `ppgmods-linux-amd64`. Run
+     `chmod +x ppgmods-linux-amd64 && ./ppgmods-linux-amd64`.
+3. The window opens with an **Install** banner. Click it to install
+   PPG Mod Manager as a normal app (no admin rights needed):
+   - **Windows:** `%LocalAppData%\Programs\PPG Mod Manager`, with Start menu
+     and desktop shortcuts and an entry in *Apps & features* for uninstalling.
+   - **Linux:** `~/.local/bin/ppgmods`, with an application-menu entry, icon
+     and desktop shortcut.
+
+   You can delete the downloaded file afterwards. From a terminal, run
+   `ppgmods install-app` (add `no-desktop` to skip the desktop shortcut) and
+   `ppgmods uninstall-app`. Uninstalling leaves your mods and settings alone.
+
+The window is a local web page. It opens in Edge or Chrome in app mode, or in
+your default browser if neither is installed. The program serves it only to
+your own PC (127.0.0.1), and every request needs a random per-session key.
+Only one copy runs at a time: starting it again brings up the existing
+window. It quits a few minutes after you close the window, unless a task is
+still running. A log is kept in the data folder as `ppgmods.log`.
 
 The window covers everything:
 
@@ -68,7 +84,9 @@ from the window.
 
 Every push to `main` builds Windows and Linux binaries with GitHub Actions and
 publishes them as a new release, `v0.1.<build number>`. ppgmods checks for a
-newer release when it starts and shows an **Update now** banner. Updating
+newer release when it starts and every 6 hours, and shows an **Update now**
+banner. The update replaces the installed copy, so menu entries and shortcuts
+keep working. Updating
 downloads the new build, checks it against the release's `SHA256SUMS.txt`
 and replaces the program. From a terminal, run `ppgmods self-update`.
 Updates can only be found while the repository is public. A private

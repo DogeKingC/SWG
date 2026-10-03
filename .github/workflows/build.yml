@@ -50,6 +50,17 @@ jobs:
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Building $v"
+      - name: Windows icon and version info
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          num=$(echo "${VERSION#v}" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3/')
+          case "$num" in *[!0-9.]*|"") num=0.0.0 ;; esac
+          go-winres simply --arch amd64,arm64 --out cmd/ppgmods/rsrc \
+            --icon internal/desktop/icons/icon-256.png --manifest gui \
+            --product-name "PPG Mod Manager" --file-description "PPG Mod Manager" \
+            --original-filename ppgmods.exe --product-version "$num.0" --file-version "$num.0"
       - name: Build binaries
         env:
           VERSION: ${{ steps.ver.outputs.version }}
@@ -57,9 +68,11 @@ jobs:
           mkdir dist
           for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
             os="${target%/*}"; arch="${target#*/}"
-            ext=""; [ "$os" = windows ] && ext=".exe"
+            ext=""; extra=""
+            # Windows builds are GUI programs: no console window on double-click.
+            [ "$os" = windows ] && ext=".exe" && extra="-H windowsgui"
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w -X main.version=${VERSION}" \
+              -ldflags "-s -w $extra -X main.version=${VERSION}" \
               -o "dist/ppgmods-${os}-${arch}${ext}" ./cmd/ppgmods
           done
           cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
@@ -85,9 +98,9 @@ jobs:
           generate_release_notes: true
           make_latest: true
           body: |
-            **Windows:** download `ppgmods-windows-amd64.exe` and double-click it.
-            **Linux:** download `ppgmods-linux-amd64`, `chmod +x` it and run it.
-            Already installed? The app shows an "Update now" banner when this release is out.
+            **Windows:** download `ppgmods-windows-amd64.exe` and double-click it, then click **Install** in the banner. It adds PPG Mod Manager to the Start menu and desktop (no admin needed); you can delete the download afterwards. Windows SmartScreen may warn because the program is not code-signed: choose "More info" → "Run anyway".
+            **Linux:** download `ppgmods-linux-amd64`, run `chmod +x ppgmods-linux-amd64 && ./ppgmods-linux-amd64`, then click **Install**. It goes to `~/.local/bin` with an application-menu entry and desktop shortcut.
+            Already installed? The app checks for new releases and shows an **Update now** banner.
 
             Verify downloads against `SHA256SUMS.txt`.
           files: dist/*

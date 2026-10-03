@@ -19,6 +19,10 @@ import (
 // browser.
 var ErrChallenge = errors.New("modsbase.com answered with a Cloudflare check")
 
+// ErrGone means modsbase's storage server no longer has the file: its
+// download link answers "No file" whatever browser or cookies ask for it.
+var ErrGone = errors.New(`modsbase.com no longer has this file (its storage server answers "No file")`)
+
 var (
 	reMBCode = regexp.MustCompile(`^https://modsbase\.com/([a-z0-9]{8,16})/`)
 	// The current site puts the link on a.dl2-btn; older pages (and the
@@ -155,6 +159,13 @@ func ModsbaseDownload(link, page, path string, maxBytes int64) (string, error) {
 		return "", fmt.Errorf("download: HTTP %d", resp.StatusCode)
 	}
 	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+		head, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		if isChallenge(resp, head) {
+			return "", ErrChallenge
+		}
+		if strings.TrimSpace(string(head)) == "No file" {
+			return "", ErrGone
+		}
 		return "", errors.New("download link returned a web page, not a file")
 	}
 	f, err := os.Create(path)

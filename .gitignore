@@ -2,3 +2,4 @@
 /ppgmods.exe
 /dist/
 ppg-workshop-backup-*/
+cmd/ppgmods/*.syso
