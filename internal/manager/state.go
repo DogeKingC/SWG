@@ -1,0 +1,152 @@
+// Package manager installs, updates, verifies and rolls back mods, enforcing
+// the safety policy around every change to the Mods folder.
+package manager
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"time"
+)
+
+type Installed struct {
+	Key         string            `json:"key"` // gb:<modid>, sky:<workshopid>, local:<sha256 prefix>
+	Name        string            `json:"name"`
+	Source      string            `json:"source"`
+	Folders     []string          `json:"folders"` // folder names under Mods/
+	FileID      int               `json:"file_id,omitempty"`
+	Version     string            `json:"version,omitempty"`
+	Revision    time.Time         `json:"revision,omitempty"` // upload/revision time at the source
+	ArchiveSHA  string            `json:"archive_sha256,omitempty"`
+	Files       map[string]string `json:"files"` // "<folder>/<rel>" -> sha256
+	Findings    []string          `json:"findings,omitempty"`
+	InstalledAt time.Time         `json:"installed_at"`
+	Pinned      bool              `json:"pinned,omitempty"`
+}
+
+type State struct {
+	path string
+	Mods map[string]*Installed `json:"mods"`
+}
+
+func ConfigDir() (string, error) {
+	if d := os.Getenv("PPGMODS_HOME"); d != "" {
+		return d, os.MkdirAll(d, 0o755)
+	}
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	d := filepath.Join(base, "ppgmods")
+	return d, os.MkdirAll(d, 0o755)
+}
+
+func LoadState() (*State, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	s := &State{path: filepath.Join(dir, "state.json"), Mods: map[string]*Installed{}}
+	b, err := os.ReadFile(s.path)
+	if os.IsNotExist(err) {
+		return s, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, s); err != nil {
+		return nil, err
+	}
+	if s.Mods == nil {
+		s.Mods = map[string]*Installed{}
+	}
+	return s, nil
+}
+
+func (s *State) Save() error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := s.path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.path)
+}
+
+func (s *State) Sorted() []*Installed {
+	var out []*Installed
+	for _, m := range s.Mods {
+		out = append(out, m)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
+
+// OwnerOf returns the entry that installed a Mods/ folder, if any.
+func (s *State) OwnerOf(folder string) *Installed {
+	for _, m := range s.Mods {
+		for _, f := range m.Folders {
+			if f == folder {
+				return m
+			}
+		}
+	}
+	return nil
+}
+
+func fileSHA(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// hashTree hashes every file under dir, keyed "<prefix>/<rel path>".
+func hashTree(dir, prefix string, into map[string]string) error {
+	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		h, err := fileSHA(p)
+		if err != nil {
+			return err
+		}
+		into[prefix+"/"+filepath.ToSlash(rel)] = h
+		return nil
+	})
+}
+
+// FileSHA returns the hex SHA-256 of a file.
+func FileSHA(p string) (string, error) { return fileSHA(p) }
+
+// TreeSHA returns a stable hex SHA-256 over every file path and hash in dir.
+func TreeSHA(dir string) (string, error) {
+	files := map[string]string{}
+	if err := hashTree(dir, ".", files); err != nil {
+		return "", err
+	}
+	keys := make([]string, 0, len(files))
+	for k := range files {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	h := sha256.New()
+	for _, k := range keys {
+		io.WriteString(h, k+"\x00"+files[k]+"\n")
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}

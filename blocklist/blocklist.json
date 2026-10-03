@@ -1,0 +1,4 @@
+{
+  "notes": "Deny-only list of known-bad mods. Entries here can only block installs, never allow them. Add the SHA-256 of a malicious archive or .cs file, a Steam Workshop ID, or a GameBanana mod/file ID, with a short reason, via pull request.",
+  "entries": []
+}
