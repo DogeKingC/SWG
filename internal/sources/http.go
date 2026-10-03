@@ -46,8 +46,18 @@ func Download(url, path string, maxBytes int64) (md5hex, sha256hex string, err e
 	if err != nil {
 		return "", "", err
 	}
+	md5hex, sha256hex, err = saveHashed(f, resp.Body, maxBytes)
+	if err != nil {
+		os.Remove(path)
+	}
+	return md5hex, sha256hex, err
+}
+
+// saveHashed copies at most maxBytes from r into f, closes f and returns the
+// MD5 and SHA-256 of what was written.
+func saveHashed(f *os.File, r io.Reader, maxBytes int64) (string, string, error) {
 	m, s := md5.New(), sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, m, s), io.LimitReader(resp.Body, maxBytes+1))
+	n, err := io.Copy(io.MultiWriter(f, m, s), io.LimitReader(r, maxBytes+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -55,7 +65,6 @@ func Download(url, path string, maxBytes int64) (md5hex, sha256hex string, err e
 		err = fmt.Errorf("download larger than %d bytes", maxBytes)
 	}
 	if err != nil {
-		os.Remove(path)
 		return "", "", err
 	}
 	return hex.EncodeToString(m.Sum(nil)), hex.EncodeToString(s.Sum(nil)), nil

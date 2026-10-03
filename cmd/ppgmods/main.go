@@ -30,7 +30,10 @@ Usage: ppgmods <command> [args] [flags]
 Find and install:
   search <text>              search GameBanana and Skymods (Workshop mirror)
   install gb:<id>            download, scan and install a GameBanana mod (id or URL)
-  install sky:<workshop id>  look up a Skymods mirror copy and open its download page
+  install sky:<workshop id>  download the Skymods mirror copy of a Workshop item
+                             (falls back to the browser + Downloads folder if
+                             modsbase.com shows a Cloudflare check)
+  install <ref> <ref> ...    queue several mods (gb: and sky: can be mixed)
   import <file|folder>       scan and install a downloaded archive or mod folder
                              (--workshop-id <id> for Workshop/Skymods copies)
 
@@ -59,10 +62,16 @@ Flags (any command):
   --cooldown <dur>           minimum age of GameBanana files (default 48h)
   --dry-run                  check everything, change nothing
   --offline                  do not refresh the remote blocklist
+  --downloads <dir>          browser download folder to watch (default: Downloads)
+  --wait <dur>               how long to wait for each browser download (default 10m)
+  --no-watch                 on fallback, just open the page; import manually
 `
 
 type opts struct {
 	game, dest, workshopID, name string
+	downloads                    string
+	wait                         time.Duration
+	noWatch                      bool
 	revision                     time.Time // known revision date (from a backup manifest)
 	yes, offline                 bool
 	fileID                       int
@@ -83,6 +92,17 @@ func main() {
 	if err := run(cmd, args, o); err != nil {
 		fatal(err)
 	}
+}
+
+func printErr(ref string, err error) {
+	var rej *manager.Rejection
+	if errors.As(err, &rej) {
+		for _, r := range rej.Reasons {
+			logf("  %s REFUSED: %s", ref, r)
+		}
+		return
+	}
+	logf("  %s error: %v", ref, err)
 }
 
 func fatal(err error) {
@@ -107,6 +127,9 @@ func parseFlags(argv []string) (*opts, []string, error) {
 	fs.StringVar(&o.workshopID, "workshop-id", "", "")
 	fs.StringVar(&o.name, "name", "", "")
 	fs.IntVar(&o.fileID, "file", 0, "")
+	fs.StringVar(&o.downloads, "downloads", "", "")
+	fs.DurationVar(&o.wait, "wait", 10*time.Minute, "")
+	fs.BoolVar(&o.noWatch, "no-watch", false, "")
 	fs.BoolVar(&o.yes, "yes", false, "")
 	fs.BoolVar(&o.offline, "offline", false, "")
 	fs.BoolVar(&o.policy.AllowHigh, "allow-high", false, "")
@@ -186,7 +209,20 @@ func run(cmd string, args []string, o *opts) error {
 		if err := need(args, 1, "mod reference"); err != nil {
 			return err
 		}
-		return cmdInstall(m, args[0], o)
+		var refused int
+		for _, ref := range args {
+			if err := cmdInstall(m, ref, o); err != nil {
+				if len(args) == 1 {
+					return err
+				}
+				refused++
+				printErr(ref, err)
+			}
+		}
+		if refused > 0 {
+			return fmt.Errorf("%d of %d mods not installed", refused, len(args))
+		}
+		return nil
 	case "import":
 		if err := need(args, 1, "file or folder"); err != nil {
 			return err
@@ -328,7 +364,7 @@ func cmdInstall(m *manager.Manager, ref string, o *opts) error {
 		}
 		return installGB(m, id, o.fileID, nil)
 	case strings.HasPrefix(ref, "sky:"):
-		return openSky(strings.TrimPrefix(ref, "sky:"), o)
+		return installSky(m, strings.TrimPrefix(ref, "sky:"), o)
 	}
 	return fmt.Errorf("unknown reference %q; use gb:<id>, a GameBanana URL, or sky:<workshop id>", ref)
 }
@@ -403,7 +439,11 @@ func humanSize(n int64) string {
 	return fmt.Sprintf("%d B", n)
 }
 
-func openSky(ws string, o *opts) error {
+// installSky looks up a Skymods mirror copy, opens its modsbase.com page in
+// the browser (the site sits behind a Cloudflare check, so it cannot be
+// downloaded directly) and imports the file as soon as it lands in the
+// Downloads folder.
+func installSky(m *manager.Manager, ws string, o *opts) error {
 	it, err := sources.SkyByWorkshopID(ws)
 	if err != nil {
 		return err
@@ -415,14 +455,115 @@ func openSky(ws string, o *opts) error {
 	if it.DownloadURL == "" {
 		return fmt.Errorf("no download link on %s", it.PageURL)
 	}
-	logf("")
-	logf("modsbase.com blocks automated downloads (Cloudflare check), so the page opens in your browser.")
-	logf("Download the .zip (ignore ads and anything that is not the mod file, never run an .exe), then run:")
-	logf("  ppgmods import <downloaded file> --workshop-id %s", ws)
-	logf("")
-	logf("Download page: %s", it.DownloadURL)
+	oo := *o
+	oo.workshopID = ws
+	if oo.name == "" {
+		oo.name = it.Title
+	}
+	if file, err := skyDirect(it); err == nil {
+		defer os.Remove(file)
+		return cmdImport(m, file, &oo)
+	} else {
+		logf("direct download not possible (%v); using the browser instead", err)
+	}
+
+	dl := o.downloads
+	if dl == "" {
+		dl = downloadFolder()
+	}
+	logf("Opening the download page in your browser: %s", it.DownloadURL)
+	logf("Click the real download button (ignore ads; never run an .exe).")
+	if o.noWatch || dl == "" {
+		logf("Then run: ppgmods import <downloaded file> --workshop-id %s", ws)
+		openBrowser(it.DownloadURL)
+		return nil
+	}
+	since := time.Now()
 	openBrowser(it.DownloadURL)
-	return nil
+	logf("Waiting for %s_* in %s (up to %s, Ctrl+C to stop)...", ws, dl, o.wait)
+	file, err := waitForDownload(dl, ws, since, o.wait)
+	if err != nil {
+		return fmt.Errorf("%v; when you have the file run: ppgmods import <file> --workshop-id %s", err, ws)
+	}
+	logf("got %s", filepath.Base(file))
+	return cmdImport(m, file, &oo)
+}
+
+// skyDirect fetches a Skymods copy through modsbase's own "create download
+// link" step. It fails with sources.ErrChallenge when Cloudflare asks for a
+// browser check, which ppgmods leaves to the browser.
+func skyDirect(it *sources.SkyItem) (string, error) {
+	logf("requesting download link from modsbase.com...")
+	link, err := sources.ModsbaseResolve(it.DownloadURL)
+	if err != nil {
+		return "", err
+	}
+	dir, err := downloadsDir()
+	if err != nil {
+		return "", err
+	}
+	name := filepath.Base(strings.TrimSuffix(it.DownloadURL, ".html"))
+	path := filepath.Join(dir, "sky-"+it.WorkshopID+"-"+name)
+	if _, err := sources.ModsbaseDownload(link, it.DownloadURL, path, 1<<30); err != nil {
+		return "", err
+	}
+	logf("downloaded %s", name)
+	return path, nil
+}
+
+// downloadFolder returns the user's browser download folder.
+func downloadFolder() string {
+	if runtime.GOOS != "windows" {
+		if out, err := exec.Command("xdg-user-dir", "DOWNLOAD").Output(); err == nil {
+			if d := strings.TrimSpace(string(out)); d != "" {
+				if st, err := os.Stat(d); err == nil && st.IsDir() {
+					return d
+				}
+			}
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	d := filepath.Join(home, "Downloads")
+	if st, err := os.Stat(d); err == nil && st.IsDir() {
+		return d
+	}
+	return ""
+}
+
+var partialExt = map[string]bool{".crdownload": true, ".part": true, ".partial": true, ".download": true, ".tmp": true}
+
+// waitForDownload polls dir for an archive named "<workshop id>_..." (the
+// naming modsbase uses) that appeared after since and has stopped growing.
+func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	sizes := map[string]int64{}
+	for time.Now().Before(deadline) {
+		ents, _ := os.ReadDir(dir)
+		for _, e := range ents {
+			name := e.Name()
+			ext := strings.ToLower(filepath.Ext(name))
+			if e.IsDir() || !strings.HasPrefix(name, ws) || partialExt[ext] {
+				continue
+			}
+			if ext != ".zip" && ext != ".rar" && ext != ".7z" {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil || info.ModTime().Before(since.Add(-2*time.Second)) || info.Size() == 0 {
+				continue
+			}
+			p := filepath.Join(dir, name)
+			if prev, ok := sizes[p]; ok && prev == info.Size() {
+				return p, nil
+			}
+			sizes[p] = info.Size()
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return "", fmt.Errorf("no download for %s appeared in %s", ws, dir)
 }
 
 func openBrowser(u string) {

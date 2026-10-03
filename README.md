@@ -24,7 +24,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 |---|---|---|---|
 | Local Steam cache | `steamapps/workshop/content/1118200` on your PC | `backup-workshop` | **Best source, and it won't last.** Steam deletes removed items when it syncs. Back the cache up before launching Steam online. |
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
-| [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026 | Manual, in browser | Files are hosted on modsbase.com behind a Cloudflare check, so `ppgmods` opens the page and you import the file. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
+| [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
 | top-mods.com | Another catalogue | — | Links to the same modsbase.com files as Skymods, so it adds nothing. |
 
 ## Install
@@ -52,8 +52,9 @@ ppgmods search "melee"
 # 3. GameBanana: fully automatic
 ppgmods install gb:655674                # or paste the gamebanana.com/mods/... URL
 
-# 4. Skymods: opens the download page, then import the file you saved
-ppgmods install sky:3801154351
+# 4. Skymods (Steam Workshop mirror), by Workshop ID: queue as many as you like
+ppgmods install sky:3801154351 sky:2573469317 gb:655674
+#    already have a file from modsbase? import it:
 ppgmods import ~/Downloads/3801154351_Quick_Draw_Mod.zip --workshop-id 3801154351
 
 # 5. Keep up to date
