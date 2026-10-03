@@ -57,6 +57,7 @@ type Candidate struct {
 	Revision   time.Time
 	SteamOrig  bool   // came from the Steam Workshop (mirror, cache or backup)
 	Mirror     string // which mirror copy, e.g. topmods:4482
+	Reviewed   bool   // a person at the source reviewed it (True Workshop "dev" trust)
 	ArchiveSHA string
 }
 
@@ -131,7 +132,9 @@ func (m *Manager) Check(c *Candidate, rep *scan.Report, prev *Installed) error {
 	if c.SteamOrig && c.Revision.IsZero() && !p.AllowAfterCutoff {
 		reasons = append(reasons, "revision date unknown, cannot prove it predates the worm (override: --allow-after-cutoff)")
 	}
-	if !c.SteamOrig && p.Cooldown > 0 && !c.Revision.IsZero() && time.Since(c.Revision) < p.Cooldown {
+	// The cooldown gives the community time to catch a bad upload; uploads a
+	// source's maintainers already reviewed skip it.
+	if !c.SteamOrig && !c.Reviewed && p.Cooldown > 0 && !c.Revision.IsZero() && time.Since(c.Revision) < p.Cooldown {
 		reasons = append(reasons, fmt.Sprintf("file uploaded %s ago, cooldown is %s (override: --cooldown 0)",
 			time.Since(c.Revision).Round(time.Minute), p.Cooldown))
 	}

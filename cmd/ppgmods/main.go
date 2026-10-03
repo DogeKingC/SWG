@@ -31,7 +31,8 @@ Usage: ppgmods <command> [args] [flags]
 
 Find and install:
   search <text>              search GameBanana and Skymods (Workshop mirror)
-  install <ref> [<ref>...]   install gb:<id>, sky:<workshop id>, or a GameBanana /
+  install <ref> [<ref>...]   install gb:<id>, sky:<workshop id>, tw:<id> (True
+                             Workshop), or a GameBanana /
                              Steam Workshop link (Workshop items come from the
                              Skymods mirror via modsbase.com)
   import <file|folder>       scan and install a downloaded archive or mod folder
@@ -297,6 +298,14 @@ func cmdSearch(q string) error {
 	fmt.Println("GameBanana (install with: ppgmods install gb:<id>)")
 	for _, m := range r.GameBanana {
 		fmt.Printf("  %-11s %-45s %-12s by %s, updated %s\n", m.Ref, m.Name, m.Category, m.Author, m.Date)
+	}
+	fmt.Println("True Workshop: uploads reviewed by its maintainers (ppgmods install tw:<id>)")
+	for _, it := range r.TrueWS {
+		rev := "reviewed"
+		if !it.Reviewed {
+			rev = "NOT reviewed yet"
+		}
+		fmt.Printf("  %-11s %-45s by %s, %s, %s\n", it.Ref, it.Name, it.Author, it.Date, rev)
 	}
 	fmt.Println("Steam Workshop mirrors: Skymods + top-mods (ppgmods install sky:<workshop id>)")
 	for _, it := range r.Workshop {

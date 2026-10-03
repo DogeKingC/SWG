@@ -328,23 +328,31 @@ async function search(q, p) {
   const errs = $("#searchErrors");
   errs.hidden = !(r.errors && r.errors.length);
   errs.textContent = (r.errors || []).join(" · ");
-  let items = [];
-  if (src !== "sky") items = items.concat(r.gamebanana || []);
-  if (src !== "gb") items = items.concat(r.workshop || []);
-  if (src === "all") items = interleave(r.gamebanana || [], r.workshop || []);
+  const lists = { gb: r.gamebanana || [], tw: r.trueworkshop || [], sky: r.workshop || [] };
+  const items = src === "all" ? interleave(lists.tw, lists.gb, lists.sky) : lists[src];
   if (p === 1) grid.replaceChildren();
   if (!items.length && p === 1) grid.append(el("div", { class: "empty" }, "No mods found."));
   grid.append(...items.map(card));
   $("#moreBtn").hidden = !items.length;
 }
 
-function interleave(a, b) {
+function interleave(...lists) {
   const out = [];
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a[i]) out.push(a[i]);
-    if (b[i]) out.push(b[i]);
-  }
+  const n = Math.max(...lists.map((l) => l.length));
+  for (let i = 0; i < n; i++) for (const l of lists) if (l[i]) out.push(l[i]);
   return out;
+}
+
+// sourceBadges labels where a result comes from (and, for True Workshop,
+// whether its maintainers reviewed it).
+function sourceBadges(m) {
+  if (m.ref.startsWith("gb:")) return [el("span", { class: "badge badge-gb" }, "GameBanana")];
+  if (m.ref.startsWith("tw:")) return [
+    el("span", { class: "badge badge-tw" }, "True Workshop"),
+    m.reviewed ? el("span", { class: "badge badge-ok", title: "Reviewed by True Workshop's maintainers" }, "✓ reviewed")
+      : el("span", { class: "badge badge-warn", title: "Only passed True Workshop's automated scanner" }, "not reviewed"),
+  ];
+  return [el("span", { class: "badge badge-sky" }, m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror")];
 }
 
 function thumbURL(u) {
@@ -424,10 +432,10 @@ function card(m) {
     thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
-      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : "version ") + m.date + (m.size ? " · " + m.size : "")),
+      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : "version ") + m.date + (m.size ? " · " + m.size : "")),
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
-        el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : (m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror")),
+        ...sourceBadges(m),
         m.category ? el("span", { class: "badge" }, m.category) : null,
         m.after_cutoff ? el("span", { class: "badge badge-bad", title: "Revised after the worm started; refused" }, "after cutoff") : null,
         installed ? el("span", { class: "badge badge-ok" }, "installed") : null,
@@ -477,9 +485,7 @@ async function openDetails(m, mirror) {
   const isGB = m.ref.startsWith("gb:");
   $("#detHero").replaceChildren(thumbImg(m, "det-hero"));
   $("#detTitle").textContent = m.name;
-  $("#detSub").replaceChildren(
-    el("span", { class: isGB ? "badge badge-gb" : "badge badge-sky" }, isGB ? "GameBanana" : "Workshop mirror"),
-    m.author ? " by " + m.author : "");
+  $("#detSub").replaceChildren(...sourceBadges(m), m.author ? " by " + m.author : "");
   if (!sameMod) {
     $("#detFacts").replaceChildren();
     $("#detDesc").textContent = "Loading description…";
@@ -494,7 +500,8 @@ async function openDetails(m, mirror) {
   if (!sameMod) api("/api/details?ref=" + encodeURIComponent(m.ref) + "&name=" + encodeURIComponent(m.name || "")).then((v) => {
     if (detailsRef !== m.ref) return;
     const facts = [
-      [isGB ? "Updated" : "Last revision", v.revision || v.date],
+      [isGB ? "Updated" : m.ref.startsWith("tw:") ? "Uploaded" : "Version", v.revision || v.date],
+      ["Likes", v.likes ? v.likes.toLocaleString() : ""],
       ["Size", v.size],
       ["Category", v.category],
       ["Downloads", v.downloads ? v.downloads.toLocaleString() : ""],

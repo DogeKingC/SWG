@@ -361,6 +361,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 				v.Kind = "GameBanana"
 			case strings.HasPrefix(m.Key, "sky:"):
 				v.Kind = "Steam Workshop"
+			case strings.HasPrefix(m.Key, "tw:"):
+				v.Kind = "True Workshop"
 			default:
 				v.Kind = "Local file"
 				v.Link = ""
@@ -767,7 +769,7 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		u := r.URL.Query().Get("url")
 		if strings.HasPrefix(u, "https://gamebanana.com/") || strings.HasPrefix(u, "https://steamcommunity.com/") ||
 			strings.HasPrefix(u, "https://github.com/DogeKingC/SWG") || strings.HasPrefix(u, "https://catalogue.smods.ru/") ||
-			strings.HasPrefix(u, "https://top-mods.com/") {
+			strings.HasPrefix(u, "https://top-mods.com/") || strings.HasPrefix(u, "https://ppgworkshop.onrender.com/") {
 			app.OpenBrowser(u)
 			writeJSON(w, map[string]bool{"ok": true})
 			return
@@ -867,6 +869,22 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		if v.Image != "" {
 			v.Images = append([]string{v.Image}, v.Images...)
 		}
+	case strings.HasPrefix(ref, "tw:"):
+		id, err := strconv.Atoi(strings.TrimPrefix(ref, "tw:"))
+		if err != nil {
+			http.Error(w, "bad ref", http.StatusBadRequest)
+			return
+		}
+		it, err := sources.TWGet(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		v.SearchResult = app.TWResult(*it)
+		v.Page = it.Page()
+		// True Workshop has no description field; the GUI shows the one
+		// from the mod's own mod.json once the safety check has run.
+		v.Details = sources.Details{Downloads: it.Downloads, Likes: it.Likes, Images: []string{it.Thumb()}}
 	default:
 		http.Error(w, "unknown ref", http.StatusBadRequest)
 		return

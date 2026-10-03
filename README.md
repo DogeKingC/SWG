@@ -23,6 +23,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 | Source | What it is | Downloads | Notes |
 |---|---|---|---|
 | Local Steam cache | `steamapps/workshop/content/1118200` on your PC | `backup-workshop` | **Best source, and it won't last.** Steam deletes removed items when it syncs. Back the cache up before launching Steam online. |
+| [True Workshop](https://ppgworkshop.onrender.com/) | Community archive of uploaded PPG mods (~140). Uploads pass the site's scanner and most are **reviewed by its maintainers** | Automatic | Files are on a public Hugging Face dataset; each item lists its SHA-256, which ppgmods checks. Reviewed items show "✓ reviewed" and skip the cooldown; unreviewed ones are marked "not reviewed" and wait out the cooldown. Updates are detected when an item's file changes. Contraptions are listed by the site but not installed yet. |
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
 | [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
 | [top-mods](https://top-mods.com/mods/people-playground) | Second Workshop mirror, ~11,000 PPG entries. It often has a **newer revision** than Skymods, mods Skymods never copied, and its own copies of the preview images | Automatic | Files are on modsfire.com, with a modsbase.com alternate link. Both are downloaded the way their own buttons do it. |
@@ -154,7 +155,8 @@ automatically, within hours. Each layer here targets part of that:
 |---|---|---|
 | Steam-origin copies (Skymods, Workshop cache) revised on/after **2026-09-21** | refused | `--allow-after-cutoff` |
 | Steam-origin copy with no provable revision date | refused | `--allow-after-cutoff` |
-| GameBanana file younger than the **cooldown** (gives the community and GameBanana's scanner time to catch a bad upload) | 48 h | `--cooldown 0` |
+| GameBanana / unreviewed True Workshop file younger than the **cooldown** (gives the community and the site's scanner time to catch a bad upload; maintainer-reviewed True Workshop uploads skip it) | 48 h | `--cooldown 0` |
+| True Workshop SHA-256 mismatch, or the site's own scan not `clean` | refused | none |
 | GameBanana antivirus/analysis result not `clean` | refused | none |
 | GameBanana MD5 mismatch | refused | none |
 | Archive or file hash, Workshop ID or GameBanana ID on the [blocklist](blocklist/blocklist.json) | refused | none |

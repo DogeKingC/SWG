@@ -108,14 +108,17 @@ type SearchResult struct {
 	URL         string   `json:"url"`
 	Image       string   `json:"image,omitempty"`
 	AfterCutoff bool     `json:"after_cutoff,omitempty"` // Workshop: every known copy is after the cutoff
-	Mirrors     []string `json:"mirrors,omitempty"`      // Workshop: "top-mods 19.09.2026", ...
+	Reviewed    bool     `json:"reviewed,omitempty"`     // True Workshop: reviewed by the site's maintainers
+	Downloads   int      `json:"download_count,omitempty"`
+	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 19.09.2026", ...
 
 	newest time.Time
 }
 
 type SearchResults struct {
 	GameBanana []SearchResult `json:"gamebanana"`
-	Workshop   []SearchResult `json:"workshop"` // deleted Steam Workshop items, merged across mirrors
+	TrueWS     []SearchResult `json:"trueworkshop"` // True Workshop uploads (maintainer-reviewed archive)
+	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
 	Errors     []string       `json:"errors,omitempty"`
 }
 
@@ -128,7 +131,22 @@ func Search(q string, page int) SearchResults {
 	addErr := func(e string) { mu.Lock(); r.Errors = append(r.Errors, e); mu.Unlock() }
 	var sky []sources.SkyItem
 	var tm []*sources.TMItem
-	wg.Add(3)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		sort := "popular"
+		if strings.TrimSpace(q) == "" {
+			sort = "newest"
+		}
+		items, _, err := sources.TWSearch(q, sort, (page-1)*24, 24)
+		if err != nil {
+			addErr("True Workshop: " + err.Error())
+			return
+		}
+		for _, it := range items {
+			r.TrueWS = append(r.TrueWS, TWResult(it))
+		}
+	}()
 	go func() {
 		defer wg.Done()
 		gb, err := sources.GBSearch(q, page)
@@ -227,14 +245,18 @@ func Search(q string, page int) SearchResults {
 // ---- install ----
 
 var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
+var reTWURL = regexp.MustCompile(`ppgworkshop\.onrender\.com/.*?(?:item-|id=)(\d+)`)
 var reWSURL = regexp.MustCompile(`steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)`)
 
-// NormalizeRef turns GameBanana / Steam Workshop links and bare Workshop IDs
-// into gb:<id> / sky:<workshop id>.
+// NormalizeRef turns GameBanana / Steam Workshop / top-mods / True Workshop
+// links and bare Workshop IDs into gb:<id> / sky:<workshop id> / tw:<id>.
 func NormalizeRef(ref string) string {
 	ref = strings.TrimSpace(ref)
 	if mm := reGBURL.FindStringSubmatch(ref); mm != nil {
 		return "gb:" + mm[1]
+	}
+	if mm := reTWURL.FindStringSubmatch(ref); mm != nil {
+		return "tw:" + mm[1]
 	}
 	if mm := reWSURL.FindStringSubmatch(ref); mm != nil {
 		return "sky:" + mm[1]
@@ -297,8 +319,14 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 		return a.fetchGB(id, a.Opt.FileID, prev)
 	case strings.HasPrefix(ref, "sky:"):
 		return a.fetchWorkshop(m, strings.TrimPrefix(ref, "sky:"))
+	case strings.HasPrefix(ref, "tw:"):
+		id, err := strconv.Atoi(strings.TrimPrefix(ref, "tw:"))
+		if err != nil {
+			return nil, fmt.Errorf("bad True Workshop id %q", ref)
+		}
+		return a.fetchTW(id, prev)
 	}
-	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, or a GameBanana/Steam Workshop link", ref)
+	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, tw:<id>, or a GameBanana/Steam Workshop link", ref)
 }
 
 var fetchLocks sync.Map
@@ -585,6 +613,24 @@ func (a *App) Update(m *manager.Manager) Summary {
 		a.logf("dry run: checking only")
 	}
 	for _, inst := range m.State.Sorted() {
+		if strings.HasPrefix(inst.Key, "tw:") {
+			if inst.Pinned {
+				a.logf("%s pinned, skipped", inst.Key)
+				continue
+			}
+			id, _ := strconv.Atoi(strings.TrimPrefix(inst.Key, "tw:"))
+			b := a.with(func(o *Options) { o.UpdateOnly = true })
+			c, err := b.fetchTW(id, inst)
+			if err == nil && c == nil {
+				s.Current++
+				continue
+			}
+			if err == nil {
+				err = m.Install(c)
+			}
+			a.tally(&s, inst.Key, "HELD", err)
+			continue
+		}
 		if !strings.HasPrefix(inst.Key, "gb:") {
 			continue // Workshop copies are frozen: Steam no longer hosts them
 		}
