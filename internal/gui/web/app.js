@@ -776,6 +776,8 @@ function renderMirrors(m, mirrors, chosen) {
     const tags = [];
     if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, best ? "highest version" : "newest safe date"));
     if (mr.reviewed) tags.push(el("span", { class: "badge badge-tw" }, "reviewed"));
+    if (mr.archived === "verified") tags.push(el("span", { class: "badge badge-ok", title: "Byte for byte the copy the pre-worm archive recorded before the worm" }, "✓ pre-worm archive"));
+    else if (mr.archived === "recorded") tags.push(el("span", { class: "badge", title: "The pre-worm archive recorded this copy; it is checked against that record when downloaded" }, "in pre-worm archive"));
     if (mr.browser) tags.push(el("span", { class: "badge", title: "Downloaded in your browser, where you are signed in to 01studio.dev; ppgmods picks the file up from Downloads and scans it" }, "in your browser"));
     if (mr.gone) tags.push(el("span", { class: "badge badge-bad", title: "This mirror no longer has the file" }, "file gone"));
     if (mr.after_cutoff) tags.push(el("span", { class: "badge badge-bad" }, "after worm cutoff"));

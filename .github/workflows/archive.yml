@@ -1,0 +1,56 @@
+name: archive
+
+# The pre-worm archive: each run reads more of the Workshop mirrors' catalogues
+# and records the SHA-256, size, contents and scan result of every copy from
+# before the worm (archive.json on the archive-data branch, rewritten as one
+# commit, so it doesn't grow). Files themselves are only stored when the
+# IA_ACCESS, IA_SECRET and IA_ITEM secrets (Internet Archive) are set; mods
+# in archive/optout.txt are always left out.
+on:
+  schedule:
+    - cron: "31 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Fetch the archive so far
+        run: |
+          if git ls-remote --exit-code --heads origin archive-data >/dev/null; then
+            git fetch --depth 1 origin archive-data
+            git worktree add data FETCH_HEAD
+          else
+            mkdir data
+          fi
+      - name: Record the next batch
+        run: go run ./cmd/preserve -data data -optout archive/optout.txt -max-minutes 280
+        env:
+          IA_ACCESS: ${{ secrets.IA_ACCESS }}
+          IA_SECRET: ${{ secrets.IA_SECRET }}
+          IA_ITEM: ${{ secrets.IA_ITEM }}
+      - name: Publish
+        run: |
+          out=$(mktemp -d)
+          cp data/archive.json "$out"/
+          cd "$out"
+          git init -q -b archive-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pre-worm archive $(date -u +%F)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" archive-data:archive-data

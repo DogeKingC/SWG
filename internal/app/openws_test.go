@@ -92,6 +92,7 @@ func TestOpenWorkshopInstallUpdateWithdraw(t *testing.T) {
 	defer srv.Close()
 	host := strings.TrimPrefix(srv.URL, "https://")
 	rt := rewrite{host, srv.Client().Transport}
+	defer workshop.SetIndexForTest(nil)()
 	defer workshop.SetTransport(rt)()
 	defer sources.UseTestServer(rt, srv.URL)()
 	pub, priv, _ := workshop.NewKey()

@@ -4,10 +4,12 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/DogeKingC/SWG/internal/preserve"
 	"github.com/DogeKingC/SWG/internal/sources"
 )
 
@@ -247,5 +249,38 @@ func TestSkyTagsDecideKind(t *testing.T) {
 	if !(sources.SkyItem{Tags: []string{"building", "destructible"}}).Contraption() ||
 		(sources.SkyItem{Tags: []string{"fun", "mods"}}).Contraption() || (sources.SkyItem{}).Contraption() {
 		t.Fatal("tags")
+	}
+}
+
+// The pre-worm archive recorded a copy: the same file is used; a changed
+// one is refused even if it is the newest.
+func TestArchiveRecordChecksCopies(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	const ws = "3801154360"
+	dir, _ := CacheDir("sky:" + ws)
+	writeVersionedZip(t, filepath.Join(dir, "topmods-71-new.zip"), "5.0", ws) // changed since archived
+	writeVersionedZip(t, filepath.Join(dir, "skymods-72-old.zip"), "4.0", ws)
+	shaOld, _ := manager.FileSHA(filepath.Join(dir, "skymods-72-old.zip"))
+	undo := preserve.SetForTest(&preserve.Archive{Records: map[string]*preserve.Record{
+		"topmods:71": {Mirror: "topmods:71", SHA256: strings.Repeat("0", 64), PreWorm: true},
+		"skymods:72": {Mirror: "skymods:72", SHA256: shaOld, PreWorm: true},
+	}})
+	defer undo()
+	mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: []Mirror{
+		{ID: "topmods:71", Source: "top-mods", Author: "a", VersionTime: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), tm: &sources.TMItem{}},
+		{ID: "skymods:72", Source: "Skymods", Author: "a", VersionTime: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), sky: &sources.SkyItem{}},
+	}}
+	defer delete(mirrorMemo, ws)
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
+	c, err := (&App{Opt: DefaultOptions()}).fetchWorkshop(m, ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Mirror != "skymods:72" {
+		t.Fatalf("picked %s: the changed copy must be refused", c.Mirror)
+	}
+	if ci := copyState("topmods:71"); ci.invalid == "" {
+		t.Fatal("changed copy not marked")
 	}
 }

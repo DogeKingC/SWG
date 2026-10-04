@@ -1,0 +1,3 @@
+# Mods the pre-worm archive leaves out, at their authors' request.
+# One per line: a Steam Workshop ID, or "author: <name>". Open a pull
+# request or an issue to be added.

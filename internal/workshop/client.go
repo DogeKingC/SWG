@@ -156,3 +156,16 @@ func ForgetIndex() {
 	idx = nil
 	idxMu.Unlock()
 }
+
+// SetIndexForTest makes FetchIndex return ix (tests).
+func SetIndexForTest(ix *Index) func() {
+	idxMu.Lock()
+	old, oldAt := idx, idxAt
+	idx, idxAt = ix, time.Now().Add(100*365*24*time.Hour)
+	idxMu.Unlock()
+	return func() {
+		idxMu.Lock()
+		idx, idxAt = old, oldAt
+		idxMu.Unlock()
+	}
+}

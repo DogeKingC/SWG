@@ -15,6 +15,7 @@ import (
 
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/popularity"
+	"github.com/DogeKingC/SWG/internal/preserve"
 	"github.com/DogeKingC/SWG/internal/scan"
 	"github.com/DogeKingC/SWG/internal/sources"
 	"github.com/DogeKingC/SWG/internal/version"
@@ -40,6 +41,7 @@ type Mirror struct {
 	invalid     string    // set once downloaded: why the copy is not offered
 	Reviewed    bool      `json:"reviewed,omitempty"` // True Workshop: reviewed by its maintainers
 	Browser     bool      `json:"browser,omitempty"`  // downloaded in the person's browser (01 STUDIO: needs their account)
+	Archived    string    `json:"archived,omitempty"` // pre-worm archive: "recorded" (hash known), "verified" (downloaded and matches)
 
 	sky *sources.SkyItem
 	tm  *sources.TMItem
@@ -460,6 +462,15 @@ func fillModVersions(list []Mirror) {
 	for i := range list {
 		ci := modInfo[list[i].ID]
 		list[i].ModVersion, list[i].Gone, list[i].invalid = ci.version, ci.gone, ci.invalid
+		if r := archiveRecordNoLock(list[i]); r != nil && r.SHA256 != "" {
+			list[i].Archived = "recorded"
+			if ci.version != "" || ci.kind != "" {
+				list[i].Archived = "verified" // downloaded, and it passed the comparison
+			}
+			if r.Stored != "" && ci.gone {
+				list[i].Gone = false // the archive still has it
+			}
+		}
 		list[i].TitleVer = TitleVersion(list[i].Title)
 	}
 }
@@ -504,6 +515,9 @@ func useIndexCache() {
 		if d, err := manager.ConfigDir(); err == nil {
 			sources.IndexCacheDir = filepath.Join(d, "cache")
 		}
+	}
+	if preserve.CacheDir == "" {
+		preserve.CacheDir = sources.IndexCacheDir
 	}
 	if workshop.CacheDir == "" {
 		workshop.CacheDir = sources.IndexCacheDir
@@ -612,7 +626,9 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			browser = easierBrowser(browser, nb) // only if no mirror can provide a copy
 			continue
 		}
-		if ci := copyState(mr.ID); a.Opt.Mirror == "" && (ci.gone || ci.invalid != "") {
+		rec := archiveRecord(mr)
+		archived := rec != nil && rec.Stored != "" && rec.SHA256 != ""
+		if ci := copyState(mr.ID); a.Opt.Mirror == "" && (ci.gone && !archived || ci.invalid != "") {
 			why := ci.invalid
 			if ci.gone {
 				why = "the file is gone"
@@ -630,6 +646,26 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			path, err = downloadOW(mr.ow)
 		} else {
 			path, err = a.downloadMirror(mr, ws)
+			if errors.Is(err, sources.ErrGone) && archived {
+				a.logf("  %v; using the pre-worm archive's copy", err)
+				path, err = a.fromArchive(rec, ws)
+			}
+		}
+		if err == nil && rec != nil && rec.SHA256 != "" {
+			// The pre-worm archive recorded this copy: it must be the same file.
+			if sum, serr := manager.FileSHA(path); serr == nil && sum != rec.SHA256 {
+				why := fmt.Sprintf("the file is not the one the pre-worm archive recorded on %s (it was changed since)", FmtTime(rec.Archived))
+				a.logf("  %s copy REFUSED: %s", mr.Source, why)
+				setCopyInfo(mr.ID, copyInfo{invalid: why})
+				os.Remove(path)
+				if a.Opt.Mirror == mr.ID {
+					return nil, &manager.Rejection{Reasons: []string{mr.Source + " copy: " + why + " (cannot be overridden)"}}
+				}
+				gone = append(gone, mr.Source+": "+why)
+				continue
+			} else if serr == nil {
+				a.logf("  matches the pre-worm archive (recorded %s, scan %s)", FmtTime(rec.Archived), orUnknown(rec.ScanMax))
+			}
 		}
 		var nb *NeedsBrowser
 		switch {
@@ -780,6 +816,36 @@ func nexusPremium() bool {
 	return a != nil && a.Premium
 }
 
+// archiveRecord is the pre-worm archive's record of a Workshop mirror copy.
+func archiveRecord(mr Mirror) *preserve.Record {
+	if mr.sky == nil && mr.tm == nil {
+		return nil
+	}
+	return preserve.Lookup(mr.ID)
+}
+
+// fromArchive downloads the pre-worm archive's stored copy and checks it.
+func (a *App) fromArchive(rec *preserve.Record, ws string) (string, error) {
+	dir, err := CacheDir("sky:" + ws)
+	if err != nil {
+		return "", err
+	}
+	dest := filepath.Join(dir, "archive-"+rec.SHA256[:16]+filepath.Ext(rec.Stored))
+	if sum, err := manager.FileSHA(dest); err == nil && sum == rec.SHA256 {
+		return dest, nil
+	}
+	_, sum, err := sources.Download(rec.Stored, dest+".part", 1<<30)
+	if err != nil {
+		os.Remove(dest + ".part")
+		return "", err
+	}
+	if sum != rec.SHA256 {
+		os.Remove(dest + ".part")
+		return "", fmt.Errorf("the archive's copy doesn't match its record")
+	}
+	return dest, os.Rename(dest+".part", dest)
+}
+
 func orUnknown(s string) string {
 	if s == "" {
 		return "unknown"
@@ -926,4 +992,22 @@ func hostOf(u string) string {
 		return u[:i]
 	}
 	return u
+}
+
+// SkyMirror and TMMirror describe a mirror listing as a Mirror (used by the
+// pre-worm archive job).
+func SkyMirror(it sources.SkyItem) Mirror { return skyMirror(it) }
+func TMMirror(it *sources.TMItem) Mirror  { return tmMirror(it) }
+
+// DownloadCopy downloads one mirror copy of a Workshop item into the cache
+// (used by the pre-worm archive job).
+func (a *App) DownloadCopy(mr Mirror, ws string) (string, error) { return a.downloadMirror(mr, ws) }
+
+// archiveRecordNoLock is archiveRecord without fetching (fillModVersions
+// holds modInfoMu): only an archive already loaded is consulted.
+func archiveRecordNoLock(mr Mirror) *preserve.Record {
+	if mr.sky == nil && mr.tm == nil {
+		return nil
+	}
+	return preserve.Cached(mr.ID)
 }

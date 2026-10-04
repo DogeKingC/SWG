@@ -250,6 +250,37 @@ own `mod.json` and files (Valve deleted the Workshop images of removed mods).
 Search cards with no author on the mirror page get it from `mod.json` once
 the mod has been previewed.
 
+## Open Workshop
+
+A reviewed replacement for the Steam Workshop: mods are submitted as pull
+requests, checked automatically (checksum, safe archive, kind, scanner),
+reviewed by a maintainer, and stored permanently under content-addressed
+names. In the app it is the first entry under **Site**; its mods install
+without the cooldown (they were reviewed), update through **Check for
+updates**, and are offered as an update to anyone who still has the old
+Steam Workshop copy of the same mod. If a mod is withdrawn, everyone who has
+it sees a warning. **Share** (in Installed) packs a mod and opens its drafted
+submission. How to submit, and how maintainers review: [workshop/README.md](workshop/README.md).
+
+## Pre-worm archive
+
+A daily job ([archive.yml](.github/workflows/archive.yml)) works through the
+Workshop mirrors' catalogues and records every copy from before the worm:
+its SHA-256, size, mod or contraption, `mod.json` version and Workshop ID,
+and the scanner's result (`archive.json` on the `archive-data` branch). The
+app checks every mirror download against it: a copy that matches is marked
+**✓ pre-worm archive**; a copy whose file changed since it was recorded is
+refused (that is how a mirror that started serving tampered files would
+show).
+
+By default only these records are kept, not the files: redistributing other
+people's mods is their decision. If you want the files preserved too, set the
+repository secrets `IA_ACCESS`, `IA_SECRET` (an Internet Archive account's S3
+keys) and `IA_ITEM` (the item to store them in); the app then falls back to
+the archived copy when a mirror's file disappears. Authors can opt out:
+their Workshop IDs or author names in [archive/optout.txt](archive/optout.txt)
+are never archived, and are removed if they were.
+
 ## Safety model
 
 The worm spread because the Workshop pushed code to every subscriber
