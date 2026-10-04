@@ -643,6 +643,25 @@ func (m *Manager) Verify() ([]Problem, error) {
 				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true, inst.Key})
 			}
 		}
+		// An adopted folder never went through the install checks (it is
+		// adopted automatically as soon as it appears), so its hashes only
+		// show it hasn't changed since: keep reporting what the scanner
+		// finds in it, as for a folder that isn't tracked.
+		if inst.Adopted {
+			for _, f := range inst.Folders {
+				dir := filepath.Join(m.dirFor(inst), f)
+				if _, err := os.Stat(dir); err != nil {
+					continue
+				}
+				rep, err := scan.DirWith(dir, m.scanOpts())
+				if err != nil {
+					return nil, err
+				}
+				if rep.Max() >= scan.High {
+					probs = append(probs, Problem{f, fmt.Sprintf("found in the game folder, not installed through ppgmods' checks; scan max %s (%d findings)", rep.Max(), len(rep.Findings)), true, inst.Key})
+				}
+			}
+		}
 	}
 	ents, err := os.ReadDir(m.ModsDir)
 	if err != nil && !os.IsNotExist(err) {
