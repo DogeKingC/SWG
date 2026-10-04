@@ -32,6 +32,7 @@ import (
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/selfupdate"
 	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
 //go:embed web
@@ -673,10 +674,13 @@ func (s *server) newApp(over map[string]bool) *app.App {
 
 type installedView struct {
 	*manager.Installed
-	Missing  bool   `json:"missing,omitempty"` // a folder is gone from the game folder
-	Kind     string `json:"kind"`              // source label
-	ItemKind string `json:"item_kind"`         // mod or contraption
-	Link     string `json:"link"`
+	Missing bool `json:"missing,omitempty"` // a folder is gone from the game folder
+	// Withdrawn: the Open Workshop took this mod down (reason), e.g. a
+	// problem found after it was published.
+	Withdrawn string `json:"withdrawn,omitempty"`
+	Kind      string `json:"kind"`      // source label
+	ItemKind  string `json:"item_kind"` // mod or contraption
+	Link      string `json:"link"`
 }
 
 func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
@@ -688,6 +692,11 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		for _, m := range st.Sorted() {
 			v := installedView{Installed: m, Link: m.Source, ItemKind: m.Kind}
 			v.Missing = paths.Mods != "" && mg.MissingFolders(m)
+			if ix := workshop.CachedIndex(); ix != nil && strings.HasPrefix(m.Mirror, "openworkshop:") {
+				if e := ix.Find(strings.TrimPrefix(m.Mirror, "openworkshop:")); e != nil && e.Withdrawn {
+					v.Withdrawn = e.WithdrawnReason
+				}
+			}
 			switch {
 			case strings.HasPrefix(m.Key, "gb:"):
 				v.Kind = "GameBanana"
@@ -697,6 +706,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 				v.Kind = "True Workshop"
 			case strings.HasPrefix(m.Key, "nx:"):
 				v.Kind = "Nexus Mods"
+			case strings.HasPrefix(m.Key, "ow:"):
+				v.Kind = "Open Workshop"
 			default:
 				v.Kind = "Local file"
 				v.Link = ""
@@ -982,6 +993,22 @@ func (s *server) do(j *job, req actionReq) error {
 			return fmt.Errorf("that Nexus link is no longer waiting; click Mod Manager Download again")
 		}
 		return a.InstallNXM(m, offer.URL)
+	case "ow-share":
+		dl := a.Opt.Downloads
+		if dl == "" {
+			dl = app.DownloadFolder()
+		}
+		if dl == "" {
+			d, _ := manager.ConfigDir()
+			dl = d
+		}
+		sh, err := a.PrepareShare(m, req.Key, filepath.Join(dl, "ppgmods-share"))
+		if err != nil {
+			return err
+		}
+		j.Data = map[string]string{"zip": sh.Zip, "sha256": sh.SHA256, "slug": sh.Slug, "submission": sh.Submission, "new_file_url": sh.NewFileURL}
+		s.logf("packed %s for the Open Workshop: %s", req.Key, sh.Zip)
+		return nil
 	case "repair":
 		sum := a.Repair(m, req.Refs)
 		j.Summary = &sum
@@ -1172,6 +1199,12 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		path = p.Data
 	case "backup":
 		path = lastBackup(p.Data)
+	case "share":
+		dl := app.DownloadFolder()
+		if dl == "" {
+			dl = p.Data
+		}
+		path = filepath.Join(dl, "ppgmods-share")
 	case "url":
 		u := r.URL.Query().Get("url")
 		if app.AllowedURL(u) && !strings.HasPrefix(u, "http://") {
@@ -1290,6 +1323,30 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		// True Workshop has no description field; the GUI shows the one
 		// from the mod's own mod.json once the safety check has run.
 		v.Details = sources.Details{Downloads: it.Downloads, Likes: it.Likes, Images: []string{it.Thumb()}}
+	case strings.HasPrefix(ref, "ow:"):
+		ix, err := workshop.FetchIndex()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		e := ix.Find(strings.TrimPrefix(ref, "ow:"))
+		if e == nil {
+			http.Error(w, "not on the Open Workshop", http.StatusNotFound)
+			return
+		}
+		v.SearchResult = app.OWResult(*e)
+		v.Page = workshop.Page(e.Slug)
+		desc := e.Description
+		if e.License != "" {
+			desc += "\n\nLicense: " + e.License
+		}
+		if e.Withdrawn {
+			desc = "WITHDRAWN: " + e.WithdrawnReason + "\n\n" + desc
+		}
+		v.Details = sources.Details{Description: desc, Downloads: e.Downloads}
+		if e.Image != "" {
+			v.Details.Images = []string{e.Image}
+		}
 	case strings.HasPrefix(ref, "nx:"):
 		id, err := strconv.Atoi(strings.TrimPrefix(ref, "nx:"))
 		if err != nil {

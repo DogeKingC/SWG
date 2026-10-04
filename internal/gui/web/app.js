@@ -193,6 +193,7 @@ function renderInstalled() {
       m.link ? el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent(m.link)) }, "Open page") : null,
       m.key.startsWith("gb:") ? el("button", { class: "btn btn-sm", onclick: () => run({ action: "pin", key: m.key, pinned: !m.pinned }, m.pinned ? "Resuming updates" : "Pinning") }, m.pinned ? "Unpin" : "Pin") : null,
       el("button", { class: "btn btn-sm", title: "Restore the version installed before the last update", onclick: () => run({ action: "rollback", key: m.key }, "Rolling back " + m.name) }, "Rollback"),
+      el("button", { class: "btn btn-ghost btn-sm", title: "Share this on the Open Workshop", onclick: () => run({ action: "ow-share", key: m.key }, "Packing " + m.name) }, "Share"),
       el("button", { class: "btn btn-sm", onclick: () => confirmRemove(m) }, "Remove"),
     );
     return el("div", { class: "item" },
@@ -202,6 +203,7 @@ function renderInstalled() {
           m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
           m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
           m.missing ? el("span", { class: "badge badge-bad", title: "Its folder is gone from the game folder" }, "missing") : null,
+          m.withdrawn ? el("span", { class: "badge badge-bad", title: "Withdrawn from the Open Workshop: " + m.withdrawn }, "withdrawn") : null,
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
@@ -314,6 +316,7 @@ function jobDone(j) {
         { label: c ? "Open Contraptions folder" : "Open Mods folder", run: () => api("/api/open?what=" + (c ? "contraptions" : "mods")) });
       return;
     }
+    if (j.name === "ow-share" && j.data) return showShare(j.data);
     if (j.name === "remove" && j.data && j.data.others) {
       toast("Removed. Another copy is still in your Mods folder (" + j.data.others + "), not installed by ppgmods.", 10000,
         { label: "Open Mods folder", run: () => api("/api/open?what=mods") });
@@ -419,7 +422,7 @@ function syncBrowse() {
   $("#periodSel").value = browse.period;
   $("#periodSel").hidden = browse.sort !== "popular";
   // 01 STUDIO only publishes mods.
-  const forContraptions = ["all", "gb", "nx", "tw", "sky"];
+  const forContraptions = ["all", "ow", "gb", "nx", "tw", "sky"];
   for (const o of $$("#srcSel option")) o.hidden = browse.kind === "contraption" && !forContraptions.includes(o.value);
   if (browse.kind === "contraption" && !forContraptions.includes(src)) src = "all";
   $("#srcSel").value = src;
@@ -453,10 +456,10 @@ async function search(q, p) {
   const grid = $("#results");
   const errs = $("#searchErrors");
   const parts = src === "all"
-    ? (browse.kind === "contraption" ? ["tw", "gb", "nx", "ws"] : ["tw", "gb", "ws", "s01", "nx"])
+    ? (browse.kind === "contraption" ? ["ow", "tw", "gb", "nx", "ws"] : ["ow", "tw", "gb", "ws", "s01", "nx"])
     : [src === "sky" ? "ws" : src];
   const pending = new Set(parts);
-  const lists = { gb: [], tw: [], ws: [], s01: [], nx: [] };
+  const lists = { gb: [], tw: [], ws: [], s01: [], nx: [], ow: [] };
   const merged = new Set();
   const errors = [];
   const notes = new Set();
@@ -485,10 +488,10 @@ async function search(q, p) {
       if (!(w.mirrors || []).some((l) => l.startsWith("Nexus"))) w.mirrors = [...(w.mirrors || []), "Nexus Mods" + (x.version ? " v" + x.version : "")];
       return false;
     });
-    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, nx, lists.ws, s01);
+    const shown = interleave(lists.ow, lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, nx, lists.ws, s01);
     [...grid.querySelectorAll(".mod")].slice(start).forEach((c) => c.remove());
     status.before(...shown.map(card));
-    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO", nx: "Nexus Mods" }[x]));
+    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO", nx: "Nexus Mods", ow: "Open Workshop" }[x]));
     status.textContent = waiting.length ? "Still searching: " + waiting.join(", ") + "…" : (!shown.length && p === 1 ? "No mods found." : "");
     status.hidden = !status.textContent;
     errs.hidden = !errors.length;
@@ -509,6 +512,7 @@ async function search(q, p) {
       if (part === "ws") { lists.ws = r.workshop || []; (r.merged_tw || []).forEach((x) => merged.add(x)); }
       if (part === "s01") lists.s01 = r.studio01 || [];
       if (part === "nx") lists.nx = r.nexus || [];
+      if (part === "ow") lists.ow = r.openworkshop || [];
       errors.push(...(r.errors || []));
     } catch (e) {
       errors.push(e.message);
@@ -537,6 +541,8 @@ function normTitle(t) {
 function sourceBadges(m) {
   if (m.ref.startsWith("gb:")) return [el("span", { class: "badge badge-gb" }, "GameBanana")];
   if (m.ref.startsWith("nx:")) return [el("span", { class: "badge badge-nx" }, "Nexus Mods")];
+  if (m.ref.startsWith("ow:")) return [el("span", { class: "badge badge-ow" }, "Open Workshop"),
+    el("span", { class: "badge badge-ok", title: "Checked and reviewed by the Open Workshop's maintainers before it was published" }, "✓ reviewed")];
   if (m.ref.startsWith("tw:")) return [
     el("span", { class: "badge badge-tw" }, "True Workshop"),
     m.reviewed ? el("span", { class: "badge badge-ok", title: "Reviewed by True Workshop's maintainers" }, "✓ reviewed")
@@ -636,7 +642,7 @@ function card(m) {
     thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
-      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (m.version ? "v" + m.version + " · " : "") + (isGB || m.ref.startsWith("nx:") ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : m.source === "01 STUDIO" ? "published " : "copied ") + m.date + (m.size ? " · " + m.size : "")),
+      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (m.version ? "v" + m.version + " · " : "") + (isGB || m.ref.startsWith("nx:") || m.ref.startsWith("ow:") ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : m.source === "01 STUDIO" ? "published " : "copied ") + m.date + (m.size ? " · " + m.size : "")),
       m.trend ? el("div", { class: "mod-trend" }, m.trend) : null,
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
@@ -1013,6 +1019,24 @@ async function restartApp(which, msg) {
   }
   note.textContent = "PPG Mod Manager restarted in a new window.";
   window.close(); // works for app windows the program opened; otherwise the note stays
+}
+
+// ---------- Open Workshop ----------
+// showShare walks an author through publishing on the Open Workshop: the zip
+// is ready; they upload it, then propose the prefilled submission on GitHub,
+// where it is checked automatically and reviewed by a maintainer.
+function showShare(d) {
+  dialog("Share on the Open Workshop", [
+    el("p", {}, "ppgmods packed it and drafted its submission. Three steps:"),
+    el("ol", {},
+      el("li", {}, "Upload ", el("code", {}, d.zip.split(/[\\/]/).pop()), " somewhere with a direct download link, for example a release on your GitHub. ",
+        el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=share") }, "Show the zip")),
+      el("li", {}, "Click Propose: GitHub opens the drafted submission. Replace the download link and YOUR-GITHUB-USERNAME, then choose ", el("b", {}, "Propose new file"), "."),
+      el("li", {}, "The Open Workshop checks the file automatically; a maintainer reviews it and merges. Then everyone with ppgmods can install it."),
+    ),
+    el("p", { class: "small" }, "Only share mods you made or have the author's permission to share. SHA-256: ", el("code", {}, d.sha256)),
+  ], { label: "Propose on GitHub", run: () => api("/api/open?what=url&url=" + encodeURIComponent(d.new_file_url)) });
+  $("#dlgExtra").className = "btn btn-primary";
 }
 
 // ---------- Nexus Mods ----------

@@ -1,0 +1,35 @@
+name: workshop-check
+
+# Checks Open Workshop submissions in pull requests. Safe for pull requests
+# from anyone: the job checks out the BASE branch and runs its tools; the
+# pull request's files are read with git and never run, and the token is
+# read-only. A maintainer still reviews and merges.
+on:
+  pull_request:
+    paths: ["workshop/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Fetch the pull request (not checked out)
+        run: git fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/pr/head"
+        env:
+          PR: ${{ github.event.pull_request.number }}
+      - name: Check submissions
+        run: go run ./cmd/workshop check -head pr/head -base "$BASE" -author "$AUTHOR"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}

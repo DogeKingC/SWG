@@ -155,6 +155,7 @@ type SearchResults struct {
 	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
 	Studio01   []SearchResult `json:"studio01"`     // 01 STUDIO's own catalogue (each is also a Workshop item)
 	Nexus      []SearchResult `json:"nexus"`        // Nexus Mods
+	OpenWS     []SearchResult `json:"openworkshop"` // the Open Workshop (reviewed)
 	Errors     []string       `json:"errors,omitempty"`
 	MergedTW   []string       `json:"merged_tw,omitempty"` // True Workshop refs shown inside a Workshop card
 	Notes      []string       `json:"notes,omitempty"`     // how the results were chosen, when not obvious
@@ -206,6 +207,9 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	}
 	if parts["nx"] {
 		searchNexus(&r, q, page, opt)
+	}
+	if parts["ow"] {
+		searchOW(&r, q, page, opt)
 	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -748,8 +752,8 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 		return res
 	}
 	const per = 24
-	for _, src := range []string{"gb", "tw", "tm", "s01", "nx"} {
-		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws", "s01": "s01", "nx": "nx"}[src]
+	for _, src := range []string{"ow", "gb", "tw", "tm", "s01", "nx"} {
+		part := map[string]string{"ow": "ow", "gb": "gb", "tw": "tw", "tm": "ws", "s01": "s01", "nx": "nx"}[src]
 		if !parts[part] {
 			continue
 		}
@@ -763,6 +767,9 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 			case "nx":
 				res.Source = "Nexus Mods"
 				r.Nexus = append(r.Nexus, res)
+			case "ow":
+				res.Source, res.Reviewed = "Open Workshop", true
+				r.OpenWS = append(r.OpenWS, res)
 			case "s01":
 				res.Ref = "sky:" + strings.TrimPrefix(it.Ref, "s01:")
 				res.Source, res.Mirrors = "01 STUDIO", []string{"01 STUDIO"}
@@ -787,6 +794,7 @@ func thousands(n int) string {
 // ---- install ----
 
 var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
+var reOWURL = regexp.MustCompile(`github\.com/DogeKingC/SWG/(?:tree|blob)/main/workshop/submissions/([a-z0-9][a-z0-9-]{1,62}[a-z0-9])`)
 var reNXURL = regexp.MustCompile(`nexusmods\.com/peopleplayground/mods/(\d+)`)
 var reTWURL = regexp.MustCompile(`ppgworkshop\.onrender\.com/.*?(?:item-|id=)(\d+)`)
 var reWSURL = regexp.MustCompile(`steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)`)
@@ -809,6 +817,9 @@ func NormalizeRef(ref string) string {
 	}
 	if mm := reNXURL.FindStringSubmatch(ref); mm != nil {
 		return "nx:" + mm[1]
+	}
+	if mm := reOWURL.FindStringSubmatch(ref); mm != nil {
+		return "ow:" + mm[1]
 	}
 	if strings.Contains(ref, "top-mods.com/mods/people-playground/") {
 		if it, err := sources.TMDetails(ref); err == nil && it.WorkshopID != "" {
@@ -913,6 +924,8 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 			return nil, fmt.Errorf("bad True Workshop id %q", ref)
 		}
 		return a.fetchTW(id, prev)
+	case strings.HasPrefix(ref, "ow:"):
+		return a.fetchOW(strings.TrimPrefix(ref, "ow:"), prev)
 	case strings.HasPrefix(ref, "nx:"):
 		id, err := strconv.Atoi(strings.TrimPrefix(ref, "nx:"))
 		if err != nil {
@@ -1302,6 +1315,24 @@ func (a *App) Update(m *manager.Manager) Summary {
 		a.logf("dry run: checking only")
 	}
 	for _, inst := range m.State.Sorted() {
+		if strings.HasPrefix(inst.Key, "ow:") || strings.HasPrefix(inst.Key, "sky:") {
+			if inst.Pinned {
+				a.logf("%s pinned, skipped", inst.Key)
+				continue
+			}
+			c, err := a.owUpdate(inst)
+			if err == nil && c == nil {
+				if strings.HasPrefix(inst.Key, "ow:") {
+					s.Current++
+				}
+				continue // Workshop copies are frozen unless republished on the Open Workshop
+			}
+			if err == nil {
+				err = m.Install(c)
+			}
+			a.tally(&s, inst.Key, "HELD", err)
+			continue
+		}
 		if strings.HasPrefix(inst.Key, "tw:") {
 			if inst.Pinned {
 				a.logf("%s pinned, skipped", inst.Key)

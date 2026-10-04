@@ -1,0 +1,70 @@
+name: workshop-publish
+
+# Publishes merged Open Workshop submissions: re-checks each new file,
+# uploads it as a content-addressed asset of the "workshop-files" release
+# (a prerelease, so the app's self-update never mistakes it for a build),
+# then updates index.json on the workshop-data branch. The files go up
+# before the index, so the index never names a missing file. Runs daily too,
+# to refresh download counts.
+on:
+  push:
+    branches: [main]
+    paths: ["workshop/**"]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: workshop-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Fetch the published index
+        run: |
+          if git ls-remote --exit-code --heads origin workshop-data >/dev/null; then
+            git fetch origin workshop-data
+            git worktree add data FETCH_HEAD
+          else
+            mkdir data
+          fi
+      - name: Check and prepare
+        run: go run ./cmd/workshop publish -data data -out out -commit "$GITHUB_SHA"
+        env:
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Upload new files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(out/*)
+          [ ${#files[@]} -eq 0 ] && exit 0
+          if ! gh release view workshop-files --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create workshop-files --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+              --title "Open Workshop files" --notes "Files of the Open Workshop. Install them with PPG Mod Manager; index: the workshop-data branch."
+          fi
+          gh release upload workshop-files --repo "$GITHUB_REPOSITORY" "${files[@]}"
+      - name: Publish the index
+        run: |
+          cd data
+          [ -e .git ] || git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json
+          [ -f index.sig ] && git add index.sig || git rm -q --cached --ignore-unmatch index.sig
+          if git diff --cached --quiet; then echo "index unchanged"; exit 0; fi
+          git commit -q -m "Open Workshop index $(date -u +%F) ($GITHUB_SHA)"
+          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:workshop-data

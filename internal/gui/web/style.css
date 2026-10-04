@@ -327,3 +327,5 @@ dialog.details:not([open]) { display: none; }
 .badge-nx { background: #d9870020; color: #a85d00; }
 @media (prefers-color-scheme: dark) { .badge-nx { background: #4a3210; color: #f0b25a; } }
 #nexusBox .check .hint { display: block; margin: 2px 0 0 24px; }
+.badge-ow { background: #0e7a4a1f; color: #0b6b40; }
+@media (prefers-color-scheme: dark) { .badge-ow { background: #12402c; color: #7fd8a9; } }

@@ -23,6 +23,7 @@ import (
 
 	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
 var (
@@ -73,6 +74,11 @@ func run() error {
 		fmt.Fprintln(os.Stderr, "True Workshop:", err)
 	} else {
 		snap.Sources = append(snap.Sources, "tw")
+	}
+	if err := collectOW(add); err != nil {
+		fmt.Fprintln(os.Stderr, "Open Workshop:", err)
+	} else {
+		snap.Sources = append(snap.Sources, "ow")
 	}
 	if err := collectNX(add); err != nil {
 		fmt.Fprintln(os.Stderr, "Nexus Mods:", err)
@@ -150,6 +156,23 @@ func collectTW(add func(popularity.Item)) error {
 		}
 		add(popularity.Item{Ref: fmt.Sprintf("tw:%d", it.ID), Src: "tw", Name: it.Title, Author: it.Author, Image: it.Thumb(),
 			Kind: kind, Date: it.CreatedTime().Format("2006-01-02"), URL: it.Page(), Reviewed: it.Reviewed(), N: it.Downloads})
+	}
+	return nil
+}
+
+func collectOW(add func(popularity.Item)) error {
+	ix, err := workshop.FetchIndex()
+	if err != nil {
+		if strings.Contains(err.Error(), "nothing published yet") {
+			return nil
+		}
+		return err
+	}
+	for _, e := range ix.Entries {
+		if !e.Withdrawn {
+			add(popularity.Item{Ref: "ow:" + e.Slug, Src: "ow", Name: e.Name, Author: e.Author, Image: e.Image, Kind: e.Kind,
+				KindChecked: true, Date: e.Published.Format("2006-01-02"), URL: workshop.Page(e.Slug), Reviewed: true, N: e.Downloads})
+		}
 	}
 	return nil
 }

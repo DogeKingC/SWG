@@ -17,6 +17,8 @@ import (
 	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/scan"
 	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/DogeKingC/SWG/internal/version"
+	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
 // Mirror is one copy of a deleted Steam Workshop item on a mirror site.
@@ -44,6 +46,7 @@ type Mirror struct {
 	tw  *sources.TWItem
 	s01 *sources.S01Mod
 	nx  *sources.NXMod
+	ow  *workshop.Entry
 }
 
 var reSkyArchive = regexp.MustCompile(`/archives/(\d+)`)
@@ -137,52 +140,7 @@ var reTitleTags = regexp.MustCompile(`\[[^\]]*\]|\([^)]*\)`)
 
 // CompareVersions compares mod.json ModVersion strings numerically
 // ("4.0" > "3.2", "1.75.2" > "1.70.8"). Unknown versions sort lowest.
-func CompareVersions(a, b string) int {
-	pa, pb := versionParts(a), versionParts(b)
-	if pa == nil || pb == nil {
-		switch {
-		case pa == nil && pb == nil:
-			return 0
-		case pa == nil:
-			return -1
-		default:
-			return 1
-		}
-	}
-	for i := 0; i < len(pa) || i < len(pb); i++ {
-		var x, y int
-		if i < len(pa) {
-			x = pa[i]
-		}
-		if i < len(pb) {
-			y = pb[i]
-		}
-		if x != y {
-			if x > y {
-				return 1
-			}
-			return -1
-		}
-	}
-	return 0
-}
-
-var reDigits = regexp.MustCompile(`\d+`)
-
-func versionParts(v string) []int {
-	var out []int
-	for _, d := range reDigits.FindAllString(v, 6) {
-		n := 0
-		for _, c := range d {
-			n = n*10 + int(c-'0')
-			if n > 1e8 {
-				break
-			}
-		}
-		out = append(out, n)
-	}
-	return out
-}
+func CompareVersions(a, b string) int { return version.Compare(a, b) }
 
 func first(re *regexp.Regexp, s string) string {
 	if m := re.FindStringSubmatch(s); m != nil {
@@ -243,6 +201,13 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 		}
 	} else if !strings.Contains(err.Error(), "not found") {
 		errs = append(errs, "Skymods: "+err.Error())
+	}
+	// The Open Workshop: the author's own, reviewed republication.
+	if e := owForWorkshop(ws); e != nil {
+		list = append(list, owMirror(*e))
+		if titleHint == "" {
+			titleHint = e.Name
+		}
 	}
 	// 01 STUDIO's own site lists its mods with their Workshop IDs.
 	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil {
@@ -540,6 +505,9 @@ func useIndexCache() {
 			sources.IndexCacheDir = filepath.Join(d, "cache")
 		}
 	}
+	if workshop.CacheDir == "" {
+		workshop.CacheDir = sources.IndexCacheDir
+	}
 	if popularity.CacheDir == "" {
 		popularity.CacheDir = sources.IndexCacheDir
 	}
@@ -658,6 +626,8 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		var err error
 		if nexusDirect {
 			path, _, err = a.downloadNexus(mr.nx.ID, nil) // linked premium account
+		} else if mr.ow != nil {
+			path, err = downloadOW(mr.ow)
 		} else {
 			path, err = a.downloadMirror(mr, ws)
 		}
@@ -699,6 +669,10 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			// From Nexus Mods, not Steam: no worm-cutoff check; the cooldown
 			// applies (Nexus uploads aren't reviewed).
 			c.SteamOrig, c.Revision = false, mr.VersionTime
+		}
+		if mr.ow != nil {
+			// Reviewed by the Open Workshop's maintainers: no cooldown.
+			c.SteamOrig, c.Reviewed, c.Revision = false, true, mr.ow.Published
 		}
 		in := inspect(m, c)
 		version, ugc, clean, max := in.version, in.ugc, in.clean, in.max
