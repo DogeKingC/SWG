@@ -312,6 +312,91 @@ type copyInfo struct {
 	invalid      string // why the copy is not offered: no mod.json, no author
 }
 
+// What was learned about mirror copies is kept on disk for a week, so a
+// copy found gone or invalid once is not shown as an option again, and a
+// card shows the version the copy's mod.json had.
+type savedCopy struct {
+	Version string    `json:"version,omitempty"`
+	UGC     string    `json:"ugc,omitempty"`
+	Gone    bool      `json:"gone,omitempty"`
+	Invalid string    `json:"invalid,omitempty"`
+	At      time.Time `json:"at"`
+}
+
+var modInfoLoaded bool
+
+func modInfoPath() string {
+	useIndexCache()
+	if sources.IndexCacheDir == "" {
+		return ""
+	}
+	return filepath.Join(sources.IndexCacheDir, "mirror-copies.json")
+}
+
+// loadModInfo reads the saved copy info; call with modInfoMu held.
+func loadModInfo() {
+	if modInfoLoaded {
+		return
+	}
+	modInfoLoaded = true
+	p := modInfoPath()
+	if p == "" {
+		return
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	var saved map[string]savedCopy
+	if json.Unmarshal(b, &saved) != nil {
+		return
+	}
+	for id, c := range saved {
+		if time.Since(c.At) < 7*24*time.Hour {
+			if _, ok := modInfo[id]; !ok {
+				modInfo[id] = copyInfo{version: c.Version, ugc: c.UGC, gone: c.Gone, invalid: c.Invalid}
+			}
+		}
+	}
+}
+
+// setCopyInfo records what a download showed and saves it.
+func setCopyInfo(id string, ci copyInfo) {
+	modInfoMu.Lock()
+	defer modInfoMu.Unlock()
+	loadModInfo()
+	modInfo[id] = ci
+	p := modInfoPath()
+	if p == "" {
+		return
+	}
+	saved := map[string]savedCopy{}
+	if b, err := os.ReadFile(p); err == nil {
+		json.Unmarshal(b, &saved)
+	}
+	saved[id] = savedCopy{Version: ci.version, UGC: ci.ugc, Gone: ci.gone, Invalid: ci.invalid, At: time.Now()}
+	if b, err := json.Marshal(saved); err == nil {
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, b, 0o644)
+	}
+}
+
+// copyState returns what is known about a mirror copy.
+func copyState(id string) copyInfo {
+	modInfoMu.Lock()
+	defer modInfoMu.Unlock()
+	loadModInfo()
+	return modInfo[id]
+}
+
+// bestVersion is a copy's mod.json version if known, else its title's.
+func bestVersion(id, title string) string {
+	if v := copyState(id).version; v != "" {
+		return v
+	}
+	return TitleVersion(title)
+}
+
 // Authors learned from downloaded copies' mod.json, by Workshop ID, for
 // listings that do not name one.
 var (
@@ -337,6 +422,7 @@ func knownAuthor(ws string) string {
 func fillModVersions(list []Mirror) {
 	modInfoMu.Lock()
 	defer modInfoMu.Unlock()
+	loadModInfo()
 	for i := range list {
 		ci := modInfo[list[i].ID]
 		list[i].ModVersion, list[i].Gone, list[i].invalid = ci.version, ci.gone, ci.invalid
@@ -373,6 +459,7 @@ func TitleVersion(title string) string {
 func ugcMismatch(id, ws string) bool {
 	modInfoMu.Lock()
 	defer modInfoMu.Unlock()
+	loadModInfo()
 	u := modInfo[id].ugc
 	return u != "" && u != ws
 }
@@ -474,6 +561,15 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		if len(copies) == 4 {
 			break
 		}
+		if ci := copyState(mr.ID); a.Opt.Mirror == "" && (ci.gone || ci.invalid != "") {
+			why := ci.invalid
+			if ci.gone {
+				why = "the file is gone"
+			}
+			a.logf("  %s copy skipped: %s (checked earlier)", mr.Source, why)
+			gone = append(gone, mr.Source+": "+why)
+			continue
+		}
 		a.logf("%s: %s by %s (Workshop %s), %s, %s", mr.Source, mr.Title, mr.Author, ws, mr.Version, mr.Size)
 		path, err := a.downloadMirror(mr, ws)
 		var nb *NeedsBrowser
@@ -481,9 +577,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		case errors.Is(err, sources.ErrGone):
 			gone = append(gone, mr.Source+": "+err.Error())
 			a.logf("  %v", err)
-			modInfoMu.Lock()
-			modInfo[mr.ID] = copyInfo{gone: true}
-			modInfoMu.Unlock()
+			setCopyInfo(mr.ID, copyInfo{gone: true})
 			continue
 		case errors.As(err, &nb):
 			if browser == nil {
@@ -524,9 +618,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		case !in.contraption && in.author == "" && strings.TrimSpace(mr.Author) == "":
 			invalid = "no author in its mod.json or on the mirror page"
 		}
-		modInfoMu.Lock()
-		modInfo[mr.ID] = copyInfo{version: version, ugc: ugc, invalid: invalid}
-		modInfoMu.Unlock()
+		setCopyInfo(mr.ID, copyInfo{version: version, ugc: ugc, invalid: invalid})
 		if invalid != "" {
 			a.logf("  this copy has %s; skipped", invalid)
 			gone = append(gone, mr.Source+": "+invalid)

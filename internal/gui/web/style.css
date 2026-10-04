@@ -128,7 +128,7 @@ input[type=file] { font: inherit; color: var(--muted); }
 
 .search, .linkbar, .row, .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .search input { flex: 1; min-width: 220px; }
-.linkbar { margin-top: 8px; }
+.linkbar { margin-top: 18px; }
 .linkbar input { flex: 1; min-width: 220px; }
 .row input:not([type=file]) { flex: 1; min-width: 160px; }
 .toolbar { margin: 12px 0 16px; }
@@ -179,9 +179,15 @@ input[type=file] { font: inherit; color: var(--muted); }
 .badge-tw { background: #e6f4f1; color: #136a5a; }
 @media (prefers-color-scheme: dark) { .badge-tw { background: #123a33; color: #6fd6bf; } }
 .badge-ok { background: var(--ok-bg); color: var(--ok); }
-.browse-opts { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 0 0 12px; }
-.browse-opts .opt { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.browse-opts select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 4px 0 14px; }
+.tab { border: 0; background: none; font: inherit; font-weight: 600; color: var(--muted); padding: 8px 14px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 10px 0 12px; }
+.filters .seg { flex-wrap: wrap; }
+.sortbox { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.sortbox select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
 .mod-trend { font-size: 12.5px; font-weight: 650; color: var(--ok); }
 .more { display: flex; justify-content: center; margin-top: 16px; }
 .empty { color: var(--muted); padding: 30px 0; text-align: center; grid-column: 1 / -1; }

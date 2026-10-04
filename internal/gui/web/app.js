@@ -368,7 +368,14 @@ function syncBrowse() {
   $$(".kind-btn").forEach((x) => x.classList.toggle("active", x.dataset.kind === browse.kind));
   $("#sortSel").value = browse.sort;
   $("#periodSel").value = browse.period;
-  $("#periodLbl").hidden = browse.sort !== "popular";
+  $("#periodSel").hidden = browse.sort !== "popular";
+  // The Workshop mirrors only carry mods.
+  const mirrorsBtn = $(".seg-btn[data-src=sky]");
+  mirrorsBtn.hidden = browse.kind === "contraption";
+  if (mirrorsBtn.hidden && src === "sky") {
+    src = "all";
+    $$(".seg-btn[data-src]").forEach((x) => x.classList.toggle("active", x.dataset.src === "all"));
+  }
   $("#q").placeholder = browse.kind === "contraption" ? "Search contraptions, e.g. tank, house, bridge" : "Search mods, e.g. melee, tank, zombie";
   try { localStorage.setItem("browse", JSON.stringify(browse)); } catch { /* not saved */ }
 }
@@ -547,7 +554,7 @@ function card(m) {
     thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
-      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : "version ") + m.date + (m.size ? " · " + m.size : "")),
+      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (m.version ? "v" + m.version + " · " : "") + (isGB ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : "copied ") + m.date + (m.size ? " · " + m.size : "")),
       m.trend ? el("div", { class: "mod-trend" }, m.trend) : null,
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },

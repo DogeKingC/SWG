@@ -52,42 +52,37 @@
     <section id="view-browse" class="view">
       <h1>Browse</h1>
       <p class="lede">Mods and contraptions from GameBanana, True Workshop (uploads reviewed by its maintainers) and two mirrors of the deleted Steam Workshop (Skymods and top-mods). Every mod is scanned before it is installed.</p>
+      <div class="tabs" role="tablist" aria-label="What to browse">
+        <button type="button" role="tab" class="tab kind-btn active" data-kind="mod">Mods</button>
+        <button type="button" role="tab" class="tab kind-btn" data-kind="contraption">Contraptions</button>
+      </div>
       <form id="searchForm" class="search">
         <input id="q" type="search" placeholder="Search mods, e.g. melee, tank, zombie" autocomplete="off">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
+      <div class="filters">
         <div class="seg" role="group" aria-label="Source">
-          <button type="button" class="seg-btn active" data-src="all">All</button>
+          <button type="button" class="seg-btn active" data-src="all">All sites</button>
           <button type="button" class="seg-btn" data-src="gb">GameBanana</button>
           <button type="button" class="seg-btn" data-src="tw">True Workshop</button>
           <button type="button" class="seg-btn" data-src="sky">Workshop mirrors</button>
         </div>
-        <button class="btn btn-primary" type="submit">Search</button>
-      </form>
-      <div class="browse-opts">
-        <div class="seg" role="group" aria-label="Type">
-          <button type="button" class="kind-btn seg-btn active" data-kind="mod">Mods</button>
-          <button type="button" class="kind-btn seg-btn" data-kind="contraption">Contraptions</button>
-        </div>
-        <label class="opt">Sort by
+        <div class="sortbox">
+          <label for="sortSel">Sort</label>
           <select id="sortSel">
             <option value="relevance">Relevance</option>
             <option value="updated">Recently updated</option>
-            <option value="popular">Popularity</option>
+            <option value="popular">Popular</option>
           </select>
-        </label>
-        <label class="opt" id="periodLbl" hidden>over
-          <select id="periodSel">
-            <option value="day">1 day</option>
-            <option value="week">1 week</option>
-            <option value="month">1 month</option>
+          <select id="periodSel" aria-label="Popular over" hidden>
+            <option value="day">today</option>
+            <option value="week">this week</option>
+            <option value="month">this month</option>
             <option value="">all time</option>
           </select>
-        </label>
+        </div>
       </div>
       <div id="searchNotes" class="notice" hidden></div>
-      <form id="linkForm" class="linkbar">
-        <input id="link" placeholder="…or paste a GameBanana / Steam Workshop link or ID (gb:123, sky:123)" autocomplete="off">
-        <button class="btn" type="submit">Install link</button>
-      </form>
       <div id="selectionBar" class="selbar" hidden>
         <span id="selCount"></span>
         <button id="installSelected" class="btn btn-primary btn-sm">Install selected</button>
@@ -96,6 +91,10 @@
       <div id="searchErrors" class="notice notice-warn" hidden></div>
       <div id="results" class="grid"></div>
       <div class="more"><button id="moreBtn" class="btn" hidden>Load more</button></div>
+      <form id="linkForm" class="linkbar">
+        <input id="link" placeholder="Have a link? Paste a GameBanana / Steam Workshop link or ID (gb:123, sky:123)" autocomplete="off">
+        <button class="btn" type="submit">Install link</button>
+      </form>
     </section>
 
     <!-- Installed -->

@@ -116,8 +116,11 @@ type SearchResult struct {
 	Kind        string   `json:"kind,omitempty"`    // "contraption" when known
 	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 19.09.2026", ...
 	Trend       string   `json:"trend,omitempty"`   // popularity sort: "+1,204 views this week"
+	Version     string   `json:"version,omitempty"` // Workshop cards: highest known version of the copies
 
-	newest time.Time
+	newest  time.Time
+	bestVer string // Workshop cards: highest version among the copies
+	hasVer  bool
 }
 
 type SearchResults struct {
@@ -305,12 +308,35 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		if e.Author == "" {
 			e.Author = mr.Author
 		}
-		e.Mirrors = append(e.Mirrors, mr.Source+" "+mr.Version)
+		ci := copyState(mr.ID)
+		v := bestVersion(mr.ID, mr.Title)
+		label := mr.Source
+		if v != "" {
+			label += " v" + v
+		}
+		label += " " + mr.Version
+		if ci.gone || ci.invalid != "" {
+			e.Mirrors = append(e.Mirrors, label+" (unavailable)")
+			return // a copy known to be gone or broken does not decide the card
+		}
+		e.Mirrors = append(e.Mirrors, label)
 		if !mr.AfterCutoff {
 			e.AfterCutoff = false
 		}
-		if e.newest.IsZero() || mr.VersionTime.After(e.newest) {
-			e.newest, e.Date, e.Size = mr.VersionTime, mr.Version, mr.Size
+		// The card shows the copy with the highest version (by mod.json when
+		// known, else by title); without versions, the newest revision.
+		better := false
+		switch c := CompareVersions(v, e.bestVer); {
+		case !e.hasVer:
+			better = true
+		case c != 0:
+			better = c > 0
+		default:
+			better = mr.VersionTime.After(e.newest)
+		}
+		if better {
+			e.hasVer, e.bestVer = true, v
+			e.Name, e.newest, e.Date, e.Size = mr.Title, mr.VersionTime, mr.Version, mr.Size
 		}
 	}
 	for _, it := range sky {
@@ -330,11 +356,24 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 			for _, ws := range order {
 				e := byWS[ws]
 				if sameMod(t.Name, t.Author, e.Name, e.Author) {
+					id := "trueworkshop:" + strings.TrimPrefix(t.Ref, "tw:")
+					v := bestVersion(id, t.Name)
 					label := "True Workshop"
+					if v != "" {
+						label += " v" + v
+					}
 					if t.Reviewed {
 						label += " (reviewed)"
 					}
 					e.Mirrors = append(e.Mirrors, label)
+					if v != "" && CompareVersions(v, e.bestVer) > 0 {
+						// The upload is a newer version than the mirrors: show it.
+						e.bestVer, e.Name, e.Date, e.Size = v, t.Name, t.Date, t.Size
+						if e.Author == "" {
+							e.Author = t.Author
+						}
+						e.AfterCutoff = false
+					}
 					merged = true
 					break
 				}
@@ -361,6 +400,7 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		if e.Author == "" {
 			e.Author = knownAuthor(ws) // from a copy's mod.json
 		}
+		e.Version = e.bestVer
 		r.Workshop = append(r.Workshop, *e)
 	}
 	if opt.Sort == "updated" {
@@ -380,8 +420,10 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 		return SearchParts(q, page, parts, opt)
 	}
 	label := map[string]string{"day": "today", "week": "this week", "month": "this month"}[opt.Period]
-	if days := ix.Days(); days < popularity.Periods[opt.Period] {
-		r.Notes = append(r.Notes, fmt.Sprintf("Popularity history starts %s (%d day(s) so far), so \"%s\" covers less than the full period for now.", ix.Since, days, label))
+	if days := ix.Days(); days == 0 {
+		r.Notes = append(r.Notes, "Popularity tracking started today, so there is nothing to compare yet: cards are ranked by all-time counts until tomorrow.")
+	} else if days < popularity.Periods[opt.Period] {
+		r.Notes = append(r.Notes, fmt.Sprintf("Popularity tracking started %s, so \"%s\" covers the last %d day(s) for now.", ix.Since, label, days))
 	}
 	conv := func(it popularity.Item) SearchResult {
 		res := SearchResult{Ref: it.Ref, Name: it.Name, Author: it.Author, Category: it.Category, Date: it.Date, URL: it.URL,
