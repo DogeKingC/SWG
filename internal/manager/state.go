@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -154,7 +155,10 @@ func hashTree(dir, prefix string, into map[string]string) error {
 		if err != nil {
 			return err
 		}
-		into[prefix+"/"+filepath.ToSlash(rel)] = h
+		// state.json stores names as UTF-8 text: a name that isn't valid
+		// UTF-8 (possible on disk) is saved with U+FFFD, so record it the
+		// same way or it never matches again.
+		into[strings.ToValidUTF8(prefix+"/"+filepath.ToSlash(rel), "\uFFFD")] = h
 		return nil
 	})
 }

@@ -211,3 +211,47 @@ func fileSHAOf(b []byte) (string, error) {
 	f.Close()
 	return fileSHA(f.Name())
 }
+
+// The game rewrites mod.json (its Active switch); names that aren't valid
+// UTF-8 are stored with U+FFFD. Neither is tampering.
+func TestVerifyIgnoresGameRewritesAndNameEncoding(t *testing.T) {
+	g := t.TempDir()
+	mods := filepath.Join(g, "Mods")
+	dir := filepath.Join(mods, "Plane")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "mod.json"), []byte(`{"Name":"Plane","Scripts":["script.cs"],"Active":false}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "script.cs"), []byte("class A {}"), 0o644)
+	os.WriteFile(filepath.Join(dir, "MIDDLE\xff.png"), []byte("png"), 0o644)
+	files := map[string]string{}
+	if err := hashTree(dir, "Plane", files); err != nil {
+		t.Fatal(err)
+	}
+	// What state.json gives back: the invalid name replaced.
+	recorded := map[string]string{}
+	for k, v := range files {
+		recorded[strings.ToValidUTF8(k, "�")] = v
+	}
+	inst := &Installed{Key: "sky:1", Name: "Plane", Folders: []string{"Plane"}, Files: recorded}
+	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{"sky:1": inst}}}
+	// The game turns the mod on.
+	os.WriteFile(filepath.Join(dir, "mod.json"), []byte(`{"Name":"Plane","Scripts":["script.cs"],"Active":true}`), 0o644)
+	probs, _ := m.Verify()
+	for _, p := range probs {
+		if p.Bad {
+			t.Errorf("unexpected problem %+v", p)
+		}
+	}
+	// An injection: a new script listed in mod.json.
+	os.WriteFile(filepath.Join(dir, "evil.cs"), []byte("class B {}"), 0o644)
+	os.WriteFile(filepath.Join(dir, "mod.json"), []byte(`{"Name":"Plane","Scripts":["script.cs","evil.cs"],"Active":true}`), 0o644)
+	probs, _ = m.Verify()
+	bad := 0
+	for _, p := range probs {
+		if p.Bad {
+			bad++
+		}
+	}
+	if bad != 2 {
+		t.Errorf("want mod.json changed + evil.cs new, got %+v", probs)
+	}
+}

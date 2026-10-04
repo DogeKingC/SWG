@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -609,15 +610,36 @@ func (m *Manager) Verify() ([]Problem, error) {
 				return nil, err
 			}
 		}
+		// A file whose name changed but whose contents didn't (a renamed
+		// file, or a name stored differently) is not a problem.
+		goneByHash := map[string]int{}
+		for p, h := range inst.Files {
+			if _, ok := now[p]; !ok {
+				goneByHash[h]++
+			}
+		}
+		renamed := map[string]bool{}
+		for p, h := range now {
+			if _, ok := inst.Files[p]; !ok && goneByHash[h] > 0 {
+				goneByHash[h]--
+				renamed[h] = true
+			}
+		}
 		for p, h := range inst.Files {
 			if g, ok := now[p]; !ok {
-				probs = append(probs, Problem{p, "file deleted since install", true, inst.Key})
+				if !renamed[h] {
+					probs = append(probs, Problem{p, "file deleted since install", true, inst.Key})
+				}
 			} else if g != h {
+				if path.Base(p) == "mod.json" && manifestOnlyToggled(m.dirFor(inst), p, inst.Files, now) {
+					probs = append(probs, Problem{p, "rewritten since install (the game does this when you turn a mod on or off); its scripts are unchanged", false, inst.Key})
+					continue
+				}
 				probs = append(probs, Problem{p, "file CHANGED since install (possible tampering)", true, inst.Key})
 			}
 		}
-		for p := range now {
-			if _, ok := inst.Files[p]; !ok {
+		for p, h := range now {
+			if _, ok := inst.Files[p]; !ok && !renamed[h] {
 				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true, inst.Key})
 			}
 		}
@@ -643,6 +665,31 @@ func (m *Manager) Verify() ([]Problem, error) {
 	}
 	probs = append(probs, m.verifyGameCode()...)
 	return probs, nil
+}
+
+// manifestOnlyToggled reports whether a changed mod.json still lists only
+// scripts that were installed and haven't changed: the game rewrites
+// mod.json itself (its "Active" switch), while an injection adds or changes
+// scripts, which shows up on those files.
+func manifestOnlyToggled(base, key string, installed, now map[string]string) bool {
+	b, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(key)))
+	if err != nil {
+		return false
+	}
+	var mf struct {
+		Scripts []string `json:"Scripts"`
+	}
+	if json.Unmarshal(b, &mf) != nil {
+		return false
+	}
+	dir := path.Dir(key)
+	for _, s := range mf.Scripts {
+		k := path.Join(dir, filepath.ToSlash(s))
+		if h, ok := installed[k]; !ok || now[k] != h {
+			return false
+		}
+	}
+	return true
 }
 
 // verifyGameCode checks the game's own code folders for what the FPS++
