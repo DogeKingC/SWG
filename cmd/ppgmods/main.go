@@ -305,7 +305,7 @@ func cmdSearch(q string) error {
 	}
 	fmt.Println("GameBanana (install with: ppgmods install gb:<id>)")
 	for _, m := range r.GameBanana {
-		fmt.Printf("  %-11s %-45s %-12s by %s, updated %s\n", m.Ref, m.Name, m.Category, m.Author, m.Date)
+		fmt.Printf("  %-11s %-45s %-12s%s, updated %s\n", m.Ref, m.Name, m.Category, app.By(m.Author), m.Date)
 	}
 	fmt.Println("True Workshop: uploads reviewed by its maintainers (ppgmods install tw:<id>)")
 	for _, it := range r.TrueWS {
@@ -313,7 +313,7 @@ func cmdSearch(q string) error {
 		if !it.Reviewed {
 			rev = "NOT reviewed yet"
 		}
-		fmt.Printf("  %-11s %-45s by %s, %s, %s\n", it.Ref, it.Name, it.Author, it.Date, rev)
+		fmt.Printf("  %-11s %-45s%s, %s, %s\n", it.Ref, it.Name, app.By(it.Author), it.Date, rev)
 	}
 	fmt.Println("Steam Workshop mirrors: Skymods + top-mods (ppgmods install sky:<workshop id>)")
 	for _, it := range r.Workshop {
@@ -321,7 +321,7 @@ func cmdSearch(q string) error {
 		if it.AfterCutoff {
 			warn = "  [after worm cutoff]"
 		}
-		fmt.Printf("  %-15s %-40s by %s; %s%s\n", it.Ref, it.Name, it.Author, strings.Join(it.Mirrors, ", "), warn)
+		fmt.Printf("  %-15s %-40s%s; %s%s\n", it.Ref, it.Name, app.By(it.Author), strings.Join(it.Mirrors, ", "), warn)
 	}
 	return nil
 }

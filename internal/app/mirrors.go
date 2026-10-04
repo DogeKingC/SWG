@@ -603,7 +603,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			gone = append(gone, mr.Source+": "+why)
 			continue
 		}
-		a.logf("%s: %s by %s (Workshop %s), %s, %s", mr.Source, mr.Title, mr.Author, ws, mr.Version, mr.Size)
+		a.logf("%s: %s%s (Workshop %s), %s, %s", mr.Source, mr.Title, By(mr.Author), ws, mr.Version, mr.Size)
 		path, err := a.downloadMirror(mr, ws)
 		var nb *NeedsBrowser
 		switch {
@@ -663,7 +663,11 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		}
 		if version != "" {
 			c.Version = version
-			a.logf("  mod.json version %s", version)
+			if in.author != "" && strings.TrimSpace(mr.Author) == "" {
+				a.logf("  mod.json version %s, author %s", version, in.author)
+			} else {
+				a.logf("  mod.json version %s", version)
+			}
 		}
 		if a.Opt.Mirror != "" {
 			return c, nil // the user picked this copy; the install policy still applies

@@ -42,7 +42,7 @@ func (a *App) fetchTW(id int, prev *manager.Installed) (*manager.Candidate, erro
 		if !it.Reviewed() {
 			trust = "NOT reviewed yet, only passed the site's automated scanner"
 		}
-		a.logf("tw:%d %s by %s - downloading %s (%s; %s)", id, it.Title, it.Author, name, HumanSize(it.Size), trust)
+		a.logf("tw:%d %s%s - downloading %s (%s; %s)", id, it.Title, By(it.Author), name, HumanSize(it.Size), trust)
 		if _, sha, err = sources.Download(it.DownloadURL(), path, 1<<30); err != nil {
 			return nil, err
 		}

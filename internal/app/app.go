@@ -89,6 +89,14 @@ func FmtTime(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+// By returns " by <author>", or "" when the author is unknown.
+func By(author string) string {
+	if a := strings.TrimSpace(author); a != "" {
+		return " by " + a
+	}
+	return ""
+}
+
 // YMD rewrites a date as the sites print it (top-mods' 19.09.2026, True
 // Workshop's 2026-09-27 15:31:50, RFC 3339) as 2026-09-19, the one format
 // ppgmods shows. Anything else is returned unchanged.
