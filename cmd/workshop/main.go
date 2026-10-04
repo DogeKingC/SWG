@@ -11,6 +11,10 @@
 //	    freezes the Open Workshop (the owner's emergency switch)
 //	workshop resume -data <dir>
 //	    lifts the freeze
+//	workshop pause-all -file blocklist/blocklist.json -reason <text>
+//	    stops installs from every source in the app (emergency)
+//	workshop resume-all -file blocklist/blocklist.json
+//	    allows them again
 //	workshop keygen
 //	    prints a new signing key pair
 package main
@@ -49,6 +53,10 @@ func main() {
 		err = pause(os.Args[2:], true)
 	case "resume":
 		err = pause(os.Args[2:], false)
+	case "pause-all":
+		err = lockdown(os.Args[2:], true)
+	case "resume-all":
+		err = lockdown(os.Args[2:], false)
 	case "keygen":
 		pub, priv, kerr := workshop.NewKey()
 		if kerr != nil {

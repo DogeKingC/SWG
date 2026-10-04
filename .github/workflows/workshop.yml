@@ -20,17 +20,21 @@ on:
   schedule:
     - cron: "17 5 * * *"
   # Run by hand (Actions > workshop > Run workflow; repository write access
-  # needed). "pause" is the emergency switch: nothing is published, and the
-  # app installs and updates nothing from the Open Workshop, until "resume".
+  # needed). Emergency switches:
+  # - "pause": nothing is published, and the app installs and updates
+  #   nothing from the Open Workshop, until "resume".
+  # - "pause-all": the app installs and updates nothing from ANY source
+  #   (GameBanana, Steam copies, True Workshop, Nexus, Open Workshop, local
+  #   files) until "resume-all". Browsing still works.
   workflow_dispatch:
     inputs:
       action:
-        description: "refresh, pause (emergency freeze) or resume"
+        description: "refresh; pause / resume (Open Workshop only); pause-all / resume-all (every source)"
         type: choice
-        options: [refresh, pause, resume]
+        options: [refresh, pause, resume, pause-all, resume-all]
         default: refresh
       reason:
-        description: "pause: why (shown to everyone)"
+        description: "pause, pause-all: why (shown to everyone)"
         required: false
       since:
         description: "pause: hold back versions published since (date like 2026-10-01, or how long ago like 72h)"
@@ -100,6 +104,30 @@ jobs:
           REASON: ${{ inputs.reason }}
           SINCE: ${{ inputs.since }}
           WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+      - name: Pause or resume every source
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'pause-all' || inputs.action == 'resume-all')
+        # The app reads blocklist.json from main on every action. A push made
+        # with the workflow's token starts no other workflow, so this makes no
+        # new release. Only blocklist.json changes, on top of the latest main.
+        run: |
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for try in 1 2 3; do
+            git fetch -q --depth 1 "$remote" main
+            git checkout -q -B lockdown FETCH_HEAD
+            go run ./cmd/workshop "$ACTION" -file blocklist/blocklist.json -reason "$REASON"
+            git add blocklist/blocklist.json
+            if git diff --cached --quiet; then echo "blocklist unchanged"; exit 0; fi
+            git commit -q -m "Blocklist: $ACTION"
+            if git push -q "$remote" HEAD:main; then exit 0; fi
+            echo "main moved; trying again"
+          done
+          exit 1
+        env:
+          ACTION: ${{ inputs.action }}
+          REASON: ${{ inputs.reason }}
+          GH_TOKEN: ${{ github.token }}
       - name: Refresh download counts
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.action == 'refresh'
         run: go run ./cmd/workshop refresh -data data

@@ -95,17 +95,20 @@ The workflow sets `published`, `needs-changes` and `needs-approval` itself.
   `since` are hidden and treated as withdrawn, and Verify names every
   installed copy of one. Apps see it within 15 minutes (their next index
   check). Lift it with action `resume`.
-- **Stop installs from any site** (GameBanana, Steam copies, Nexus, ...): add
-  `{"sources": ["gb"], "reason": "..."}` to `"pause"` in
-  `blocklist/blocklist.json` on `main` (sources: `gb`, `sky`, `tw`, `nx`,
-  `ow`, `local`, or `*` for all). Apps read it on their next action. Remove
-  the entry to lift it. The blocklist can only refuse, so a tampered copy can
-  never allow anything.
+- **Stop installs from every site** (GameBanana, Steam copies, True
+  Workshop, Nexus, Open Workshop, local files): Actions → workshop → Run
+  workflow, action `pause-all`, with a reason. Browsing still works; nothing
+  installs or updates, and the app shows your reason. Apps read it on their
+  next action. Lift it with action `resume-all`. (It sets `"pause"` in
+  `blocklist/blocklist.json` on `main`; to stop only some sites, edit that
+  by hand: `{"sources": ["gb"], "reason": "..."}`, sources `gb`, `sky`, `tw`,
+  `nx`, `ow`, `local` or `*`.) The blocklist can only refuse, so a tampered
+  copy can never allow anything.
 
-Signing (recommended): run `go run ./cmd/workshop keygen`, put the public key
-in `internal/workshop/key.go` and the private key in the repository secret
-`WORKSHOP_SIGNING_KEY`. From then on the app refuses an unsigned or altered
-index.
+The index is signed: the private key is the repository secret
+`WORKSHOP_SIGNING_KEY`, the public key is in `internal/workshop/key.go`, and
+the app refuses an unsigned or altered index. To replace the key, see the
+comment in `key.go`.
 
 How it works: [workshop.yml](../.github/workflows/workshop.yml) runs
 `cmd/workshop` on each submission. Issue text is only passed as data (never

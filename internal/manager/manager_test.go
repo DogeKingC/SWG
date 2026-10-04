@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DogeKingC/SWG/blocklist"
 	"github.com/DogeKingC/SWG/internal/loaders"
 	"github.com/DogeKingC/SWG/internal/scan"
 )
@@ -339,5 +340,17 @@ func TestBlocklistPause(t *testing.T) {
 	all := &Blocklist{Pauses: []Pause{{Sources: []string{"*"}, Reason: "x"}}}
 	if all.Paused("local:abc") == "" || all.Paused("nx:1") == "" {
 		t.Error(`"*" did not pause every source`)
+	}
+}
+
+// A pause baked into a release's embedded list must not lock that release
+// forever: only the live, cached or local list can pause.
+func TestEmbeddedPauseIgnored(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	old := blocklist.Default
+	blocklist.Default = []byte(`{"entries":[],"pause":[{"sources":["*"],"reason":"baked in"}]}`)
+	defer func() { blocklist.Default = old }()
+	if why := LoadBlocklist(false, func(string, ...any) {}).Paused("gb:1"); why != "" {
+		t.Fatalf("embedded pause applied: %s", why)
 	}
 }

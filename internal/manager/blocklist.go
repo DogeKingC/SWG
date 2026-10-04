@@ -81,7 +81,12 @@ func LoadBlocklist(fetch bool, logf func(string, ...any)) *Blocklist {
 			return
 		}
 		bl.Entries = append(bl.Entries, got.Entries...)
-		bl.Pauses = append(bl.Pauses, got.Pauses...)
+		// A pause is lifted by editing the live list. A release built while
+		// one was on carries it in its embedded copy, where it could never
+		// be lifted: only the live (or cached) and local lists can pause.
+		if src != "embedded" {
+			bl.Pauses = append(bl.Pauses, got.Pauses...)
+		}
 	}
 	add("embedded", blocklist.Default)
 	dir, err := ConfigDir()

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -171,5 +172,39 @@ func TestPauseAndResume(t *testing.T) {
 	}
 	if _, err := parseSince("2999-01-01", time.Now()); err == nil {
 		t.Error("a future -since was accepted")
+	}
+}
+
+// pause-all / resume-all set and clear the app-wide pause in blocklist.json
+// and leave the rest of the file as it was.
+func TestLockdown(t *testing.T) {
+	orig, err := os.ReadFile("../../blocklist/blocklist.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := t.TempDir() + "/blocklist.json"
+	os.WriteFile(f, orig, 0o644)
+	if err := lockdown([]string{"-file", f}, true); err == nil {
+		t.Fatal("pause-all without a reason was accepted")
+	}
+	if err := lockdown([]string{"-file", f, "-reason", "worm <spreading> & more"}, true); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(f)
+	var bl blocklistFile
+	if err := json.Unmarshal(b, &bl); err != nil {
+		t.Fatal(err)
+	}
+	if len(bl.Pause) != 1 || bl.Pause[0].Sources[0] != "*" || bl.Pause[0].Reason != "worm <spreading> & more" || len(bl.Entries) == 0 {
+		t.Fatalf("pause-all wrote %+v", bl.Pause)
+	}
+	if !strings.Contains(string(b), "worm <spreading> & more") {
+		t.Error("reason was HTML-escaped")
+	}
+	if err := lockdown([]string{"-file", f}, false); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(f); !bytes.Equal(b, orig) {
+		t.Error("resume-all did not restore the file exactly")
 	}
 }
