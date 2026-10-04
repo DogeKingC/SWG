@@ -11,6 +11,8 @@
 //	    freezes the Open Workshop (the owner's emergency switch)
 //	workshop resume -data <dir>
 //	    lifts the freeze
+//	workshop bulk -data <dir> -out <dir> -manifest bulk.json -base <url>/ -owner <login>
+//	    publishes an owner's bulk upload of old Workshop items
 //	workshop pause-all -file blocklist/blocklist.json -reason <text>
 //	    stops installs from every source in the app (emergency)
 //	workshop resume-all -file blocklist/blocklist.json
@@ -53,6 +55,8 @@ func main() {
 		err = pause(os.Args[2:], true)
 	case "resume":
 		err = pause(os.Args[2:], false)
+	case "bulk":
+		err = bulk(os.Args[2:])
 	case "pause-all":
 		err = lockdown(os.Args[2:], true)
 	case "resume-all":

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/DogeKingC/SWG/internal/app"
 	"github.com/DogeKingC/SWG/internal/desktop"
@@ -19,6 +20,7 @@ import (
 	"github.com/DogeKingC/SWG/internal/scan"
 	"github.com/DogeKingC/SWG/internal/selfupdate"
 	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
 var version = "dev"
@@ -61,6 +63,8 @@ Safety and recovery:
                              and scan Mods folders ppgmods did not install
   backup-workshop            copy the Steam Workshop cache before Steam deletes it
   restore-workshop <dir>     import every item from a backup-workshop folder
+  ow-pack <dir> [out]        pack a folder of Workshop-ID folders for an Open
+                             Workshop bulk upload (owner)
   paths                      show detected game, Mods and Workshop folders
 
 Flags (any command):
@@ -221,6 +225,24 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 			logf("Install the safe ones with: ppgmods restore-workshop %q", dest)
 		}
 		return err
+	case "ow-pack":
+		if err := need(args, 1, "folder of Workshop-ID folders"); err != nil {
+			return err
+		}
+		out := filepath.Join(filepath.Dir(filepath.Clean(args[0])), "open-workshop-upload")
+		if len(args) > 1 {
+			out = args[1]
+		}
+		logf("packing %s -> %s", args[0], out)
+		mf, err := workshop.PackBulk(args[0], out, logf)
+		if err != nil {
+			return err
+		}
+		logf("packed %d items. Upload everything in %s (the zips and bulk.json) to a new release, e.g.:", len(mf.Items), out)
+		logf("  gh release create bulk-%s %s --repo %s --prerelease --title \"Bulk upload\" --notes \"Old Workshop items\"",
+			time.Now().Format("20060102"), filepath.Join(out, "*"), workshop.Repo)
+		logf("then run the workshop workflow with action bulk and that release's tag.")
+		return nil
 	}
 
 	m, err := a.Manager(cmd != "list" && cmd != "pin" && cmd != "unpin")

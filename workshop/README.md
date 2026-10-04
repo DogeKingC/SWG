@@ -85,6 +85,30 @@ your review and the click.
 
 The workflow sets `published`, `needs-changes` and `needs-approval` itself.
 
+### Bulk upload of old Workshop items
+
+For a folder of Workshop items as Steam keeps them (one folder per item,
+named by its Workshop ID, e.g. a copy of
+`steamapps/workshop/content/1118200`):
+
+1. On your PC: `ppgmods ow-pack <folder>`. It reads each item's name, author
+   and type, zips it, and writes `bulk.json` into `open-workshop-upload`
+   next to the folder (the log lists which ID is which). Copy the folder in a
+   way that keeps file dates: they show whether an item is from before the
+   worm.
+2. Upload everything in `open-workshop-upload` to a new release, e.g.
+   `gh release create bulk-20261004 open-workshop-upload/* --prerelease`, or
+   drag the files into a new release on GitHub.
+3. Actions → workshop → Run workflow, action `bulk`, release `bulk-20261004`.
+   Each item is checked like a submission and published credited to its
+   author and Workshop ID (tag `archive`). Skipped: files dated on or after
+   the worm cutoff, scanner findings, unusual file types, items already on
+   the Open Workshop. The run's summary lists what was published and what to
+   look at by hand. At most 150 per run: run it again for the rest.
+
+Authors can ask for their item to be taken down; withdraw it with the
+`withdrawn` label or `/withdraw` on any issue that names it.
+
 ### Emergency: a worm may be spreading
 
 - **Freeze the Open Workshop:** Actions → workshop → Run workflow, action

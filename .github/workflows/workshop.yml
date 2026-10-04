@@ -26,13 +26,18 @@ on:
   # - "pause-all": the app installs and updates nothing from ANY source
   #   (GameBanana, Steam copies, True Workshop, Nexus, Open Workshop, local
   #   files) until "resume-all". Browsing still works.
+  # And "bulk": publish an owner's bulk upload of old Workshop items (made
+  # with `ppgmods ow-pack`, uploaded as the assets of a release).
   workflow_dispatch:
     inputs:
       action:
-        description: "refresh; pause / resume (Open Workshop only); pause-all / resume-all (every source)"
+        description: "refresh; pause / resume (Open Workshop only); pause-all / resume-all (every source); bulk (upload)"
         type: choice
-        options: [refresh, pause, resume, pause-all, resume-all]
+        options: [refresh, pause, resume, pause-all, resume-all, bulk]
         default: refresh
+      release:
+        description: "bulk: the tag of the release holding the zips and bulk.json (e.g. bulk-20261004)"
+        required: false
       reason:
         description: "pause, pause-all: why (shown to everyone)"
         required: false
@@ -53,7 +58,7 @@ jobs:
   workshop:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'workshop-submission')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -103,6 +108,18 @@ jobs:
           ACTION: ${{ inputs.action }}
           REASON: ${{ inputs.reason }}
           SINCE: ${{ inputs.since }}
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+      - name: Bulk upload
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'bulk'
+        run: |
+          case "$TAG" in ""|*[!A-Za-z0-9._-]*) echo "release: give the tag of the upload release, like bulk-20261004"; exit 1;; esac
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p bulk.json -D bulk-in
+          go run ./cmd/workshop bulk -data data -out out -manifest bulk-in/bulk.json \
+            -base "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" -owner "$REPO_OWNER"
+        env:
+          TAG: ${{ inputs.release }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          GH_TOKEN: ${{ github.token }}
           WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
       - name: Pause or resume every source
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'pause-all' || inputs.action == 'resume-all')
