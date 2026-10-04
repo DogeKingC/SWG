@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -592,9 +593,17 @@ func CacheDir(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	p := filepath.Join(d, "cache", strings.ReplaceAll(key, ":", "-"))
+	name := strings.ReplaceAll(key, ":", "-")
+	if !reCacheName.MatchString(name) || strings.Trim(name, ".") == "" {
+		return "", fmt.Errorf("bad cache key %q", key)
+	}
+	p := filepath.Join(d, "cache", name)
 	return p, os.MkdirAll(p, 0o755)
 }
+
+// reCacheName is what a cache folder name may contain: refs like gb-123,
+// sky-123, tw-12, local-m-some-folder. No separators, so no "..".
+var reCacheName = regexp.MustCompile(`^[A-Za-z0-9._-]{1,120}$`)
 
 // PruneCache removes cached downloads older than maxAge.
 func PruneCache(maxAge time.Duration) {
@@ -763,8 +772,39 @@ func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (st
 	return "", fmt.Errorf("no download for %s appeared in %s", ws, dir)
 }
 
-// OpenBrowser opens u in the default browser.
+// browserHosts are the sites ppgmods ever opens in the browser. Links come
+// from scraped pages, so anything else (file:, other programs' URL schemes,
+// a link to an .exe on some other host) is refused.
+var browserHosts = []string{"gamebanana.com", "steamcommunity.com", "github.com", "catalogue.smods.ru",
+	"top-mods.com", "ppgworkshop.onrender.com", "modsbase.com", "modsfire.com"}
+
+// AllowedURL reports whether ppgmods may open u in the browser: https on one
+// of browserHosts (or a subdomain), or this app's own window on 127.0.0.1.
+func AllowedURL(u string) bool {
+	p, err := url.Parse(u)
+	if err != nil || p.User != nil || p.Opaque != "" {
+		return false
+	}
+	host := strings.ToLower(p.Hostname())
+	if p.Scheme == "http" && host == "127.0.0.1" {
+		return true
+	}
+	if p.Scheme != "https" || p.Port() != "" {
+		return false
+	}
+	for _, h := range browserHosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return true
+		}
+	}
+	return false
+}
+
+// OpenBrowser opens u in the default browser, if AllowedURL permits it.
 func OpenBrowser(u string) error {
+	if !AllowedURL(u) {
+		return fmt.Errorf("refusing to open %q: not a known mod site", u)
+	}
 	var c *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":

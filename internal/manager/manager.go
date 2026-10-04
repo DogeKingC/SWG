@@ -316,7 +316,7 @@ func (m *Manager) Install(c *Candidate) error {
 	}
 	if placed, err := m.place(roots, inst); err != nil {
 		for _, f := range inst.Folders[:placed] {
-			os.RemoveAll(filepath.Join(m.dirFor(inst), f))
+			removeFolder(m.dirFor(inst), f)
 		}
 		if prev != nil {
 			if rerr := m.Rollback(c.Key); rerr != nil {
@@ -424,7 +424,7 @@ func (m *Manager) Rollback(key string) error {
 	}
 	if cur := m.State.Mods[key]; cur != nil {
 		for _, f := range cur.Folders {
-			if err := os.RemoveAll(filepath.Join(m.dirFor(cur), f)); err != nil {
+			if err := removeFolder(m.dirFor(cur), f); err != nil {
 				return err
 			}
 		}
@@ -458,7 +458,7 @@ func (m *Manager) Remove(key string) error {
 		return fmt.Errorf("%s is not installed", key)
 	}
 	for _, f := range inst.Folders {
-		if err := os.RemoveAll(filepath.Join(m.dirFor(inst), f)); err != nil {
+		if err := removeFolder(m.dirFor(inst), f); err != nil {
 			return err
 		}
 	}
@@ -729,4 +729,13 @@ func (m *Manager) scanOpts() scan.Options {
 		return scan.Options{}
 	}
 	return scan.Options{GameManaged: filepath.Join(filepath.Dir(m.ModsDir), "People Playground_Data", "Managed")}
+}
+
+// removeFolder deletes base/name, where name comes from state.json: only a
+// plain folder name directly inside the Mods or Contraptions folder.
+func removeFolder(base, name string) error {
+	if base == "" || name == "" || name != filepath.Base(name) || name == "." || name == ".." {
+		return fmt.Errorf("refusing to delete %q: not a folder inside %s", name, base)
+	}
+	return os.RemoveAll(filepath.Join(base, name))
 }

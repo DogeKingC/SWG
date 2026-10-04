@@ -295,6 +295,31 @@ build output was removed, and one was flagged HIGH. That one was an
 achievement/stats cheat that uses split strings
 (`"A" + "ss" + "embly"`) to get past the game's own checks.
 
+## Security of ppgmods itself
+
+- **What it connects to:** the mod sites (GameBanana, True Workshop and its
+  Hugging Face files, Skymods, modsbase.com, top-mods, modsfire.com), GitHub
+  (releases, the blocklist and `popularity.json`), and nothing else. There
+  is no telemetry and no account. The one request that reports anything is
+  True Workshop's own download counter, which its site calls too.
+- **Downloads** only connect to public internet addresses, never to this
+  computer or the local network, even if a mirror page or redirect asks.
+- **The window** is a local web page on `127.0.0.1` with a random token per
+  session; requests without the token or with a foreign `Host` (DNS
+  rebinding) are refused, and the page only renders text, never HTML from
+  the sites.
+- **Links** are opened in the browser only if they are `https` links to the
+  mod sites or GitHub.
+- **Archives** can't write outside their folder (no `..`, absolute paths,
+  symlinks, Windows alternate data streams), and are limited to 2 GiB and
+  20,000 files.
+- **Updates** come only from this repository's GitHub releases and must
+  match the release's `SHA256SUMS.txt`. That catches corrupted downloads,
+  not a compromised GitHub account: anyone who can publish a release here
+  can ship an update. Protect the account with two-factor authentication.
+- **CI** pins every third-party GitHub Action to a commit, and only the
+  release job can write to the repository.
+
 ## Reporting a malicious mod
 
 Open a pull request that adds an entry to

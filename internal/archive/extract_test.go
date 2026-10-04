@@ -56,3 +56,10 @@ func TestUnknownFormat(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestHiddenStreamNameRejected(t *testing.T) {
+	src := writeZip(t, map[string]string{"Mod/mod.json": "{}", "Mod/Main.cs:payload": "class Evil{}"})
+	if err := Extract(src, t.TempDir()); err == nil || !strings.Contains(err.Error(), "invalid name") {
+		t.Fatalf("got %v", err)
+	}
+}

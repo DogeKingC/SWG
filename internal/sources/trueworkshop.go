@@ -68,7 +68,7 @@ func escapeURL(u string) string {
 // DownloadURL is the file on Hugging Face, properly escaped.
 func (it TWItem) DownloadURL() string { return escapeURL(it.FileURL) }
 
-var twClient = &http.Client{Timeout: 90 * time.Second} // free hosting: the first request may wake the server
+var twClient = &http.Client{Timeout: 90 * time.Second, Transport: publicTransport()} // free hosting: the first request may wake the server
 
 func twGet(u string, v any) (int, error) {
 	req, err := http.NewRequest("GET", u, nil)

@@ -85,6 +85,11 @@ func Latest() (*Release, error) {
 			r.sumsURL = a.URL
 		}
 	}
+	// Only this repository's own release files are downloaded.
+	prefix := "https://github.com/" + Repo + "/releases/download/"
+	if r.assetURL != "" && !strings.HasPrefix(r.assetURL, prefix) || r.sumsURL != "" && !strings.HasPrefix(r.sumsURL, prefix) {
+		return nil, fmt.Errorf("release %s points outside %s", gr.Tag, prefix)
+	}
 	r.Newer = Newer(gr.Tag, Current)
 	return r, nil
 }

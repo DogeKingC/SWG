@@ -6,6 +6,7 @@ package gui
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -320,7 +321,7 @@ func (s *server) guard(next http.Handler) http.Handler {
 			if r.URL.Path == "/api/thumb" && tok == "" {
 				tok = r.URL.Query().Get("t") // <img> tags cannot send headers
 			}
-			if tok != s.token {
+			if subtle.ConstantTimeCompare([]byte(tok), []byte(s.token)) != 1 {
 				http.Error(w, "missing or bad token", http.StatusForbidden)
 				return
 			}
@@ -813,9 +814,7 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 		path = lastBackup(p.Data)
 	case "url":
 		u := r.URL.Query().Get("url")
-		if strings.HasPrefix(u, "https://gamebanana.com/") || strings.HasPrefix(u, "https://steamcommunity.com/") ||
-			strings.HasPrefix(u, "https://github.com/DogeKingC/SWG") || strings.HasPrefix(u, "https://catalogue.smods.ru/") ||
-			strings.HasPrefix(u, "https://top-mods.com/") || strings.HasPrefix(u, "https://ppgworkshop.onrender.com/") {
+		if app.AllowedURL(u) && !strings.HasPrefix(u, "http://") {
 			app.OpenBrowser(u)
 			writeJSON(w, map[string]bool{"ok": true})
 			return

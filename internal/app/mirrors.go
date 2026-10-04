@@ -734,22 +734,6 @@ func inspect(m *manager.Manager, c *manager.Candidate) inspected {
 	return in
 }
 
-// scansClean reports whether a candidate has no HIGH or CRITICAL findings.
-func scansClean(m *manager.Manager, c *manager.Candidate) (bool, string) {
-	if m == nil {
-		return true, ""
-	}
-	dir, rep, err := m.Stage(c)
-	if err != nil {
-		return false, err.Error()
-	}
-	os.RemoveAll(dir)
-	if rep.Max() >= scan.High {
-		return false, rep.Max().String()
-	}
-	return true, ""
-}
-
 // downloadMirror downloads one mirror copy into the cache (reusing an
 // earlier download) and returns its path.
 func (a *App) downloadMirror(mr Mirror, ws string) (string, error) {
@@ -827,7 +811,8 @@ func (a *App) downloadMirror(mr Mirror, ws string) (string, error) {
 		os.Remove(part)
 		a.logf("  %s: %v", hostOf(link), err)
 		lastErr = err
-		if !errors.Is(err, sources.ErrGone) && browser == nil {
+		supported := strings.HasPrefix(link, "https://modsfire.com/") || strings.HasPrefix(link, "https://modsbase.com/")
+		if supported && !errors.Is(err, sources.ErrGone) && browser == nil {
 			browser = &NeedsBrowser{URL: link, Reason: err.Error(), WorkshopID: ws}
 		}
 	}

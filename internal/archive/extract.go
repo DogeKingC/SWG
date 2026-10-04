@@ -51,6 +51,11 @@ type limiter struct {
 
 func (l *limiter) target(dest, name string) (string, error) {
 	name = strings.ReplaceAll(name, `\`, "/")
+	// ':' would write an NTFS alternate data stream (hidden from the
+	// scanner) on Windows; control characters have no place in a mod.
+	if strings.ContainsAny(name, ":\x00") || strings.IndexFunc(name, func(r rune) bool { return r < 0x20 }) >= 0 {
+		return "", fmt.Errorf("archive entry %q has an invalid name", name)
+	}
 	clean := filepath.Clean(filepath.FromSlash(name))
 	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.VolumeName(clean) != "" {
 		return "", fmt.Errorf("archive entry %q escapes the extraction folder", name)

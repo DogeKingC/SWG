@@ -9,9 +9,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"syscall"
 	"time"
 )
 
@@ -21,8 +23,48 @@ var UserAgent = "ppgmods/dev (+https://github.com/DogeKingC/SWG)"
 // "create download link" step can depend on cookies set by its file page.
 var client = func() *http.Client {
 	jar, _ := cookiejar.New(nil)
-	return &http.Client{Timeout: 5 * time.Minute, Jar: jar}
+	return &http.Client{Timeout: 5 * time.Minute, Jar: jar, Transport: publicTransport()}
 }()
+
+// publicTransport only connects to public internet addresses. Download
+// links come from scraped pages; a hijacked mirror must not be able to make
+// ppgmods send requests to this computer or the local network (router admin
+// pages and the like), directly or through a redirect. With a proxy
+// configured, the proxy resolves names and the check is left to it.
+func publicTransport() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	if !proxyConfigured() {
+		d.Control = func(network, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			if ip := net.ParseIP(host); ip == nil || !PublicIP(ip) {
+				return fmt.Errorf("refusing to connect to non-public address %s", host)
+			}
+			return nil
+		}
+	}
+	t.DialContext = d.DialContext
+	return t
+}
+
+func proxyConfigured() bool {
+	for _, k := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"} {
+		if os.Getenv(k) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// PublicIP reports whether ip is a routable internet address.
+func PublicIP(ip net.IP) bool {
+	return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() ||
+		ip.Equal(net.IPv4bcast) || ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1]&0xc0 == 64) // 100.64.0.0/10 (CGNAT)
+}
 
 // setHeaders adds the identifying User-Agent and the standard headers every
 // browser sends.
