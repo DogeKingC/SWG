@@ -108,7 +108,9 @@ func TestVerifyChecksBepInEx(t *testing.T) {
 	os.MkdirAll(filepath.Join(pl, "RE_PPG"), 0o755)
 	os.WriteFile(filepath.Join(pl, "RE_PPG", "RE_PPG.Runtime.dll"), []byte("MZ clean"), 0o644)
 	os.WriteFile(filepath.Join(pl, "Helper.dll"), []byte("MZ clean"), 0o644)
-	os.WriteFile(filepath.Join(pl, "Evil.dll"), []byte("MZ RejectShadyCode NewCommunityFile"), 0o644)
+	os.WriteFile(filepath.Join(pl, "Evil.dll"), []byte("MZ ... FPSPlusPlus.entry ... api.ipify.org"), 0o644)
+	// A loader that legitimately touches the same APIs as the worm.
+	os.WriteFile(filepath.Join(pl, "RE_PPG", "RE_PPG.Guard.dll"), []byte("MZ RejectShadyCode BinaryFormatter"), 0o644)
 	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{}}}
 	probs, err := m.Verify()
 	if err != nil {
@@ -126,5 +128,34 @@ func TestVerifyChecksBepInEx(t *testing.T) {
 	}
 	if _, ok := got["BepInEx/plugins/RE_PPG/RE_PPG.Runtime.dll"]; ok {
 		t.Errorf("RE_PPG's own plugin listed")
+	}
+}
+
+// The game's own code defines the APIs the worm used; it must not be
+// reported (it was, in v0.1.30-31).
+func TestVerifyGameManagedNoFalsePositives(t *testing.T) {
+	g := t.TempDir()
+	mods := filepath.Join(g, "Mods")
+	os.MkdirAll(mods, 0o755)
+	man := filepath.Join(g, "People Playground_Data", "Managed")
+	os.MkdirAll(man, 0o755)
+	os.WriteFile(filepath.Join(man, "mscorlib.dll"), []byte("MZ BinaryFormatter DelegateSerializationHolder"), 0o644)
+	os.WriteFile(filepath.Join(man, "Assembly-CSharp.dll"), []byte("MZ RejectShadyCode NewCommunityFile"), 0o644)
+	os.WriteFile(filepath.Join(man, "Facepunch.Steamworks.Win64.dll"), []byte("MZ NewCommunityFile WhereUserPublished"), 0o644)
+	os.WriteFile(filepath.Join(man, "UnityEngine.CoreModule.dll"), []byte("MZ m_PersistentCalls m_TargetAssemblyTypeName"), 0o644)
+	os.WriteFile(filepath.Join(man, "Xq7Kw.dll"), []byte("MZ ... FPSPlusPlus ... STEAM_CONFIG"), 0o644)
+	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{}}}
+	probs, err := m.Verify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var worm []string
+	for _, p := range probs {
+		if strings.HasPrefix(p.Issue, "WORM") {
+			worm = append(worm, p.Folder)
+		}
+	}
+	if len(worm) != 1 || !strings.HasSuffix(worm[0], "Xq7Kw.dll") {
+		t.Errorf("want only Xq7Kw.dll, got %v", worm)
 	}
 }

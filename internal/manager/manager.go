@@ -653,6 +653,10 @@ func (m *Manager) verifyGameCode() []Problem {
 	}
 	game := filepath.Dir(m.ModsDir)
 	var probs []Problem
+	// mods: compiled mods get the full worm check; the game's and the
+	// loaders' own files only the blocklist and worm-only strings, since
+	// they define the very APIs the worm used.
+	mods := false
 	checkFile := func(p, label, fix string) {
 		why := ""
 		if h, err := fileSHA(p); err == nil && m.Blocklist != nil {
@@ -660,8 +664,11 @@ func (m *Manager) verifyGameCode() []Problem {
 				why = "blocklisted: " + b.Reason
 			}
 		}
-		if why == "" {
+		if why == "" && mods {
 			why = scan.WormDLL(p)
+		}
+		if why == "" {
+			why = scan.WormOnlyDLL(p)
 		}
 		if why != "" {
 			probs = append(probs, Problem{label, "WORM: " + why + ". " + fix, true, ""})
@@ -672,9 +679,11 @@ func (m *Manager) verifyGameCode() []Problem {
 			checkFile(filepath.Join(dir, filepath.FromSlash(rel)), label+"/"+rel, fix)
 		}
 	}
+	mods = true
 	check(filepath.Join(game, "CompiledMods"), "CompiledMods", "Delete the CompiledMods folder (the game rebuilds it), remove the mod it came from, and reset your Discord and Steam passwords.")
 	check(filepath.Join(game, "CompiledModAssemblies"), "CompiledModAssemblies", "Delete that folder (the game rebuilds it) and remove the mod it came from.")
-	check(filepath.Join(game, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (Steam: Properties → Installed Files → Verify integrity) and reset your Discord and Steam passwords.")
+	mods = false
+	check(filepath.Join(game, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (in Steam: Properties, Installed Files, Verify integrity of game files) and reset your Discord and Steam passwords.")
 	// BepInEx (used by RE_PPG) runs plugins before every mod and before the
 	// game's own checks: the most valuable place for malware to sit.
 	bepFix := "Delete that file, reinstall BepInEx and RE_PPG from their official releases, and reset your Discord and Steam passwords."

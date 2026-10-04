@@ -109,7 +109,9 @@ var dllMarkers = []string{"NewCommunityFile", "WhereUserPublished", "RejectShady
 	"BinaryFormatter", "m_PersistentCalls", "m_TargetAssemblyTypeName", "api.ipify.org", "STEAM_CONFIG",
 	"FPSPlusPlus"}
 
-// WormDLL reports the worm markers a compiled file references ("" if none).
+// WormDLL reports the worm markers a compiled mod references ("" if none).
+// For mods only: the game's own code and loaders legitimately define these
+// APIs (see WormOnlyDLL).
 func WormDLL(path string) string {
 	r := &Report{}
 	inspectDLL(r, "", path)
@@ -117,6 +119,37 @@ func WormDLL(path string) string {
 		return ""
 	}
 	return r.Findings[0].Detail
+}
+
+// wormOnlyMarkers appear only in the worm itself, never in the game, .NET,
+// Unity, Steamworks, BepInEx or RE_PPG: safe to look for in game folders.
+var wormOnlyMarkers = []string{"FPSPlusPlus", "api.ipify.org", "STEAM_CONFIG", "PPG Mod Compiler Protection", "myprivatedata.txt"}
+
+// WormOnlyDLL reports worm-only strings in a file from the game's or a
+// loader's folders ("" if none).
+func WormOnlyDLL(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil || len(b) > 256<<20 {
+		return ""
+	}
+	var found []string
+	for _, m := range wormOnlyMarkers {
+		if bytes.Contains(b, []byte(m)) || bytes.Contains(b, utf16le(m)) {
+			found = append(found, m)
+		}
+	}
+	if len(found) == 0 {
+		return ""
+	}
+	return "contains strings only the FPS++ worm has: " + strings.Join(found, ", ")
+}
+
+func utf16le(s string) []byte {
+	b := make([]byte, 0, len(s)*2)
+	for i := 0; i < len(s); i++ {
+		b = append(b, s[i], 0)
+	}
+	return b
 }
 
 // inspectDLL looks inside a bundled DLL for worm markers (type, member and
