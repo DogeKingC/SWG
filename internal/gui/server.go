@@ -123,7 +123,12 @@ func Run(opt app.Options, g Options) error {
 	if st, err := loadSettings(); err == nil {
 		st.apply(&opt)
 	}
-	if !g.NoWindow && g.Port == 0 {
+	// Restarted by an update (or "switch to the installed copy"): take over
+	// the old process's address and session token, so the window that is
+	// already open reloads into this version instead of a second window
+	// opening next to it.
+	resumePort, resumeToken := takeResume()
+	if !g.NoWindow && g.Port == 0 && resumeToken == "" {
 		if url := runningInstance(); url != "" {
 			fmt.Println("ppgmods is already running; opening its window")
 			return openWindow(url)
@@ -133,11 +138,27 @@ func Run(opt app.Options, g Options) error {
 	if _, err := rand.Read(b); err != nil {
 		return err
 	}
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", g.Port))
-	if err != nil {
-		return err
+	token := hex.EncodeToString(b)
+	var ln net.Listener
+	var err error
+	resumed := false
+	if resumeToken != "" {
+		// The old process may still be closing its listener.
+		for i := 0; i < 40 && ln == nil; i++ {
+			if ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", resumePort)); err != nil {
+				time.Sleep(250 * time.Millisecond)
+			}
+		}
+		if ln != nil {
+			token, resumed = resumeToken, true
+		}
 	}
-	s := &server{opt: opt, version: g.Version, token: hex.EncodeToString(b), host: ln.Addr().String(), quit: make(chan struct{})}
+	if ln == nil {
+		if ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", g.Port)); err != nil {
+			return err
+		}
+	}
+	s := &server{opt: opt, version: g.Version, token: token, host: ln.Addr().String(), quit: make(chan struct{})}
 	if d, err := manager.ConfigDir(); err == nil {
 		lp := filepath.Join(d, "ppgmods.log")
 		if st, err := os.Stat(lp); err == nil && st.Size() > 2<<20 {
@@ -152,7 +173,10 @@ func Run(opt app.Options, g Options) error {
 	writeInstance(s.host, s.token)
 	defer removeInstance(s.token)
 	s.logf("ppgmods %s started (window address http://%s)", g.Version, s.host)
-	if !g.NoWindow {
+	if resumed {
+		s.logf("restarted; the open window reloads into this version")
+		go s.watchdog()
+	} else if !g.NoWindow {
 		if err := openWindow(url); err != nil {
 			s.logf("could not open a window (%v); open this address in your browser: %s", err, url)
 		}
@@ -202,9 +226,30 @@ func Run(opt app.Options, g Options) error {
 	}
 	removeInstance(s.token)
 	if s.relaunch != "" {
+		// Hand the address and token to the new process through its
+		// environment (not its command line, which other users can read).
+		_, port, _ := net.SplitHostPort(s.host)
+		os.Setenv(resumeEnv, port+":"+s.token)
 		return desktop.Launch(s.relaunch, "gui")
 	}
 	return nil
+}
+
+const resumeEnv = "PPGMODS_RESUME"
+
+// takeResume reads and clears the address handed over by a restart.
+func takeResume() (int, string) {
+	v := os.Getenv(resumeEnv)
+	os.Unsetenv(resumeEnv)
+	port, token, ok := strings.Cut(v, ":")
+	var p int
+	if !ok || len(token) != 48 || strings.Trim(token, "0123456789abcdef") != "" {
+		return 0, ""
+	}
+	if _, err := fmt.Sscan(port, &p); err != nil || p <= 0 || p > 65535 {
+		return 0, ""
+	}
+	return p, token
 }
 
 // watchdog quits once the window has been closed: the page sends a

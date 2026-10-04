@@ -252,9 +252,7 @@ function jobDone(j) {
   if (j.name === "verify") return showVerify(j.problems || []);
   if (j.ok) {
     if (j.data && j.data.restart) {
-      dialog("Updated to " + j.data.version, el("p", {}, "Restart PPG Mod Manager to use the new version."),
-        { label: "Restart now", run: () => restartApp("") });
-      $("#dlgExtra").className = "btn btn-primary";
+      restartApp("", "Updated to " + j.data.version + ". Restarting…");
       return;
     }
     if (j.name === "find-installed") {
@@ -924,9 +922,24 @@ $("#quitBtn").onclick = async () => {
   document.body.replaceChildren(el("div", { class: "empty", style: "margin:auto" }, "ppgmods has stopped. You can close this window."));
 };
 
-async function restartApp(which) {
+// restartApp restarts ppgmods. The new process takes over this window's
+// address and token, so this window reloads into it; if it had to start
+// somewhere else, it opens its own window and this one closes.
+async function restartApp(which, msg) {
+  const old = state?.version;
   await api("/api/action", { body: { action: "restart", key: which } }).catch(() => {});
-  document.body.replaceChildren(el("div", { class: "empty", style: "margin:auto" }, "Restarting PPG Mod Manager… a new window will open. You can close this one."));
+  const note = el("div", { class: "empty", style: "margin:auto" }, msg || "Restarting PPG Mod Manager…");
+  document.body.replaceChildren(note);
+  await new Promise((r) => setTimeout(r, 1500)); // let the old process stop
+  for (let i = 0; i < 60; i++) {
+    try {
+      const st = await api("/api/state");
+      if (st && (st.version !== old || i > 6)) { location.reload(); return; }
+    } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  note.textContent = "PPG Mod Manager restarted in a new window.";
+  window.close(); // works for app windows the program opened; otherwise the note stays
 }
 
 // ---------- start ----------
