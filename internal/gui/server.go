@@ -614,7 +614,18 @@ func runningInstance() string {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(webFS, "web")
-	mux.Handle("/", http.FileServer(http.FS(static)))
+	if s.show != nil {
+		// The native window is in use. A browser window left over from an
+		// update of an older version reloads into this note.
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			io.WriteString(w, `<!doctype html><meta charset="utf-8"><title>PPG Mod Manager</title>`+
+				`<body style="font:16px system-ui;background:#161616;color:#eee;display:grid;place-items:center;height:90vh">`+
+				`<p>PPG Mod Manager now has its own window. You can close this one.</p>`)
+		})
+	} else {
+		mux.Handle("/", http.FileServer(http.FS(static)))
+	}
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/log", s.handleLog)
 	mux.HandleFunc("/api/search", s.handleSearch)
