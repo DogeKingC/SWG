@@ -35,6 +35,11 @@ type Installed struct {
 	Findings     []string          `json:"findings,omitempty"`
 	InstalledAt  time.Time         `json:"installed_at"`
 	Pinned       bool              `json:"pinned,omitempty"`
+	// Quarantined says why the item's folders were moved out of the game
+	// folder (into the quarantine area), so the game can't load it; "" when
+	// it is in place.
+	Quarantined   string     `json:"quarantined,omitempty"`
+	QuarantinedAt *time.Time `json:"quarantined_at,omitempty"`
 }
 
 type State struct {

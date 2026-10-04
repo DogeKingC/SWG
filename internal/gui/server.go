@@ -1135,6 +1135,10 @@ func (s *server) do(j *job, req actionReq) error {
 		return err
 	case "pin":
 		return m.SetPinned(req.Key, req.Pinned)
+	case "quarantine":
+		return m.Quarantine(req.Key, "quarantined from the window")
+	case "release":
+		return m.Release(req.Key)
 	}
 	return fmt.Errorf("unknown action %q", req.Action)
 }

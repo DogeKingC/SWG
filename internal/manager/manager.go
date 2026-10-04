@@ -260,6 +260,9 @@ func (m *Manager) Install(c *Candidate) error {
 	PrintReport(m.logf, rep, dir)
 
 	prev := m.State.Mods[c.Key]
+	if prev != nil && prev.Quarantined != "" {
+		return errQuarantined(prev) // an update or repair must not bring it back
+	}
 	if err := m.Check(c, rep, prev); err != nil {
 		return err
 	}
@@ -415,6 +418,9 @@ func (m *Manager) backup(prev *Installed) error {
 
 // Rollback restores the most recent backup of key.
 func (m *Manager) Rollback(key string) error {
+	if cur := m.State.Mods[key]; cur != nil && cur.Quarantined != "" {
+		return errQuarantined(cur)
+	}
 	base, err := m.workDir("backups")
 	if err != nil {
 		return err
@@ -476,6 +482,15 @@ func (m *Manager) RemoveReport(key string) ([]string, error) {
 	inst := m.State.Mods[key]
 	if inst == nil {
 		return nil, fmt.Errorf("%s is not installed", key)
+	}
+	if inst.Quarantined != "" {
+		// Its folders are in the quarantine area, not the game folder.
+		if err := m.deleteQuarantined(inst); err != nil {
+			return nil, err
+		}
+		delete(m.State.Mods, key)
+		m.logf("removed %s (deleted its quarantined copy)", key)
+		return nil, m.State.Save()
 	}
 	base := m.dirFor(inst)
 	var idents []modIdent
@@ -573,6 +588,9 @@ func UGCString(raw json.RawMessage) string {
 // MissingFolders reports whether any of an installed item's folders is gone
 // from the game folder (deleted by hand, by another program, or by malware).
 func (m *Manager) MissingFolders(inst *Installed) bool {
+	if inst.Quarantined != "" {
+		return false // moved out on purpose
+	}
 	for _, f := range inst.Folders {
 		if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err != nil {
 			return true
@@ -606,6 +624,18 @@ type Problem struct {
 func (m *Manager) Verify() ([]Problem, error) {
 	var probs []Problem
 	for _, inst := range m.State.Sorted() {
+		if inst.Quarantined != "" {
+			// Its folder names stay reserved for it, so a folder that shows up
+			// under one of them again would otherwise go unchecked.
+			for _, f := range inst.Folders {
+				if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err == nil {
+					probs = append(probs, Problem{f, "a quarantined mod's folder is back in the game folder (put there by something else); remove it", true, inst.Key})
+				} else {
+					probs = append(probs, Problem{f, "in quarantine: " + inst.Quarantined + " (the game can't load it)", false, inst.Key})
+				}
+			}
+			continue
+		}
 		if m.Withdrawn != nil {
 			if why := m.Withdrawn(inst); why != "" {
 				folder := inst.Key

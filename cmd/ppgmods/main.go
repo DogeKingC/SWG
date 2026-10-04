@@ -45,6 +45,8 @@ Keep up to date:
   pin|unpin <key>            stop/resume updates for a mod
   rollback <key>             restore the previous version (and pin it)
   remove <key>               uninstall
+  quarantine <key> [reason]  move it out of the game folder (the game can't load it)
+  release <key>              put a quarantined item back
   find-installed             track mods/contraptions already in the game folders
                              (installed by hand or from the sites)
   self-update                update ppgmods itself to the latest release
@@ -275,6 +277,16 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 			return err
 		}
 		return m.Remove(args[0])
+	case "quarantine":
+		if err := need(args, 1, "mod key"); err != nil {
+			return err
+		}
+		return m.Quarantine(args[0], strings.Join(args[1:], " "))
+	case "release":
+		if err := need(args, 1, "mod key"); err != nil {
+			return err
+		}
+		return m.Release(args[0])
 	case "verify":
 		return cmdVerify(m)
 	case "find-installed":

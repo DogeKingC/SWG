@@ -1361,6 +1361,10 @@ func (a *App) Update(m *manager.Manager) Summary {
 		a.logf("dry run: checking only")
 	}
 	for _, inst := range m.State.Sorted() {
+		if inst.Quarantined != "" {
+			a.logf("%s is in quarantine, skipped", inst.Key)
+			continue
+		}
 		if strings.HasPrefix(inst.Key, "ow:") || strings.HasPrefix(inst.Key, "sky:") {
 			if inst.Pinned {
 				a.logf("%s pinned, skipped", inst.Key)
