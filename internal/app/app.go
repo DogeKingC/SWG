@@ -1069,6 +1069,33 @@ type Summary struct {
 	OK, Refused, Failed, Current int
 }
 
+// Repair reinstalls installed items whose folders are missing or whose files
+// were changed: the same GameBanana file or mirror copy as before, through
+// every safety check again. Items found on this PC without a source (local:)
+// can't be downloaded again.
+func (a *App) Repair(m *manager.Manager, keys []string) Summary {
+	var s Summary
+	for _, k := range keys {
+		inst := m.State.Mods[k]
+		if inst == nil {
+			continue
+		}
+		a.logf("== restoring %s (%s)", inst.Name, k)
+		if strings.HasPrefix(k, "local:") {
+			a.logf("  %s was installed from a file on this PC, not a mod site; import that file again", inst.Name)
+			s.Failed++
+			continue
+		}
+		b := a.with(func(o *Options) { o.Mirror, o.FileID = inst.Mirror, inst.FileID })
+		if strings.HasPrefix(inst.Mirror, "01studio:") {
+			b.Opt.Mirror = "" // needs the browser; any mirror copy will do
+		}
+		a.tally(&s, k, "REFUSED", b.Install(m, k))
+	}
+	a.logf("restore finished: %d restored, %d refused, %d failed", s.OK, s.Refused, s.Failed)
+	return s
+}
+
 // Update checks installed GameBanana mods for newer files. Without
 // Opt.Yes it is a dry run.
 func (a *App) Update(m *manager.Manager) Summary {

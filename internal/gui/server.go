@@ -70,23 +70,24 @@ type server struct {
 }
 
 type job struct {
-	ID       int               `json:"id"`
-	Name     string            `json:"name"`
-	Running  bool              `json:"running"`
-	OK       bool              `json:"ok"`
-	Error    string            `json:"error,omitempty"`
-	Reasons  []string          `json:"reasons,omitempty"`
-	Summary  *app.Summary      `json:"summary,omitempty"`
-	Problems []manager.Problem `json:"problems,omitempty"`
-	Data     map[string]string `json:"data,omitempty"`
-	Started  time.Time         `json:"started"`
-	Finished time.Time         `json:"finished,omitempty"`
-	Retry    map[string]any    `json:"retry,omitempty"` // request to repeat with an override
-	Findings []string          `json:"findings,omitempty"`
-	Browser  *app.NeedsBrowser `json:"browser,omitempty"`
-	Risk     bool              `json:"risk,omitempty"` // the retry accepts CRITICAL findings: needs the typed phrase
-	opts     map[string]bool
-	logStart int
+	ID         int               `json:"id"`
+	Name       string            `json:"name"`
+	Running    bool              `json:"running"`
+	OK         bool              `json:"ok"`
+	Error      string            `json:"error,omitempty"`
+	Reasons    []string          `json:"reasons,omitempty"`
+	Summary    *app.Summary      `json:"summary,omitempty"`
+	Problems   []manager.Problem `json:"problems,omitempty"`
+	Data       map[string]string `json:"data,omitempty"`
+	Started    time.Time         `json:"started"`
+	Finished   time.Time         `json:"finished,omitempty"`
+	Retry      map[string]any    `json:"retry,omitempty"` // request to repeat with an override
+	Findings   []string          `json:"findings,omitempty"`
+	Browser    *app.NeedsBrowser `json:"browser,omitempty"`
+	Risk       bool              `json:"risk,omitempty"`       // the retry accepts CRITICAL findings: needs the typed phrase
+	Background bool              `json:"background,omitempty"` // started by ppgmods itself (folder watching), not shown as "last task"
+	opts       map[string]bool
+	logStart   int
 }
 
 const maxLogLines = 5000
@@ -194,7 +195,7 @@ func Run(opt app.Options, g Options) error {
 	go func() {
 		sources.TWAll()
 		for i := 0; i < 120; i++ {
-			if _, err := s.start(actionReq{Action: "find-installed"}); err == nil {
+			if _, err := s.start(actionReq{Action: "find-installed", background: true}); err == nil {
 				return
 			}
 			select { // a task is running; try again shortly
@@ -204,6 +205,7 @@ func Run(opt app.Options, g Options) error {
 			}
 		}
 	}()
+	go s.watchFolders()
 	go func() {
 		for {
 			s.checkRelease(true)
@@ -250,6 +252,70 @@ func takeResume() (int, string) {
 		return 0, ""
 	}
 	return p, token
+}
+
+// watchFolders follows the Mods and Contraptions folders while ppgmods runs:
+// a folder added by hand (or by another tool) is identified and tracked
+// within seconds, and a deleted one shows as missing on the next refresh of
+// the window. Listing two folders every few seconds costs nothing.
+func (s *server) watchFolders() {
+	last := ""
+	pending := false
+	for {
+		select {
+		case <-s.quit:
+			return
+		case <-time.After(4 * time.Second):
+		}
+		p := s.newApp(nil).Paths()
+		if p.Mods == "" {
+			continue
+		}
+		var names []string
+		untracked := false
+		st, err := manager.LoadState()
+		for _, d := range []struct{ kind, dir string }{{manager.KindMod, p.Mods}, {manager.KindContraption, p.Contraptions}} {
+			ents, _ := os.ReadDir(d.dir)
+			for _, e := range ents {
+				if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+					continue
+				}
+				name := d.kind + "/" + e.Name()
+				if err == nil && st.OwnerOf(d.kind, e.Name()) == nil {
+					untracked = true
+					// A folder still being copied in has no mod.json/.jaap
+					// yet: look again once it does.
+					if looksComplete(filepath.Join(d.dir, e.Name())) {
+						name += "*"
+					}
+				}
+				names = append(names, name)
+			}
+		}
+		sig := strings.Join(names, "\x00")
+		if sig != last {
+			pending = untracked
+			last = sig
+		}
+		if pending && untracked {
+			sources.TWAll() // the slow part, outside the task queue (cached)
+			// Queued like any task; if one is running, try again next tick.
+			if _, err := s.start(actionReq{Action: "find-installed", background: true}); err == nil {
+				pending = false
+			}
+		}
+	}
+}
+
+// looksComplete reports whether a folder holds a mod.json or a .jaap file
+// (at the top or one level down).
+func looksComplete(dir string) bool {
+	for _, pat := range []string{"mod.json", "*.jaap", "*/mod.json", "*/*.jaap"} {
+		if m, _ := filepath.Glob(filepath.Join(dir, pat)); len(m) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // watchdog quits once the window has been closed: the page sends a
@@ -415,8 +481,9 @@ func (s *server) newApp(over map[string]bool) *app.App {
 
 type installedView struct {
 	*manager.Installed
-	Kind     string `json:"kind"`      // source label
-	ItemKind string `json:"item_kind"` // mod or contraption
+	Missing  bool   `json:"missing,omitempty"` // a folder is gone from the game folder
+	Kind     string `json:"kind"`              // source label
+	ItemKind string `json:"item_kind"`         // mod or contraption
 	Link     string `json:"link"`
 }
 
@@ -425,8 +492,10 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	paths := a.Paths()
 	var mods []installedView
 	if st, err := manager.LoadState(); err == nil {
+		mg := &manager.Manager{State: st, ModsDir: paths.Mods, ContraptionsDir: paths.Contraptions}
 		for _, m := range st.Sorted() {
 			v := installedView{Installed: m, Link: m.Source, ItemKind: m.Kind}
+			v.Missing = paths.Mods != "" && mg.MissingFolders(m)
 			switch {
 			case strings.HasPrefix(m.Key, "gb:"):
 				v.Kind = "GameBanana"
@@ -522,6 +591,7 @@ type actionReq struct {
 	Override   map[string]bool `json:"override,omitempty"`
 	Mirror     string          `json:"mirror,omitempty"`
 	Confirm    string          `json:"confirm,omitempty"` // RiskPhrase, typed by the person, with override accept_risk
+	background bool            // started by ppgmods itself; never set from a request
 }
 
 // RiskPhrase must be typed to install a mod with CRITICAL findings.
@@ -568,7 +638,7 @@ func (s *server) start(req actionReq) (*job, error) {
 	s.logMu.Lock()
 	logStart := s.base + len(s.logs)
 	s.logMu.Unlock()
-	j := &job{ID: jobSeq, Name: req.Action, Running: true, Started: time.Now(), opts: req.Override, logStart: logStart}
+	j := &job{ID: jobSeq, Name: req.Action, Running: true, Started: time.Now(), opts: req.Override, logStart: logStart, Background: req.background}
 	s.job = j
 	s.jobMu.Unlock()
 
@@ -702,6 +772,21 @@ func (s *server) do(j *job, req actionReq) error {
 		a.Opt.Yes = req.Apply
 		sum := a.Update(m)
 		j.Summary = &sum
+		return nil
+	case "repair":
+		sum := a.Repair(m, req.Refs)
+		j.Summary = &sum
+		return nil
+	case "forget":
+		keys := req.Refs
+		if req.Key != "" {
+			keys = append(keys, req.Key)
+		}
+		for _, k := range keys {
+			if err := m.Forget(k); err != nil {
+				return err
+			}
+		}
 		return nil
 	case "restore":
 		sum, err := a.Restore(m, req.Path)

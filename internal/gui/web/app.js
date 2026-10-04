@@ -97,6 +97,7 @@ $$(".nav").forEach((n) => (n.onclick = () => show(n.dataset.view)));
 // ---------- state ----------
 let state = null;
 
+let installedSig = "";
 async function refreshState() {
   try {
     state = await api("/api/state");
@@ -145,10 +146,16 @@ async function refreshState() {
     "Downloads:     " + (p.downloads || "-"),
     "ppgmods data:  " + p.data,
   ].join("\n");
-  renderInstalled();
-  markInstalledCards();
+  // Re-draw the lists only when what's installed changed (this runs every
+  // few seconds; re-drawing would reload every thumbnail).
+  const sig = JSON.stringify((state.installed || []).map((m) => [m.key, m.name, m.missing, m.folders, m.scan_max, m.pinned, m.risk_accepted, m.author]));
+  if (sig !== installedSig) {
+    installedSig = sig;
+    renderInstalled();
+    markInstalledCards();
+  }
   renderDesktop(state.desktop);
-  if (state.job && state.job.running && !lastJobId) lastJobId = state.job.id;
+  if (state.job && state.job.running && !state.job.background && !lastJobId) lastJobId = state.job.id;
   if (!lastJobId) setJob(state.job);
 }
 
@@ -164,6 +171,7 @@ $$(".seg-btn[data-ikind]").forEach((b) => (b.onclick = () => {
 function renderInstalled() {
   const list = $("#installedList");
   const all = state.installed || [];
+  renderMissing(all);
   const isC = (m) => m.item_kind === "contraption";
   $("#countMods").textContent = all.filter((m) => !isC(m)).length;
   $("#countContraptions").textContent = all.filter(isC).length;
@@ -191,6 +199,7 @@ function renderInstalled() {
         el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind),
           m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
           m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
+          m.missing ? el("span", { class: "badge badge-bad", title: "Its folder is gone from the game folder" }, "missing") : null,
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null),
         el("div", { class: "item-meta" },
@@ -199,6 +208,29 @@ function renderInstalled() {
           " · ", (m.folders || []).join(", "))),
       actions);
   }));
+}
+
+// renderMissing offers to restore tracked items whose folders disappeared
+// (deleted by accident, by another program, or by malware).
+function renderMissing(all) {
+  const gone = all.filter((m) => m.missing);
+  const b = $("#missingBanner");
+  b.hidden = !gone.length;
+  if (!gone.length) return;
+  const names = gone.slice(0, 4).map((m) => m.name).join(", ") + (gone.length > 4 ? ` and ${gone.length - 4} more` : "");
+  // Items found on this PC without a mod site behind them can't be downloaded again.
+  const restorable = gone.filter((m) => !m.key.startsWith("local:"));
+  const local = gone.length - restorable.length;
+  b.replaceChildren(
+    el("div", {}, el("b", {}, `${gone.length} installed item${gone.length > 1 ? "s are" : " is"} missing from your game folder`), ": " + names + "."),
+    el("div", { class: "small" }, "If you didn't delete them, check your PC for malware before restoring: whatever deleted them could do it again."),
+    local ? el("div", { class: "small" }, `${local} of them came from a file on this PC, not a mod site, so ppgmods can't download ${local > 1 ? "them" : "it"} again.`) : null,
+    el("div", { class: "row", style: "margin-top:8px" },
+      restorable.length ? el("button", { class: "btn btn-primary btn-sm", "data-busy": true, onclick: () => run({ action: "repair", refs: restorable.map((m) => m.key) }, `Restoring ${restorable.length} item(s)`) },
+        restorable.length === gone.length ? "Restore them" : `Restore ${restorable.length} from their sites`) : null,
+      el("button", { class: "btn btn-ghost btn-sm", onclick: () => dialog("Stop tracking?", [el("p", {}, "ppgmods forgets " + names + ". Nothing is deleted; their folders are already gone.")],
+        { label: "Stop tracking", run: () => run({ action: "forget", refs: gone.map((m) => m.key) }, "Forgetting " + gone.length + " item(s)") }) }, "Stop tracking")),
+  );
 }
 
 function confirmRemove(m) {
@@ -222,7 +254,7 @@ async function run(req, label) {
 
 function setJob(j, label) {
   const s = $("#jobStatus");
-  if (!j) { s.textContent = "Ready"; s.className = "job-status"; return; }
+  if (!j || (j.background && !j.running)) { s.textContent = "Ready"; s.className = "job-status"; return; }
   jobRunning = j.running;
   $$("button[data-busy]").forEach((b) => (b.disabled = j.running));
   if (j.running) {
@@ -271,6 +303,7 @@ function jobDone(j) {
       toast(`${sum.Current} up to date, ${sum.OK} ${$("#applyUpdates").dataset.last === "apply" ? "updated" : "can update"}, ${sum.Refused} held back`, 6000);
       return;
     }
+    if (sum && j.name === "repair") { toast(`${sum.OK} restored, ${sum.Refused} refused, ${sum.Failed} could not be restored (see the log)`, 8000); refreshState(); return; }
     if (sum) { toast(`${sum.OK} installed, ${sum.Refused} refused, ${sum.Failed} errors`, 6000); return; }
     if (j.name === "backup" && j.data) { $("#restorePath").value = j.data.dest; toast("Backup saved. Now restore the safe copies (step 2)."); return; }
     if (j.name === "install") {
@@ -327,6 +360,12 @@ function showVerify(probs) {
   panel.replaceChildren(
     el("b", {}, bad.length ? `⚠ ${bad.length} problem(s) found` : "✓ All managed mods match their install fingerprints"),
     probs.length ? el("ul", {}, probs.map((p) => el("li", { class: p.bad ? "bad" : "" }, p.folder + ": " + p.issue))) : null,
+    ...(() => {
+      const keys = [...new Set(bad.filter((p) => p.key).map((p) => p.key))];
+      return keys.length ? [el("button", { class: "btn btn-primary btn-sm", style: "margin-top:8px", "data-busy": true,
+        onclick: () => run({ action: "repair", refs: keys }, `Restoring ${keys.length} item(s)`) },
+        `Restore ${keys.length} damaged item${keys.length > 1 ? "s" : ""} from their source`)] : [];
+    })(),
   );
   show("installed");
 }
@@ -950,7 +989,7 @@ async function restartApp(which, msg) {
   pollLog();
   setInterval(pollLog, 1000);
   setInterval(pollJob, 800);
-  setInterval(() => { if (!jobRunning) refreshState(); }, 15000);
+  setInterval(() => { if (!jobRunning && !document.hidden) refreshState(); }, 4000);
   const ping = () => api("/api/ping").catch(() => {});
   ping();
   setInterval(ping, 20000);

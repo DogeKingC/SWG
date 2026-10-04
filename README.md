@@ -231,6 +231,18 @@ that refers to it, gets update checks, and is covered by Verify. Nothing is
 moved. Installing it again from any site replaces that copy instead of adding
 a second one.
 
+While the window is open, ppgmods watches the Mods and Contraptions folders:
+a mod copied in by hand is identified and tracked within seconds (once its
+`mod.json` or `.jaap` is there), and one that disappears is marked
+**missing**. If installed items disappear (deleted by accident, by another
+program, or by malware), Installed shows how many and offers **Restore
+them**: each is downloaded again from where it came from (the same
+GameBanana file or mirror copy) and goes through every safety check again,
+or **Stop tracking**. **Verify files** offers the same for mods whose files
+were changed or added to. Items found on the PC with no mod site behind them
+can't be downloaded again. If you didn't delete them yourself, check the PC
+for malware first: whatever deleted them can do it again.
+
 The Installed list shows each item's author and thumbnail, taken from its
 own `mod.json` and files (Valve deleted the Workshop images of removed mods).
 Search cards with no author on the mirror page get it from `mod.json` once

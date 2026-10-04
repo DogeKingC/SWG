@@ -559,11 +559,34 @@ func UGCString(raw json.RawMessage) string {
 	return s
 }
 
+// MissingFolders reports whether any of an installed item's folders is gone
+// from the game folder (deleted by hand, by another program, or by malware).
+func (m *Manager) MissingFolders(inst *Installed) bool {
+	for _, f := range inst.Folders {
+		if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// Forget stops tracking an item without touching the game folders (for
+// items whose folders are already gone).
+func (m *Manager) Forget(key string) error {
+	if m.State.Mods[key] == nil {
+		return fmt.Errorf("%s is not installed", key)
+	}
+	delete(m.State.Mods, key)
+	m.logf("stopped tracking %s", key)
+	return m.State.Save()
+}
+
 // Problem is a verify result for one Mods/ folder.
 type Problem struct {
 	Folder string `json:"folder"`
 	Issue  string `json:"issue"`
-	Bad    bool   `json:"bad"` // false for informational lines (clean unmanaged folders)
+	Bad    bool   `json:"bad"`           // false for informational lines (clean unmanaged folders)
+	Key    string `json:"key,omitempty"` // the installed item it belongs to, if any (can be restored)
 }
 
 // Verify re-hashes installed mods to detect tampering (the September worm
@@ -575,7 +598,7 @@ func (m *Manager) Verify() ([]Problem, error) {
 		now := map[string]string{}
 		for _, f := range inst.Folders {
 			if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err != nil {
-				probs = append(probs, Problem{f, "missing", true})
+				probs = append(probs, Problem{f, "missing", true, inst.Key})
 				continue
 			}
 			if err := hashTree(filepath.Join(m.dirFor(inst), f), f, now); err != nil {
@@ -584,14 +607,14 @@ func (m *Manager) Verify() ([]Problem, error) {
 		}
 		for p, h := range inst.Files {
 			if g, ok := now[p]; !ok {
-				probs = append(probs, Problem{p, "file deleted since install", true})
+				probs = append(probs, Problem{p, "file deleted since install", true, inst.Key})
 			} else if g != h {
-				probs = append(probs, Problem{p, "file CHANGED since install (possible tampering)", true})
+				probs = append(probs, Problem{p, "file CHANGED since install (possible tampering)", true, inst.Key})
 			}
 		}
 		for p := range now {
 			if _, ok := inst.Files[p]; !ok {
-				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true})
+				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true, inst.Key})
 			}
 		}
 	}
@@ -607,7 +630,7 @@ func (m *Manager) Verify() ([]Problem, error) {
 		if err != nil {
 			return nil, err
 		}
-		pr := Problem{e.Name(), "not managed by ppgmods; scan clean", false}
+		pr := Problem{e.Name(), "not managed by ppgmods; scan clean", false, ""}
 		if rep.Max() >= scan.Medium {
 			pr.Issue = fmt.Sprintf("not managed by ppgmods; scan max %s (%d findings)", rep.Max(), len(rep.Findings))
 			pr.Bad = rep.Max() >= scan.High
