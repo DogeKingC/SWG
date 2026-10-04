@@ -846,6 +846,7 @@ type NeedsBrowser struct {
 	Reason     string `json:"reason"`
 	WorkshopID string `json:"workshop_id"`
 	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO, Nexus)
+	Match      string `json:"match,omitempty"`    // with AnyFile: text the file's name must contain (Nexus: "-<mod id>-")
 	Mirror     string `json:"mirror,omitempty"`
 	Key        string `json:"key,omitempty"` // install under this ref instead of sky:<WorkshopID> (nx:<id>)
 	NXM        bool   `json:"nxm,omitempty"` // a linked Nexus account handles "Mod Manager Download": just open the page
@@ -856,7 +857,9 @@ type NeedsBrowser struct {
 // nexusBrowser is the browser download of a Nexus Mods file (its files are
 // given to signed-in users).
 func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
-	nb := &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
+	// Nexus names its downloads <name>-<mod id>-<version>-<time>.zip:
+	// only such a file is taken, not any archive that lands in Downloads.
+	nb := &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
 		Reason: "Nexus Mods gives its files to signed-in users: download it on the mod's Files tab"}
 	if acct := LoadNexus(); acct != nil && acct.Handler {
 		nb.NXM = true
@@ -1077,16 +1080,19 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	OpenBrowser(nb.URL)
 	prefix := nb.WorkshopID
 	if nb.AnyFile {
-		prefix = "" // any archive that appears from now on
-		a.logf("Waiting for a new .zip/.rar/.7z in %s (up to %s)...", dl, a.Opt.Wait)
+		prefix = "" // any archive that appears from now on (with nb.Match in its name)
+		a.logf("Waiting for a new .zip/.rar/.7z%s in %s (up to %s)...", map[bool]string{true: " named *" + nb.Match + "*", false: ""}[nb.Match != ""], dl, a.Opt.Wait)
 	} else {
 		a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
 	}
-	file, err := waitForDownload(dl, prefix, since, a.Opt.Wait)
+	file, err := waitForDownload(dl, prefix, nb.Match, since, a.Opt.Wait)
 	if err != nil {
 		return nil, fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, nb.WorkshopID)
 	}
 	a.logf("got %s", filepath.Base(file))
+	if err := checkNexusDownload(nb, file); err != nil {
+		return nil, err
+	}
 	c, err := a.with(func(o *Options) { o.WorkshopID, o.Name = nb.WorkshopID, nb.Name }).candidate(file)
 	if err == nil && c != nil && nb.Key != "" {
 		c.Key = nb.Key
@@ -1100,6 +1106,35 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 		c.SteamOrig, c.Revision, c.Mirror, c.Source = false, time.Time{}, nb.Mirror, nb.URL
 	}
 	return c, err
+}
+
+// checkNexusDownload asks Nexus Mods, with the linked account, whether a
+// file picked up from the Downloads folder is a file of the mod the person
+// was sent to: anything else that lands there (another download, a file a
+// web page pushed) is refused.
+func checkNexusDownload(nb *NeedsBrowser, file string) error {
+	var modID int
+	if _, err := fmt.Sscanf(nb.Mirror, "nexus:%d", &modID); err != nil {
+		return nil
+	}
+	acct := LoadNexus()
+	if acct == nil {
+		return nil // no account to ask with; the file name was checked
+	}
+	sum, err := fileMD5(file)
+	if err != nil {
+		return err
+	}
+	ids, err := sources.NXFileByMD5(acct.Key, sum)
+	if err != nil {
+		return nil // Nexus unreachable: the file name was checked, the scanner still runs
+	}
+	for _, id := range ids {
+		if id == modID {
+			return nil
+		}
+	}
+	return &manager.Rejection{Reasons: []string{fmt.Sprintf("%s is not a file of Nexus Mods mod %d (Nexus has no file with its checksum for that mod); download it again from the mod's Files tab", filepath.Base(file), modID)}}
 }
 
 // DownloadFolder returns the user's browser download folder.
@@ -1128,7 +1163,7 @@ var partialExt = map[string]bool{".crdownload": true, ".part": true, ".partial":
 
 // waitForDownload polls dir for an archive named "<workshop id>_..." (the
 // naming modsbase uses) that appeared after since and has stopped growing.
-func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (string, error) {
+func waitForDownload(dir, ws, match string, since time.Time, timeout time.Duration) (string, error) {
 	deadline := time.Now().Add(timeout)
 	sizes := map[string]int64{}
 	for time.Now().Before(deadline) {
@@ -1136,7 +1171,7 @@ func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (st
 		for _, e := range ents {
 			name := e.Name()
 			ext := strings.ToLower(filepath.Ext(name))
-			if e.IsDir() || !strings.HasPrefix(name, ws) || partialExt[ext] {
+			if e.IsDir() || !strings.HasPrefix(name, ws) || !strings.Contains(name, match) || partialExt[ext] {
 				continue
 			}
 			if ext != ".zip" && ext != ".rar" && ext != ".7z" {

@@ -3,12 +3,17 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/sources"
@@ -45,6 +50,8 @@ func fakeNexus(t *testing.T) *httptest.Server {
 			json.NewEncoder(rw).Encode([]map[string]string{{"name": "CDN", "URI": srv.URL + "/file.zip"}})
 		case "/file.zip":
 			rw.Write(zipped.Bytes())
+		case "/v1/games/peopleplayground/mods/md5_search/" + md5Hex(zipped.Bytes()) + ".json":
+			json.NewEncoder(rw).Encode([]map[string]any{{"mod": map[string]any{"mod_id": 77, "domain_name": "peopleplayground"}}})
 		default:
 			rw.WriteHeader(404)
 		}
@@ -101,5 +108,44 @@ func TestParseNXM(t *testing.T) {
 		if _, err := sources.ParseNXM(bad); err == nil {
 			t.Errorf("accepted %s", bad)
 		}
+	}
+}
+
+func md5Hex(b []byte) string {
+	h := md5.Sum(b)
+	return hex.EncodeToString(h[:])
+}
+
+// A browser download is only taken if it is the mod's file: by its name,
+// and (with a linked account) by Nexus' record of its checksum.
+func TestNexusBrowserDownloadIsChecked(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	srv := fakeNexus(t)
+	dl := t.TempDir()
+	since := time.Now()
+	os.WriteFile(filepath.Join(dl, "Free Stuff-12-1-0-1700000000.zip"), []byte("other"), 0o644)
+	os.WriteFile(filepath.Join(dl, "setup.zip"), []byte("other"), 0o644)
+	if _, err := waitForDownload(dl, "", "-77-", since, 3*time.Second); err == nil {
+		t.Fatal("an unrelated archive in Downloads was taken")
+	}
+
+	if _, err := LinkNexus("testkey"); err != nil {
+		t.Fatal(err)
+	}
+	nb := &NeedsBrowser{Mirror: "nexus:77", Match: "-77-"}
+	fake := filepath.Join(dl, "Nexus Test-77-2-0-1700000000.zip")
+	os.WriteFile(fake, []byte("not the real file"), 0o644)
+	if err := checkNexusDownload(nb, fake); err == nil {
+		t.Fatal("a file Nexus doesn't have for mod 77 was accepted")
+	}
+	resp, err := srv.Client().Get(srv.URL + "/file.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	real, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	os.WriteFile(fake, real, 0o644)
+	if err := checkNexusDownload(nb, fake); err != nil {
+		t.Fatalf("the mod's real file was refused: %v", err)
 	}
 }
