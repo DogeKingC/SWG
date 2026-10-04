@@ -2,6 +2,7 @@ package manager
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,5 +353,54 @@ func TestEmbeddedPauseIgnored(t *testing.T) {
 	defer func() { blocklist.Default = old }()
 	if why := LoadBlocklist(false, func(string, ...any) {}).Paused("gb:1"); why != "" {
 		t.Fatalf("embedded pause applied: %s", why)
+	}
+}
+
+// How real mods write mod.json: a BOM, script names in another case than
+// the file, backslashes, a listed script that never existed, and loose
+// JSON the game accepts. When the game rewrites such a mod.json (its
+// Active switch), that is still not tampering.
+func TestVerifyGameRewriteOfRealWorldManifests(t *testing.T) {
+	for name, manifest := range map[string]string{
+		"BOM":            "\xef\xbb\xbf" + `{"Name":"M","Scripts":["script.cs"],"Active":%s}`,
+		"case":           `{"Name":"M","Scripts":["SCRIPT.cs"],"Active":%s}`,
+		"backslash":      `{"Name":"M","Scripts":["sub\\inner.cs"],"Active":%s}`,
+		"never existed":  `{"Name":"M","Scripts":["script.cs","missing.cs"],"Active":%s}`,
+		"trailing comma": `{"Name":"M","Scripts":["script.cs",],"Active":%s,}`,
+		"comment":        "{\n// made by me\n" + `"Name":"M","Scripts":["script.cs"],"Active":%s}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			mods := filepath.Join(t.TempDir(), "Mods")
+			dir := filepath.Join(mods, "M")
+			os.MkdirAll(filepath.Join(dir, "sub"), 0o755)
+			os.WriteFile(filepath.Join(dir, "mod.json"), []byte(fmt.Sprintf(manifest, "false")), 0o644)
+			os.WriteFile(filepath.Join(dir, "script.cs"), []byte("class A {}"), 0o644)
+			os.WriteFile(filepath.Join(dir, "sub", "inner.cs"), []byte("class B {}"), 0o644)
+			files := map[string]string{}
+			if err := hashTree(dir, "M", files); err != nil {
+				t.Fatal(err)
+			}
+			inst := &Installed{Key: "sky:1", Name: "M", Folders: []string{"M"}, Files: files}
+			m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{"sky:1": inst}}}
+			os.WriteFile(filepath.Join(dir, "mod.json"), []byte(fmt.Sprintf(manifest, "true")), 0o644)
+			probs, _ := m.Verify()
+			for _, p := range probs {
+				if p.Bad {
+					t.Errorf("game rewrite reported as tampering: %+v", p)
+				}
+			}
+			// A script really changed is still reported.
+			os.WriteFile(filepath.Join(dir, "script.cs"), []byte("class Evil {}"), 0o644)
+			probs, _ = m.Verify()
+			bad := 0
+			for _, p := range probs {
+				if p.Bad {
+					bad++
+				}
+			}
+			if name != "backslash" && bad == 0 {
+				t.Error("a changed script went unreported")
+			}
+		})
 	}
 }

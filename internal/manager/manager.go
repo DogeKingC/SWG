@@ -705,25 +705,58 @@ func (m *Manager) Verify() ([]Problem, error) {
 // scripts that were installed and haven't changed: the game rewrites
 // mod.json itself (its "Active" switch), while an injection adds or changes
 // scripts, which shows up on those files.
+//
+// mod.json is read the way the game reads it (byte order mark, comments,
+// trailing commas), and script names match files whatever their case or
+// slashes, as on Windows. A listed script that never existed holds no code.
 func manifestOnlyToggled(base, key string, installed, now map[string]string) bool {
 	b, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(key)))
 	if err != nil {
 		return false
 	}
-	var mf struct {
-		Scripts []string `json:"Scripts"`
-	}
-	if json.Unmarshal(b, &mf) != nil {
+	scripts, ok := scan.ManifestScripts(b)
+	if !ok {
 		return false
 	}
 	dir := path.Dir(key)
-	for _, s := range mf.Scripts {
-		k := path.Join(dir, filepath.ToSlash(s))
-		if h, ok := installed[k]; !ok || now[k] != h {
+	was, is := foldKeys(installed, dir), foldKeys(now, dir)
+	for _, s := range scripts {
+		k := path.Join(dir, strings.ReplaceAll(s, `\`, "/"))
+		if !strings.HasPrefix(k, dir+"/") {
+			return false // points outside the mod
+		}
+		k = strings.ToLower(k)
+		h, wasThere := was[k]
+		g, isThere := is[k]
+		if !wasThere && !isThere {
+			continue
+		}
+		if !wasThere || !isThere || h != g {
 			return false
 		}
 	}
 	return true
+}
+
+// foldKeys maps the lowercased paths under dir to their hashes. Two files
+// whose names differ only in case can't both be the one a script entry
+// means, so such a name never matches.
+func foldKeys(files map[string]string, dir string) map[string]string {
+	out := map[string]string{}
+	seen := map[string]bool{}
+	for p, h := range files {
+		if !strings.HasPrefix(p, dir+"/") {
+			continue
+		}
+		k := strings.ToLower(p)
+		if seen[k] {
+			out[k] = "\x00ambiguous:" + p
+			continue
+		}
+		seen[k] = true
+		out[k] = h
+	}
+	return out
 }
 
 // verifyGameCode checks the game's own code folders for what the FPS++

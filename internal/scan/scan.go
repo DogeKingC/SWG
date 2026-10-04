@@ -16,7 +16,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 )
@@ -214,9 +216,12 @@ func isNativeBinary(b []byte) bool {
 // scripts that are not .cs files. RE_PPG refuses to compile those, but
 // another loader may not, so they are scanned as code anyway.
 func checkManifest(r *Report, dir, rel string, b []byte) []string {
-	scripts, err := manifestScripts([]byte(decodeText(b)))
-	if err != nil {
-		r.add(Medium, "manifest-invalid", rel, 0, "mod.json does not parse: "+err.Error())
+	if _, err := manifestScripts([]byte(decodeText(b))); err != nil {
+		r.add(Medium, "manifest-invalid", rel, 0, "mod.json is not strict JSON: "+err.Error())
+	}
+	// The game's reader is looser than JSON: check the list it would read.
+	scripts, ok := ManifestScripts(b)
+	if !ok {
 		return nil
 	}
 	var other []string
@@ -236,6 +241,33 @@ func checkManifest(r *Report, dir, rel string, b []byte) []string {
 	}
 	return other
 }
+
+// ManifestScripts reads the script list of a mod.json file's raw bytes the
+// way the game does: any byte order mark, and the loose JSON (comments,
+// trailing commas) its reader accepts. ok is false if no list can be read.
+func ManifestScripts(raw []byte) (scripts []string, ok bool) {
+	b := []byte(decodeText(raw))
+	if s, err := manifestScripts(b); err == nil {
+		return s, true
+	}
+	m := reLooseScripts.FindAllSubmatch(b, -1)
+	if m == nil {
+		return nil, false
+	}
+	for _, list := range m {
+		for _, q := range reJSONString.FindAll(list[1], -1) {
+			if s, err := strconv.Unquote(string(q)); err == nil {
+				scripts = append(scripts, s)
+			}
+		}
+	}
+	return scripts, true
+}
+
+var (
+	reLooseScripts = regexp.MustCompile(`(?is)"scripts"\s*:\s*\[(.*?)\]`)
+	reJSONString   = regexp.MustCompile(`"(?:[^"\\]|\\.)*"`)
+)
 
 // manifestScripts returns the script list of a mod.json. JSON readers
 // disagree on duplicate keys and on "Scripts" vs "scripts" (Go takes the
