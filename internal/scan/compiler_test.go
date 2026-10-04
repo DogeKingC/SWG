@@ -103,3 +103,15 @@ func TestLoneFormatCharacterKeepsLexerInSync(t *testing.T) {
 		t.Errorf("process start after a lone format character not detected: %+v", r.Findings)
 	}
 }
+
+// Picking a type out of a list by a name built at runtime names no API.
+func TestReflectionByListing(t *testing.T) {
+	src := `class P { void M() {
+  string n = "Pro"; n += "cess";
+  var t = typeof(System.Uri).Assembly.GetTypes().First(x => x.Name == n);
+  t.GetMethod("Start", new[] { typeof(string) }).Invoke(null, new object[] { "calc" });
+} }`
+	if r := Source("x.cs", src); r.Max() < High || !has(r, "reflection-enumerate") {
+		t.Errorf("type picked from GetTypes() not flagged HIGH: %+v", r.Findings)
+	}
+}
