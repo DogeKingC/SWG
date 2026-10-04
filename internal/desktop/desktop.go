@@ -20,6 +20,9 @@ var iconPNG []byte
 //go:embed icons/icon.svg
 var iconSVG []byte
 
+// IconPNG is the app icon (256×256).
+func IconPNG() []byte { return iconPNG }
+
 type Options struct {
 	DesktopShortcut bool
 	Version         string

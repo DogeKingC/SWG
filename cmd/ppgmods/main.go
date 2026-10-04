@@ -78,6 +78,7 @@ Flags (any command):
                              instead of the newest clean one
   --port <n>                 gui: fixed port (default random)
   --no-window                gui: do not open a window, just print the address
+  --web                      gui: use the browser window instead of the native one
 `
 
 func main() {
@@ -140,6 +141,7 @@ func parseFlags(argv []string) (*app.App, []string, gui.Options, error) {
 	fs.DurationVar(&o.Policy.Cooldown, "cooldown", o.Policy.Cooldown, "")
 	fs.IntVar(&g.Port, "port", 0, "")
 	fs.BoolVar(&g.NoWindow, "no-window", false, "")
+	fs.BoolVar(&g.Web, "web", false, "")
 	var pos []string
 	for {
 		if err := fs.Parse(argv); err != nil {

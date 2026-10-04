@@ -52,12 +52,15 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
    `ppgmods install-app` (add `no-desktop` to skip the desktop shortcut) and
    `ppgmods uninstall-app`. Uninstalling leaves your mods and settings alone.
 
-The window is a local web page. It opens in Edge or Chrome in app mode, or in
-your default browser if neither is installed. The program serves it only to
-your own PC (127.0.0.1), and every request needs a random per-session key.
-Only one copy runs at a time: starting it again brings up the existing
-window. It quits a few minutes after you close the window, unless a task is
-still running. A log is kept in the data folder as `ppgmods.log`.
+The window is a native desktop app on Windows (x64) and Linux (x64). It
+needs OpenGL 2.1, which every PC from the last fifteen years has; on one
+without it (some virtual machines), start `ppgmods --web` to use the browser
+window instead. The arm64 builds always use the browser window: it opens in
+Edge or Chrome in app mode, or in your default browser. Either way the
+program's API is served only to your own PC (127.0.0.1), and every request
+needs a random per-session key. Only one copy runs at a time: starting it
+again brings up the existing window. A log is kept in the data folder as
+`ppgmods.log`.
 
 The window covers everything:
 

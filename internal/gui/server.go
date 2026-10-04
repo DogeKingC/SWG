@@ -1,7 +1,10 @@
-// Package gui serves ppgmods' graphical interface: a small web app bound to
-// 127.0.0.1 and shown in a chromeless Edge/Chrome window (falling back to the
-// default browser). Every API call must carry a random per-session token, and
-// the Host header is checked, so other websites cannot drive it.
+// Package gui is ppgmods' graphical interface. Builds with cgo show a native
+// window (Fyne, native.go); the window calls the API below in-process. Builds
+// without cgo, or with --web, serve the same API as a small web app shown in
+// a chromeless Edge/Chrome window. The API also listens on 127.0.0.1 so a
+// second launch or a Nexus link can reach the running window; every request
+// must carry a random per-session token, and the Host header is checked, so
+// other websites cannot drive it.
 package gui
 
 import (
@@ -41,6 +44,7 @@ var webFS embed.FS
 type Options struct {
 	Port     int
 	NoWindow bool
+	Web      bool // the browser window even when the native one is built in
 	Version  string
 }
 
@@ -69,6 +73,8 @@ type server struct {
 	logFile  *os.File
 	relaunch string // executable to start after shutting down
 
+	handler  http.Handler  // the API, called in-process by the native window
+	show     chan struct{} // native window: bring it to the front
 	offerMu  sync.Mutex
 	nxmOffer *nxmOffer // a Nexus "Mod Manager Download" link waiting for the person to confirm
 	quitOnce sync.Once
@@ -136,9 +142,13 @@ func Run(opt app.Options, g Options) error {
 	resumePort, resumeToken := takeResume()
 	startNXM := os.Getenv(nxmEnv) // launched by a Nexus link with no window open
 	os.Unsetenv(nxmEnv)
+	native := nativeUI != nil && !g.NoWindow && !g.Web
 	if !g.NoWindow && g.Port == 0 && resumeToken == "" {
 		if url := runningInstance(); url != "" {
 			fmt.Println("ppgmods is already running; opening its window")
+			if showRunning() {
+				return nil
+			}
 			return openWindow(url)
 		}
 	}
@@ -167,6 +177,9 @@ func Run(opt app.Options, g Options) error {
 		}
 	}
 	s := &server{opt: opt, version: g.Version, token: token, host: ln.Addr().String(), quit: make(chan struct{})}
+	if native {
+		s.show = make(chan struct{}, 1)
+	}
 	if d, err := manager.ConfigDir(); err == nil {
 		lp := filepath.Join(d, "ppgmods.log")
 		if st, err := os.Stat(lp); err == nil && st.Size() > 2<<20 {
@@ -177,14 +190,17 @@ func Run(opt app.Options, g Options) error {
 	if startNXM != "" {
 		s.offerNXM(startNXM)
 	}
-	srv := &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
+	s.handler = s.routes()
+	srv := &http.Server{Handler: s.handler, ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
 
 	url := fmt.Sprintf("http://%s/#%s", s.host, s.token)
 	writeInstance(s.host, s.token)
 	defer removeInstance(s.token)
 	s.logf("ppgmods %s started (window address http://%s)", g.Version, s.host)
-	if resumed {
+	if native {
+		// The window runs on the main goroutine below.
+	} else if resumed {
 		s.logf("restarted; the open window reloads into this version")
 		go s.watchdog()
 	} else if !g.NoWindow {
@@ -228,10 +244,20 @@ func Run(opt app.Options, g Options) error {
 	}()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-s.quit:
-	case <-sig:
+	go func() {
+		select {
+		case <-s.quit:
+		case <-sig:
+			s.stop("")
+		}
+	}()
+	if native {
+		if err := nativeUI(s); err != nil {
+			s.logf("the window failed: %v", err)
+		}
+		s.stop("") // the window was closed (no-op after Quit or an update)
 	}
+	<-s.quit
 	srv.Close()
 	if s.logFile != nil {
 		s.logFile.Close()
@@ -547,6 +573,24 @@ func removeInstance(token string) {
 	}
 }
 
+// showRunning asks a running native window to come to the front.
+func showRunning() bool {
+	var in instance
+	b, err := os.ReadFile(instancePath())
+	if err != nil || json.Unmarshal(b, &in) != nil || in.Host == "" {
+		return false
+	}
+	req, _ := http.NewRequest("POST", "http://"+in.Host+"/api/show", strings.NewReader("{}"))
+	req.Header.Set("X-Token", in.Token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
 // runningInstance returns the window address of a live ppgmods, or "".
 func runningInstance() string {
 	var in instance
@@ -602,6 +646,17 @@ func (s *server) routes() http.Handler {
 		s.offerMu.Lock()
 		s.nxmOffer = nil
 		s.offerMu.Unlock()
+		writeJSON(w, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("/api/show", func(w http.ResponseWriter, r *http.Request) {
+		if s.show == nil || r.Method != http.MethodPost {
+			http.NotFound(w, r) // a browser window: the caller opens it
+			return
+		}
+		select {
+		case s.show <- struct{}{}:
+		default:
+		}
 		writeJSON(w, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {

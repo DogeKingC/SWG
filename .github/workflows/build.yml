@@ -29,21 +29,16 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+      - name: Window toolkit headers (the native window uses OpenGL)
+        run: sudo apt-get update -q && sudo apt-get install -y -q libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - run: go vet ./...
       - run: go test ./...
 
-  build:
-    needs: test
+  version:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version-file: go.mod
       - name: Pick version
         id: ver
         run: |
@@ -56,35 +51,101 @@ jobs:
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Building $v"
-      - name: Windows icon and version info
+
+  # The native window (Fyne) needs cgo, so each OS builds its own binary:
+  # Windows amd64 on Windows, Linux amd64 on Linux. The arm64 builds are
+  # built without cgo and show the browser window instead.
+  build-linux:
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Window toolkit headers
+        run: sudo apt-get update -q && sudo apt-get install -y -q libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+      - name: Windows icon and version info (arm64)
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           go install github.com/tc-hib/go-winres@v0.3.3 # module checksum verified by sum.golang.org
           num=$(echo "${VERSION#v}" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3/')
           case "$num" in *[!0-9.]*|"") num=0.0.0 ;; esac
-          go-winres simply --arch amd64,arm64 --out cmd/ppgmods/rsrc \
+          go-winres simply --arch arm64 --out cmd/ppgmods/rsrc \
             --icon internal/desktop/icons/icon-256.png --manifest gui \
             --product-name "PPG Mod Manager" --file-description "PPG Mod Manager" \
             --original-filename ppgmods.exe --product-version "$num.0" --file-version "$num.0"
       - name: Build binaries
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           mkdir dist
-          for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
-            os="${target%/*}"; arch="${target#*/}"
-            ext=""; extra=""
-            # Windows builds are GUI programs: no console window on double-click.
-            [ "$os" = windows ] && ext=".exe" && extra="-H windowsgui"
-            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w $extra -X main.version=${VERSION}" \
-              -o "dist/ppgmods-${os}-${arch}${ext}" ./cmd/ppgmods
-          done
-          cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          flags="-s -w -X main.version=${VERSION}"
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-amd64 ./cmd/ppgmods
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-arm64 ./cmd/ppgmods
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$flags -H windowsgui" -o dist/ppgmods-windows-arm64.exe ./cmd/ppgmods
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ppgmods-${{ steps.ver.outputs.version }}
+          name: part-linux
+          path: dist/*
+
+  build-windows:
+    needs: [test, version]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Windows icon and version info
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3 # module checksum verified by sum.golang.org
+          num=$(echo "${VERSION#v}" | sed -E 's/^([0-9]+)\.([0-9]+)\.([0-9]+).*/\1.\2.\3/')
+          case "$num" in *[!0-9.]*|"") num=0.0.0 ;; esac
+          go-winres simply --arch amd64 --out cmd/ppgmods/rsrc \
+            --icon internal/desktop/icons/icon-256.png --manifest gui \
+            --product-name "PPG Mod Manager" --file-description "PPG Mod Manager" \
+            --original-filename ppgmods.exe --product-version "$num.0" --file-version "$num.0"
+      - name: Build binary
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir dist
+          # Windows builds are GUI programs: no console window on double-click.
+          CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w -H windowsgui -X main.version=${VERSION}" \
+            -o dist/ppgmods-windows-amd64.exe ./cmd/ppgmods
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: part-windows
+          path: dist/*
+
+  build:
+    needs: [version, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: part-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ppgmods-${{ needs.version.outputs.version }}
           path: dist/*
 
   release:
