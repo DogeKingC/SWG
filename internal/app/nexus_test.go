@@ -1,0 +1,105 @@
+package app
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"runtime"
+	"testing"
+
+	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/DogeKingC/SWG/internal/sources"
+)
+
+// A fake Nexus Mods API, answering the way Nexus documents it.
+func fakeNexus(t *testing.T) *httptest.Server {
+	var zipped bytes.Buffer
+	zw := zip.NewWriter(&zipped)
+	w, _ := zw.Create("Nexus Test/mod.json")
+	w.Write([]byte(`{"Name":"Nexus Test","Author":"Tester","ModVersion":"2.0","Scripts":["a.cs"]}`))
+	w, _ = zw.Create("Nexus Test/a.cs")
+	w.Write([]byte(`class A {}`))
+	zw.Close()
+	var srv *httptest.Server
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/file.zip" && r.Header.Get("apikey") != "testkey" {
+			rw.WriteHeader(401)
+			return
+		}
+		switch r.URL.Path {
+		case "/v1/users/validate.json":
+			json.NewEncoder(rw).Encode(map[string]any{"user_id": 1, "name": "tester", "is_premium": false})
+		case "/v1/games/peopleplayground/mods/77/files.json":
+			json.NewEncoder(rw).Encode(map[string]any{"files": []map[string]any{
+				{"file_id": 499, "name": "Old", "file_name": "old.zip", "version": "1.0", "category_name": "OLD_VERSION", "uploaded_timestamp": 1600000000},
+				{"file_id": 500, "name": "Nexus Test", "file_name": "test.zip", "version": "2.0", "category_name": "MAIN", "uploaded_timestamp": 1700000000},
+			}})
+		case "/v1/games/peopleplayground/mods/77/files/500/download_link.json":
+			if r.URL.Query().Get("key") != "abc" || r.URL.Query().Get("expires") != "123" {
+				rw.WriteHeader(403) // free account without the link's key
+				return
+			}
+			json.NewEncoder(rw).Encode([]map[string]string{{"name": "CDN", "URI": srv.URL + "/file.zip"}})
+		case "/file.zip":
+			rw.Write(zipped.Bytes())
+		default:
+			rw.WriteHeader(404)
+		}
+	}))
+	t.Cleanup(sources.UseTestServer(srv.Client().Transport, srv.URL))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestNexusLinkAndInstallFromNXM(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	fakeNexus(t)
+	if _, err := LinkNexus("wrong"); err == nil {
+		t.Fatal("bad key accepted")
+	}
+	acct, err := LinkNexus("testkey")
+	if err != nil || acct.User != "tester" || acct.Premium {
+		t.Fatalf("link: %+v %v", acct, err)
+	}
+	if st, err := os.Stat(nexusPath()); err != nil || runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+		t.Fatalf("key file: %v %v", st.Mode(), err)
+	}
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir(), ContraptionsDir: t.TempDir()}
+	a := &App{Opt: DefaultOptions()}
+	// A free account can't download without the link's one-time key.
+	if _, err := a.fetchNexus(77, nil); err == nil {
+		t.Fatal("free account downloaded without a link")
+	}
+	if err := a.InstallNXM(m, "nxm://peopleplayground/mods/77/files/500?key=abc&expires=123&user_id=1"); err != nil {
+		t.Fatal(err)
+	}
+	inst := m.State.Mods["nx:77"]
+	if inst == nil || inst.Version != "2.0" || inst.Mirror != "nexus:77" {
+		t.Fatalf("installed: %+v", inst)
+	}
+	if err := UnlinkNexus(); err != nil || LoadNexus() != nil {
+		t.Fatal("unlink")
+	}
+}
+
+func TestParseNXM(t *testing.T) {
+	ok := "nxm://peopleplayground/mods/77/files/500?key=abc-DEF_1&expires=123&user_id=1"
+	if l, err := sources.ParseNXM(ok); err != nil || l.ModID != 77 || l.FileID != 500 || l.Key != "abc-DEF_1" {
+		t.Fatalf("%+v %v", l, err)
+	}
+	for _, bad := range []string{
+		"nxm://skyrimspecialedition/mods/1/files/2?key=a&expires=1",
+		"nxm://peopleplayground/mods/77/files/500/../../x",
+		"nxm://peopleplayground/mods/77/files/500?key=a%22%20&expires=1",
+		"nxm://peopleplayground/mods/77/files/500?key=a&expires=1;calc",
+		"https://peopleplayground/mods/77/files/500",
+	} {
+		if _, err := sources.ParseNXM(bad); err == nil {
+			t.Errorf("accepted %s", bad)
+		}
+	}
+}

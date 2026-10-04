@@ -233,3 +233,19 @@ func TestTitleVersion(t *testing.T) {
 		}
 	}
 }
+
+func TestEasierBrowser(t *testing.T) {
+	s01 := &NeedsBrowser{Mirror: "01studio:x"}
+	nx := &NeedsBrowser{Mirror: "nexus:1"}
+	mb := &NeedsBrowser{URL: "https://modsbase.com/x"}
+	if easierBrowser(easierBrowser(easierBrowser(nil, s01), nx), mb) != mb || easierBrowser(easierBrowser(nil, s01), nx) != nx || easierBrowser(nx, s01) != nx {
+		t.Fatal("wrong order: want mirror page, then Nexus, then 01 STUDIO")
+	}
+}
+
+func TestSkyTagsDecideKind(t *testing.T) {
+	if !(sources.SkyItem{Tags: []string{"building", "destructible"}}).Contraption() ||
+		(sources.SkyItem{Tags: []string{"fun", "mods"}}).Contraption() || (sources.SkyItem{}).Contraption() {
+		t.Fatal("tags")
+	}
+}

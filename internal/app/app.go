@@ -146,6 +146,7 @@ type SearchResult struct {
 	newest  time.Time
 	bestVer string // Workshop cards: highest version among the copies
 	hasVer  bool
+	kindBy  int // how sure Kind is: 0 guess, 1 Steam tags, 2 a downloaded copy's files
 }
 
 type SearchResults struct {
@@ -264,7 +265,7 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	}()
 	go func() {
 		defer wg.Done()
-		if !parts["ws"] || opt.Kind == manager.KindContraption {
+		if !parts["ws"] {
 			return
 		}
 		if opt.Sort == "popular" && strings.TrimSpace(q) == "" {
@@ -282,7 +283,7 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	}()
 	go func() {
 		defer wg.Done()
-		if !parts["ws"] || opt.Kind == manager.KindContraption {
+		if !parts["ws"] {
 			return
 		}
 		var list []sources.TMSummary
@@ -326,9 +327,20 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		e := byWS[ws]
 		if e == nil {
 			e = &SearchResult{Ref: "sky:" + ws, Source: "Steam Workshop", Name: mr.Title, Author: mr.Author,
-				URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, AfterCutoff: true}
+				URL: "https://steamcommunity.com/sharedfiles/filedetails/?id=" + ws, AfterCutoff: true, Kind: manager.KindMod}
 			byWS[ws] = e
 			order = append(order, ws)
+		}
+		// Mod or contraption: a downloaded copy's files are certain; Steam's
+		// tags (on Skymods) are right in practice: every mod upload is
+		// tagged "Mods", contraptions only their subject (Building, ...).
+		if k := copyState(mr.ID).kind; k != "" && e.kindBy < 2 {
+			e.Kind, e.kindBy = k, 2
+		} else if mr.sky != nil && len(mr.sky.Tags) > 0 && e.kindBy < 1 {
+			e.Kind, e.kindBy = manager.KindMod, 1
+			if mr.sky.Contraption() {
+				e.Kind = manager.KindContraption
+			}
 		}
 		if mr.Source == "top-mods" && mr.Image != "" {
 			e.Image = mr.Image // hosted by top-mods: still there after Valve's deletion
@@ -382,10 +394,10 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	var keepTW []SearchResult
 	for _, t := range r.TrueWS {
 		merged := false
-		if t.Kind != "contraption" {
+		{
 			for _, ws := range order {
 				e := byWS[ws]
-				if sameMod(t.Name, t.Author, e.Name, e.Author) {
+				if (t.Kind == manager.KindContraption) == (e.Kind == manager.KindContraption) && sameMod(t.Name, t.Author, e.Name, e.Author) {
 					id := "trueworkshop:" + strings.TrimPrefix(t.Ref, "tw:")
 					v := bestVersion(id, t.Name)
 					label := "True Workshop"
@@ -419,14 +431,14 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	if !parts["tw"] {
 		r.TrueWS = nil
 	}
-	if parts["ws"] && opt.Kind == manager.KindContraption {
-		r.Notes = append(r.Notes, "The Workshop mirrors (Skymods, top-mods) only carry mods, not contraptions.")
-	}
-	if parts["ws"] && opt.Sort == "popular" && strings.TrimSpace(q) != "" && opt.Kind != manager.KindContraption {
+	if parts["ws"] && opt.Sort == "popular" && strings.TrimSpace(q) != "" {
 		r.Notes = append(r.Notes, "Workshop mirror results stay in search order: the mirrors don't publish download counts for searches.")
 	}
 	for _, ws := range order {
 		e := byWS[ws]
+		if e.Kind != opt.Kind {
+			continue // the other tab's
+		}
 		if e.Author == "" {
 			e.Author = knownAuthor(ws) // from a copy's mod.json
 		}
@@ -761,9 +773,6 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 			}
 		}
 	}
-	if parts["ws"] && opt.Kind == manager.KindContraption {
-		r.Notes = append(r.Notes, "The Workshop mirrors (Skymods, top-mods) only carry mods, not contraptions.")
-	}
 	return r
 }
 
@@ -820,6 +829,7 @@ type NeedsBrowser struct {
 	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO, Nexus)
 	Mirror     string `json:"mirror,omitempty"`
 	Key        string `json:"key,omitempty"` // install under this ref instead of sky:<WorkshopID> (nx:<id>)
+	NXM        bool   `json:"nxm,omitempty"` // a linked Nexus account handles "Mod Manager Download": just open the page
 	Name       string `json:"name,omitempty"`
 	Version    string `json:"version,omitempty"`
 }
@@ -827,12 +837,17 @@ type NeedsBrowser struct {
 // nexusBrowser is the browser download of a Nexus Mods file (its files are
 // given to signed-in users).
 func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
-	return &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
+	nb := &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
 		Reason: "Nexus Mods gives its files to signed-in users: download it on the mod's Files tab"}
+	if acct := LoadNexus(); acct != nil && acct.Handler {
+		nb.NXM = true
+		nb.Reason = "click \"Mod Manager Download\" on the mod's Files tab and ppgmods installs it"
+	}
+	return nb
 }
 
 func (e *NeedsBrowser) Error() string {
-	return "modsbase.com did not give ppgmods a download link (" + e.Reason + ")"
+	return "download it in your browser: " + e.Reason
 }
 
 // Install installs gb:<id>, sky:<workshop id>, a GameBanana URL or a Steam
@@ -847,6 +862,11 @@ func (a *App) Install(m *manager.Manager, ref string) error {
 	if err != nil || c == nil {
 		return err
 	}
+	return a.installCandidate(m, ref, c)
+}
+
+// installCandidate installs a fetched candidate for ref.
+func (a *App) installCandidate(m *manager.Manager, ref string, c *manager.Candidate) error {
 	// Already installed under another ref (e.g. found by its Workshop ID
 	// and now installed from True Workshop): replace that copy instead of
 	// adding a second one next to it.
@@ -901,6 +921,9 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 		it, err := sources.NXGet(id)
 		if err != nil {
 			return nil, err
+		}
+		if acct := LoadNexus(); acct != nil && acct.Premium {
+			return a.fetchNexus(id, nil) // linked premium account: download directly
 		}
 		return nil, nexusBrowser(*it, ref)
 	}

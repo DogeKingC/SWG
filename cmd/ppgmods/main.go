@@ -179,6 +179,13 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 	case "gui":
 		g.Version = version
 		return gui.Run(a.Opt, g)
+	case "nxm":
+		// Run by the browser for Nexus Mods' "Mod Manager Download" button.
+		if len(args) != 1 {
+			return fmt.Errorf("usage: ppgmods nxm <nxm://peopleplayground/mods/...>")
+		}
+		g.Version = version
+		return gui.OpenNXM(a.Opt, g, args[0])
 	case "version":
 		fmt.Println("ppgmods", version)
 		return nil

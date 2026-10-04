@@ -5,6 +5,7 @@
 package gui
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -66,6 +67,9 @@ type server struct {
 
 	logFile  *os.File
 	relaunch string // executable to start after shutting down
+
+	offerMu  sync.Mutex
+	nxmOffer *nxmOffer // a Nexus "Mod Manager Download" link waiting for the person to confirm
 	quitOnce sync.Once
 }
 
@@ -129,6 +133,8 @@ func Run(opt app.Options, g Options) error {
 	// already open reloads into this version instead of a second window
 	// opening next to it.
 	resumePort, resumeToken := takeResume()
+	startNXM := os.Getenv(nxmEnv) // launched by a Nexus link with no window open
+	os.Unsetenv(nxmEnv)
 	if !g.NoWindow && g.Port == 0 && resumeToken == "" {
 		if url := runningInstance(); url != "" {
 			fmt.Println("ppgmods is already running; opening its window")
@@ -166,6 +172,9 @@ func Run(opt app.Options, g Options) error {
 			os.Rename(lp, lp+".1")
 		}
 		s.logFile, _ = os.OpenFile(lp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	}
+	if startNXM != "" {
+		s.offerNXM(startNXM)
 	}
 	srv := &http.Server{Handler: s.routes(), ReadHeaderTimeout: 10 * time.Second}
 	go srv.Serve(ln)
@@ -239,6 +248,26 @@ func Run(opt app.Options, g Options) error {
 
 const resumeEnv = "PPGMODS_RESUME"
 
+// nxmEnv carries a Nexus link to a window started for it.
+const nxmEnv = "PPGMODS_NXM"
+
+// OpenNXM handles `ppgmods nxm <link>` (what the browser runs for a Nexus
+// "Mod Manager Download" link): hand it to the open window, or start one
+// that shows it.
+func OpenNXM(opt app.Options, g Options, raw string) error {
+	for i := 0; i < 3; i++ {
+		if ForwardNXM(raw) {
+			return nil
+		}
+		if runningInstance() == "" {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	os.Setenv(nxmEnv, raw)
+	return Run(opt, g)
+}
+
 // takeResume reads and clears the address handed over by a restart.
 func takeResume() (int, string) {
 	v := os.Getenv(resumeEnv)
@@ -305,6 +334,148 @@ func (s *server) watchFolders() {
 			}
 		}
 	}
+}
+
+// nxmOffer is a Nexus link handed over by the browser, shown in the window
+// for the person to confirm: any website can open an nxm:// link, so a link
+// alone never installs anything.
+type nxmOffer struct {
+	URL   string    `json:"url"`
+	ModID int       `json:"mod_id"`
+	Name  string    `json:"name"`
+	Page  string    `json:"page"`
+	At    time.Time `json:"at"`
+}
+
+// offerNXM validates a link and shows it in the window.
+func (s *server) offerNXM(raw string) error {
+	link, err := sources.ParseNXM(raw)
+	if errors.Is(err, sources.ErrNXMOtherGame) {
+		s.logf("a Nexus Mods link for another game arrived; ppgmods only handles People Playground. Turn off \"Handle Mod Manager Download links\" in Settings to give them back to your other mod manager.")
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	o := &nxmOffer{URL: raw, ModID: link.ModID, Name: fmt.Sprintf("Nexus Mods mod %d", link.ModID),
+		Page: fmt.Sprintf("https://www.nexusmods.com/peopleplayground/mods/%d", link.ModID), At: time.Now()}
+	if it, err := sources.NXGet(link.ModID); err == nil {
+		o.Name = it.Name
+	}
+	s.offerMu.Lock()
+	s.nxmOffer = o
+	s.offerMu.Unlock()
+	s.logf("Nexus Mods sent %q; confirm it in the window", o.Name)
+	return nil
+}
+
+type nexusView struct {
+	Linked  bool   `json:"linked"`
+	User    string `json:"user,omitempty"`
+	Premium bool   `json:"premium,omitempty"`
+	Handler bool   `json:"handler,omitempty"`
+}
+
+func nexusStatus() nexusView {
+	a := app.LoadNexus()
+	if a == nil {
+		return nexusView{}
+	}
+	return nexusView{Linked: true, User: a.User, Premium: a.Premium, Handler: a.Handler}
+}
+
+// handleNexus links (POST {key, handler}), changes the link handler (POST
+// {handler}), or unlinks (DELETE) the Nexus Mods account. The key is never
+// sent back.
+func (s *server) handleNexus(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, nexusStatus())
+		return
+	case http.MethodDelete:
+		if a := app.LoadNexus(); a != nil && a.Handler {
+			desktop.UnregisterNXM(a.PrevNXM)
+		}
+		if err := app.UnlinkNexus(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.logf("Nexus Mods account unlinked")
+		writeJSON(w, nexusStatus())
+		return
+	case http.MethodPost:
+	default:
+		http.Error(w, "GET, POST or DELETE", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Key     string `json:"key"`
+		Handler *bool  `json:"handler"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	acct := app.LoadNexus()
+	if req.Key != "" {
+		a, err := app.LinkNexus(req.Key)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		acct = a
+		s.logf("linked Nexus Mods account %s (%s)", a.User, map[bool]string{true: "premium", false: "free"}[a.Premium])
+	}
+	if acct == nil {
+		http.Error(w, "link an account first", http.StatusBadRequest)
+		return
+	}
+	if req.Handler != nil && *req.Handler != acct.Handler {
+		if *req.Handler {
+			exe := desktop.InstallPath()
+			if !desktop.InstalledCopyExists() {
+				exe = desktop.Executable() // not installed: links go to this copy
+			}
+			prev, err := desktop.RegisterNXM(exe)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				writeJSON(w, map[string]string{"error": err.Error()})
+				return
+			}
+			acct.Handler, acct.PrevNXM = true, prev
+			s.logf("ppgmods now opens Nexus Mods \"Mod Manager Download\" links")
+		} else {
+			desktop.UnregisterNXM(acct.PrevNXM)
+			acct.Handler, acct.PrevNXM = false, ""
+			s.logf("Nexus Mods links handed back to the previous handler")
+		}
+		if err := acct.Save(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, nexusStatus())
+}
+
+// ForwardNXM hands a Nexus link to a running ppgmods window. It reports
+// whether one took it.
+func ForwardNXM(raw string) bool {
+	var in instance
+	b, err := os.ReadFile(instancePath())
+	if err != nil || json.Unmarshal(b, &in) != nil || in.Host == "" {
+		return false
+	}
+	body, _ := json.Marshal(map[string]string{"url": raw})
+	req, _ := http.NewRequest("POST", "http://"+in.Host+"/api/nxm-offer", bytes.NewReader(body))
+	req.Header.Set("X-Token", in.Token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // looksComplete reports whether a folder holds a mod.json or a .jaap file
@@ -411,6 +582,27 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/details", s.handleDetails)
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/thumb", s.handleThumb)
+	mux.HandleFunc("/api/nexus", s.handleNexus)
+	mux.HandleFunc("/api/nxm-offer", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			URL string `json:"url"`
+		}
+		if r.Method != http.MethodPost || json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			http.Error(w, "POST {url}", http.StatusBadRequest)
+			return
+		}
+		if err := s.offerNXM(req.URL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("/api/nxm-dismiss", func(w http.ResponseWriter, r *http.Request) {
+		s.offerMu.Lock()
+		s.nxmOffer = nil
+		s.offerMu.Unlock()
+		writeJSON(w, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("/api/quit", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 		go func() { time.Sleep(200 * time.Millisecond); s.stop("") }()
@@ -515,7 +707,12 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	s.jobMu.Lock()
 	j := s.job
 	s.jobMu.Unlock()
+	s.offerMu.Lock()
+	offer := s.nxmOffer
+	s.offerMu.Unlock()
 	writeJSON(w, map[string]any{
+		"nxm_offer":  offer,
+		"nexus":      nexusStatus(),
 		"version":    s.version,
 		"paths":      paths,
 		"installed":  mods,
@@ -775,6 +972,16 @@ func (s *server) do(j *job, req actionReq) error {
 		sum := a.Update(m)
 		j.Summary = &sum
 		return nil
+	case "nxm":
+		// Only from the window, after the person confirmed the offer.
+		s.offerMu.Lock()
+		offer := s.nxmOffer
+		s.nxmOffer = nil
+		s.offerMu.Unlock()
+		if offer == nil || offer.URL != req.Path {
+			return fmt.Errorf("that Nexus link is no longer waiting; click Mod Manager Download again")
+		}
+		return a.InstallNXM(m, offer.URL)
 	case "repair":
 		sum := a.Repair(m, req.Refs)
 		j.Summary = &sum

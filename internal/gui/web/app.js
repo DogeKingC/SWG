@@ -155,6 +155,8 @@ async function refreshState() {
     markInstalledCards();
   }
   renderDesktop(state.desktop);
+  renderNexus(state.nexus);
+  showNXMOffer(state.nxm_offer);
   if (state.job && state.job.running && !state.job.background && !lastJobId) lastJobId = state.job.id;
   if (!lastJobId) setJob(state.job);
 }
@@ -334,6 +336,12 @@ function jobDone(j) {
     body.push(el("p", { class: "small" }, "The log at the bottom has the full details."));
   }
   let extra = null;
+  if (j.browser && j.browser.nxm) {
+    dialog("Get it from Nexus Mods", [el("p", {}, "On the mod's Files tab, click ", el("b", {}, "Mod Manager Download"), ". ppgmods asks you to confirm, then downloads, scans and installs it.")],
+      { label: "Open Files tab", run: () => api("/api/open?what=url&url=" + encodeURIComponent(j.browser.url)) });
+    $("#dlgExtra").className = "btn btn-primary";
+    return;
+  }
   if (j.browser && j.retry) {
     body.splice(0, body.length,
       el("p", {}, "This copy has to be downloaded in your browser: " + j.browser.reason + "."),
@@ -407,8 +415,8 @@ function syncBrowse() {
   $("#sortSel").value = browse.sort;
   $("#periodSel").value = browse.period;
   $("#periodSel").hidden = browse.sort !== "popular";
-  // The Workshop mirrors and 01 STUDIO only carry mods.
-  const forContraptions = ["all", "gb", "nx", "tw"];
+  // 01 STUDIO only publishes mods.
+  const forContraptions = ["all", "gb", "nx", "tw", "sky"];
   for (const o of $$("#srcSel option")) o.hidden = browse.kind === "contraption" && !forContraptions.includes(o.value);
   if (browse.kind === "contraption" && !forContraptions.includes(src)) src = "all";
   $("#srcSel").value = src;
@@ -442,7 +450,7 @@ async function search(q, p) {
   const grid = $("#results");
   const errs = $("#searchErrors");
   const parts = src === "all"
-    ? (browse.kind === "contraption" ? ["tw", "gb", "nx"] : ["tw", "gb", "ws", "s01", "nx"])
+    ? (browse.kind === "contraption" ? ["tw", "gb", "nx", "ws"] : ["tw", "gb", "ws", "s01", "nx"])
     : [src === "sky" ? "ws" : src];
   const pending = new Set(parts);
   const lists = { gb: [], tw: [], ws: [], s01: [], nx: [] };
@@ -801,7 +809,9 @@ function showCheck(m, p) {
     unavailable: ["verdict-bad", "✕ This mod's mirror copy is gone."],
   }[p.verdict] || ["verdict-bad", p.verdict];
   box.push(el("div", { class: "verdict " + text[0] }, text[1]));
-  if (p.verdict === "browser") {
+  if (p.verdict === "browser" && p.browser?.nxm) {
+    box.push(el("p", { class: "small" }, "On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."));
+  } else if (p.verdict === "browser") {
     box.push(el("p", { class: "small" }, "Reason: " + (p.browser?.reason || "unknown") + ". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."));
   }
   if (p.reasons && p.reasons.length && p.verdict !== "browser") {
@@ -835,6 +845,11 @@ function setDetailActions(m, p) {
   btn.textContent = installed ? "Reinstall" : "Install";
   if (!p) { btn.textContent = installed ? "Reinstall" : "Install"; return; }
   if (p.verdict === "blocked" || p.verdict === "error" || p.verdict === "unavailable") { btn.disabled = true; return; }
+  if (p.verdict === "browser" && p.browser?.nxm) {
+    btn.textContent = "Open Files tab";
+    btn.onclick = () => api("/api/open?what=url&url=" + encodeURIComponent(p.browser.url));
+    return;
+  }
   if (p.verdict === "browser") {
     btn.textContent = "Open download page";
     btn.onclick = () => { $("#details").close(); install(m.ref, m.name, { browser: true }, detailsMirror); };
@@ -994,6 +1009,66 @@ async function restartApp(which, msg) {
   }
   note.textContent = "PPG Mod Manager restarted in a new window.";
   window.close(); // works for app windows the program opened; otherwise the note stays
+}
+
+// ---------- Nexus Mods ----------
+// renderNexus shows the account link in Settings. The key is typed once and
+// never shown again (the server doesn't send it back).
+let nexusShown = "";
+function renderNexus(n) {
+  n = n || {};
+  const sig = JSON.stringify(n);
+  if (sig === nexusShown) return;
+  nexusShown = sig;
+  const box = $("#nexusBox");
+  const keyLink = el("a", { href: "#", onclick: (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent("https://www.nexusmods.com/users/myaccount?tab=api+access")); } }, "your Nexus account's API page");
+  if (!n.linked) {
+    const input = el("input", { type: "password", placeholder: "Personal API key", autocomplete: "off", spellcheck: "false" });
+    const handler = el("input", { type: "checkbox", checked: true });
+    box.replaceChildren(
+      el("p", { class: "small" }, "Link your account to install from Nexus Mods without saving files by hand. Copy your personal API key from ", keyLink,
+        " (at the bottom, \"Personal API Key\"). It stays on this PC and is only sent to Nexus Mods."),
+      el("div", { class: "row" }, input, el("button", { class: "btn btn-primary", onclick: async () => {
+        try {
+          await api("/api/nexus", { body: { key: input.value.trim(), handler: handler.checked } });
+          input.value = "";
+          nexusShown = "";
+          refreshState();
+          toast("Nexus Mods account linked");
+        } catch (e) { toast(e.message, 7000); }
+      } }, "Link account")),
+      el("label", { class: "check" }, handler, " Handle \"Mod Manager Download\" links",
+        el("span", { class: "hint" }, "Free accounts: that button on a mod's Files tab sends the file to ppgmods. While this is on, Vortex or Mod Organizer don't get Nexus links (for other games either); turning it off gives them back.")),
+    );
+    return;
+  }
+  const handler = el("input", { type: "checkbox", checked: !!n.handler, onchange: async () => {
+    try { await api("/api/nexus", { body: { handler: handler.checked } }); nexusShown = ""; refreshState(); } catch (e) { toast(e.message, 7000); handler.checked = !handler.checked; }
+  } });
+  box.replaceChildren(
+    el("p", {}, "Linked as ", el("b", {}, n.user), n.premium ? el("span", { class: "badge badge-ok" }, "premium") : el("span", { class: "badge" }, "free")),
+    el("p", { class: "small" }, n.premium
+      ? "Install downloads from Nexus Mods directly."
+      : "Free accounts download through the site: Install opens the mod's Files tab, where \"Mod Manager Download\" sends the file to ppgmods."),
+    el("label", { class: "check" }, handler, " Handle \"Mod Manager Download\" links",
+      el("span", { class: "hint" }, "While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either; turning it off gives them back.")),
+    el("div", {}, el("button", { class: "btn btn-ghost btn-sm", onclick: () => dialog("Unlink Nexus Mods?", [el("p", {}, "ppgmods forgets your API key and gives Nexus links back to the previous handler.")],
+      { label: "Unlink", run: async () => { await api("/api/nexus", { method: "DELETE" }).catch((e) => toast(e.message)); nexusShown = ""; refreshState(); } }) }, "Unlink account")),
+  );
+}
+
+// showNXMOffer asks before installing what a Nexus link sent: any website
+// can open such a link, so it never installs by itself.
+let nxmShownAt = "";
+function showNXMOffer(o) {
+  if (!o || o.at === nxmShownAt) return;
+  nxmShownAt = o.at;
+  dialog("Install from Nexus Mods?", [
+    el("p", {}, "Nexus Mods sent ", el("b", {}, o.name), " to ppgmods."),
+    el("p", { class: "small" }, "It will be downloaded and scanned like any mod before it is installed. If you didn't just click Mod Manager Download, close this."),
+  ], { label: "Install", run: () => run({ action: "nxm", path: o.url }, "Installing " + o.name + " from Nexus Mods") });
+  $("#dlgExtra").className = "btn btn-primary";
+  $("#dlgClose").onclick = () => { $("#dialog").close(); api("/api/nxm-dismiss", { body: {} }).catch(() => {}); $("#dlgClose").onclick = () => $("#dialog").close(); };
 }
 
 // ---------- start ----------

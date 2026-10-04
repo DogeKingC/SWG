@@ -119,3 +119,42 @@ func Launch(exe string, args ...string) error {
 	c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008 | 0x00000200} // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
 	return c.Start()
 }
+
+const nxmKey = `HKCU\Software\Classes\nxm`
+
+// RegisterNXM makes ppgmods open nxm:// links (Nexus Mods' "Mod Manager
+// Download" button) for this user and returns the previous handler's
+// command, to restore later.
+func RegisterNXM(exe string) (string, error) {
+	prev := ""
+	if out, err := hidden("reg", "query", `HKCR\nxm\shell\open\command`, "/ve").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if i := strings.Index(line, "REG_SZ"); i >= 0 {
+				prev = strings.TrimSpace(line[i+len("REG_SZ"):])
+			}
+		}
+		if strings.Contains(strings.ToLower(prev), strings.ToLower(filepath.Base(exe))) {
+			prev = "" // already ours
+		}
+	}
+	cmd := `"` + exe + `" nxm "%1"`
+	for _, args := range [][]string{
+		{"add", nxmKey, "/ve", "/d", "URL:Nexus Mods link", "/f"},
+		{"add", nxmKey, "/v", "URL Protocol", "/d", "", "/f"},
+		{"add", nxmKey + `\shell\open\command`, "/ve", "/d", cmd, "/f"},
+	} {
+		if err := hidden("reg", args...).Run(); err != nil {
+			return prev, fmt.Errorf("registering nxm links: %v", err)
+		}
+	}
+	return prev, nil
+}
+
+// UnregisterNXM gives nxm:// links back to the previous handler.
+func UnregisterNXM(prev string) {
+	if prev != "" {
+		hidden("reg", "add", nxmKey+`\shell\open\command`, "/ve", "/d", prev, "/f").Run()
+		return
+	}
+	hidden("reg", "delete", nxmKey, "/f").Run()
+}

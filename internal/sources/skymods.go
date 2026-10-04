@@ -27,7 +27,25 @@ type SkyItem struct {
 	Mirrored    time.Time `json:"mirrored"`
 	Size        string    `json:"size"`
 	Image       string    `json:"image"`
+	Tags        []string  `json:"tags,omitempty"` // Steam Workshop tags, e.g. "mods", "building", "vehicles"
 }
+
+// Contraption reports what the Workshop tags say: People Playground tags
+// every mod upload "Mods"; contraptions only carry their subject tags
+// (Building, Vehicles, Destructible...).
+func (it SkyItem) Contraption() bool {
+	if len(it.Tags) == 0 {
+		return false // unknown
+	}
+	for _, t := range it.Tags {
+		if t == "mods" {
+			return false
+		}
+	}
+	return true
+}
+
+var reSkyTag = regexp.MustCompile(`/category/([a-z0-9-]+)\?app=`)
 
 var (
 	reArticle  = regexp.MustCompile(`(?s)<article\b.*?</article>`)
@@ -159,6 +177,13 @@ func ParseSkyPage(page string) []SkyItem {
 			it.Mirrored = t.UTC()
 		}
 		it.Revision = ParseSteamDate(it.RevisionRaw, it.Mirrored)
+		seen := map[string]bool{}
+		for _, m := range reSkyTag.FindAllStringSubmatch(a, -1) {
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				it.Tags = append(it.Tags, m[1])
+			}
+		}
 		if it.WorkshopID != "" {
 			items = append(items, it)
 		}

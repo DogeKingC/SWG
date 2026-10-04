@@ -377,6 +377,7 @@ type copyInfo struct {
 	version, ugc string
 	gone         bool
 	invalid      string // why the copy is not offered: no mod.json, no author
+	kind         string // mod or contraption, from the downloaded files
 }
 
 // What was learned about mirror copies is kept on disk for a week, so a
@@ -387,6 +388,7 @@ type savedCopy struct {
 	UGC     string    `json:"ugc,omitempty"`
 	Gone    bool      `json:"gone,omitempty"`
 	Invalid string    `json:"invalid,omitempty"`
+	Kind    string    `json:"kind,omitempty"`
 	At      time.Time `json:"at"`
 }
 
@@ -421,7 +423,7 @@ func loadModInfo() {
 	for id, c := range saved {
 		if time.Since(c.At) < 7*24*time.Hour {
 			if _, ok := modInfo[id]; !ok {
-				modInfo[id] = copyInfo{version: c.Version, ugc: c.UGC, gone: c.Gone, invalid: c.Invalid}
+				modInfo[id] = copyInfo{version: c.Version, ugc: c.UGC, gone: c.Gone, invalid: c.Invalid, kind: c.Kind}
 			}
 		}
 	}
@@ -441,7 +443,7 @@ func setCopyInfo(id string, ci copyInfo) {
 	if b, err := os.ReadFile(p); err == nil {
 		json.Unmarshal(b, &saved)
 	}
-	saved[id] = savedCopy{Version: ci.version, UGC: ci.ugc, Gone: ci.gone, Invalid: ci.invalid, At: time.Now()}
+	saved[id] = savedCopy{Version: ci.version, UGC: ci.ugc, Gone: ci.gone, Invalid: ci.invalid, Kind: ci.kind, At: time.Now()}
 	if b, err := json.Marshal(saved); err == nil {
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, b, 0o644)
@@ -628,9 +630,10 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		if len(copies) == 4 {
 			break
 		}
-		if mr.s01 != nil || mr.nx != nil {
+		nexusDirect := mr.nx != nil && nexusPremium()
+		if (mr.s01 != nil || mr.nx != nil) && !nexusDirect {
 			nb := &NeedsBrowser{URL: mr.Page, WorkshopID: ws, AnyFile: true, Mirror: mr.ID,
-				Reason: "01 STUDIO gives its files to signed-in users: download it on its page"}
+				Reason: "01 STUDIO only gives its files to signed-in users, some only to supporters"}
 			if mr.nx != nil {
 				nb = nexusBrowser(*mr.nx, "")
 				nb.WorkshopID = ws
@@ -638,9 +641,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			if a.Opt.Mirror == mr.ID {
 				return nil, nb // picked: download it in the browser
 			}
-			if browser == nil {
-				browser = nb // only if no mirror can provide a copy
-			}
+			browser = easierBrowser(browser, nb) // only if no mirror can provide a copy
 			continue
 		}
 		if ci := copyState(mr.ID); a.Opt.Mirror == "" && (ci.gone || ci.invalid != "") {
@@ -653,7 +654,13 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			continue
 		}
 		a.logf("%s: %s%s (Workshop %s), %s, %s", mr.Source, mr.Title, By(mr.Author), ws, mr.Version, mr.Size)
-		path, err := a.downloadMirror(mr, ws)
+		var path string
+		var err error
+		if nexusDirect {
+			path, _, err = a.downloadNexus(mr.nx.ID, nil) // linked premium account
+		} else {
+			path, err = a.downloadMirror(mr, ws)
+		}
 		var nb *NeedsBrowser
 		switch {
 		case errors.Is(err, sources.ErrGone):
@@ -662,9 +669,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			setCopyInfo(mr.ID, copyInfo{gone: true})
 			continue
 		case errors.As(err, &nb):
-			if browser == nil {
-				browser = nb
-			}
+			browser = easierBrowser(browser, nb)
 			continue
 		case err != nil:
 			a.logf("  %s: %v", mr.Source, err)
@@ -690,6 +695,11 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			// check does not apply; the cooldown applies unless reviewed.
 			c.SteamOrig, c.Reviewed, c.Revision = false, mr.Reviewed, mr.tw.CreatedTime()
 		}
+		if mr.nx != nil {
+			// From Nexus Mods, not Steam: no worm-cutoff check; the cooldown
+			// applies (Nexus uploads aren't reviewed).
+			c.SteamOrig, c.Revision = false, mr.VersionTime
+		}
 		in := inspect(m, c)
 		version, ugc, clean, max := in.version, in.ugc, in.clean, in.max
 		invalid := ""
@@ -700,7 +710,14 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		case !in.contraption && in.author == "" && strings.TrimSpace(mr.Author) == "":
 			invalid = "no author in its mod.json or on the mirror page"
 		}
-		setCopyInfo(mr.ID, copyInfo{version: version, ugc: ugc, invalid: invalid})
+		kind := ""
+		switch {
+		case in.contraption:
+			kind = manager.KindContraption
+		case in.modJSON:
+			kind = manager.KindMod
+		}
+		setCopyInfo(mr.ID, copyInfo{version: version, ugc: ugc, invalid: invalid, kind: kind})
 		if invalid != "" {
 			a.logf("  this copy has %s; skipped", invalid)
 			gone = append(gone, mr.Source+": "+invalid)
@@ -761,6 +778,32 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		a.logf("  %s copy (version %s) flagged by the scanner (%s)", cc.mr.Source, orUnknown(cc.version), cc.max)
 	}
 	return copies[0].c, nil // every copy is flagged: let the install policy report the newest
+}
+
+// easierBrowser picks the browser download that is easiest for the person:
+// a mirror's page (no account), then Nexus Mods (a free account), then
+// 01 STUDIO (an account, some files for supporters only).
+func easierBrowser(have, nb *NeedsBrowser) *NeedsBrowser {
+	rank := func(b *NeedsBrowser) int {
+		switch {
+		case b == nil:
+			return 9
+		case strings.HasPrefix(b.Mirror, "01studio:"):
+			return 2
+		case strings.HasPrefix(b.Mirror, "nexus:"):
+			return 1
+		}
+		return 0
+	}
+	if rank(nb) < rank(have) {
+		return nb
+	}
+	return have
+}
+
+func nexusPremium() bool {
+	a := LoadNexus()
+	return a != nil && a.Premium
 }
 
 func orUnknown(s string) string {

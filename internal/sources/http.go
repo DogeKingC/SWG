@@ -128,3 +128,11 @@ func saveHashed(f *os.File, r io.Reader, maxBytes int64) (string, string, error)
 
 func createFile(p string) (*os.File, error) { return os.Create(p) }
 func removeFile(p string)                   { os.Remove(p) }
+
+// UseTestServer points the sources at a test server: requests go through rt
+// and the Nexus APIs to base. It returns a function that undoes it.
+func UseTestServer(rt http.RoundTripper, base string) func() {
+	oldT, oldV1, oldQL := client.Transport, NXV1, nxGraphQL
+	client.Transport, NXV1, nxGraphQL = rt, base+"/v1", base+"/v2/graphql"
+	return func() { client.Transport, NXV1, nxGraphQL = oldT, oldV1, oldQL }
+}

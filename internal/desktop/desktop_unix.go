@@ -108,3 +108,45 @@ func Launch(exe string, args ...string) error {
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return c.Start()
 }
+
+const nxmDesktop = "ppgmods-nxm.desktop"
+
+// RegisterNXM makes ppgmods open nxm:// links (Nexus Mods' "Mod Manager
+// Download" button) and returns the previous handler, to restore later.
+func RegisterNXM(exe string) (string, error) {
+	prev := ""
+	if out, err := exec.Command("xdg-mime", "query", "default", "x-scheme-handler/nxm").Output(); err == nil {
+		if p := strings.TrimSpace(string(out)); p != nxmDesktop {
+			prev = p
+		}
+	}
+	file := filepath.Join(dataHome(), "applications", nxmDesktop)
+	os.MkdirAll(filepath.Dir(file), 0o755)
+	content := fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=%s (Nexus Mods links)
+Exec="%s" nxm %%u
+Icon=ppgmods
+NoDisplay=true
+Terminal=false
+MimeType=x-scheme-handler/nxm;
+`, AppName, exe)
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		return prev, err
+	}
+	exec.Command("update-desktop-database", filepath.Dir(file)).Run()
+	if err := exec.Command("xdg-mime", "default", nxmDesktop, "x-scheme-handler/nxm").Run(); err != nil {
+		return prev, fmt.Errorf("xdg-mime: %v", err)
+	}
+	return prev, nil
+}
+
+// UnregisterNXM gives nxm:// links back to the previous handler.
+func UnregisterNXM(prev string) {
+	file := filepath.Join(dataHome(), "applications", nxmDesktop)
+	os.Remove(file)
+	if prev != "" {
+		exec.Command("xdg-mime", "default", prev, "x-scheme-handler/nxm").Run()
+	}
+	exec.Command("update-desktop-database", filepath.Dir(file)).Run()
+}

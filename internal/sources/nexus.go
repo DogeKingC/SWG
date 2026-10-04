@@ -22,10 +22,12 @@ import (
 // files page in the browser and imports what lands in Downloads.
 
 const (
-	nxGraphQL = "https://api.nexusmods.com/v2/graphql"
-	nxGame    = "peopleplayground"
-	nxSite    = "https://www.nexusmods.com/peopleplayground/mods/"
+	nxGame = "peopleplayground"
+	nxSite = "https://www.nexusmods.com/peopleplayground/mods/"
 )
+
+// nxGraphQL is Nexus's public API (a variable so tests can point it elsewhere).
+var nxGraphQL = "https://api.nexusmods.com/v2/graphql"
 
 // NXMod is one Nexus Mods entry.
 type NXMod struct {

@@ -35,3 +35,14 @@ func TestParseSteamDateWithoutYear(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestSkyTags(t *testing.T) {
+	items := ParseSkyPage(read(t, "testdata/skymods_page.html"))
+	got := map[string]bool{}
+	for _, it := range items {
+		got[it.Title] = it.Contraption()
+	}
+	if !got["Arracourt France 1944"] || got["Quick Draw Mod"] {
+		t.Fatalf("contraption flags: %v", got)
+	}
+}
