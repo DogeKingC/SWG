@@ -483,6 +483,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 
 type installedPane struct {
 	u         *ui
+	compiler  *fyne.Container
 	root      fyne.CanvasObject
 	kind      *tabBar
 	list      *fyne.Container
@@ -494,7 +495,7 @@ type installedPane struct {
 }
 
 func newInstalled(u *ui) *installedPane {
-	p := &installedPane{u: u, list: container.New(&vlist{gap: 8}), missing: tight(), verify: tight()}
+	p := &installedPane{u: u, list: container.New(&vlist{gap: 8}), missing: tight(), verify: tight(), compiler: tight()}
 	sel := 0
 	if u.app.Preferences().String("installed.kind") == "contraption" {
 		sel = 1
@@ -522,7 +523,7 @@ func newInstalled(u *ui) *installedPane {
 	p.missing.Hide()
 	p.verify.Hide()
 	p.root = view(container.New(&vlist{gap: 12}, h1("Installed"), p.kind.root,
-		flowBox(8, check, apply, verify, find, p.openMods, p.openContr), p.missing, p.verify, p.list))
+		flowBox(8, check, apply, verify, find, p.openMods, p.openContr), p.compiler, p.missing, p.verify, p.list))
 	return p
 }
 
@@ -537,6 +538,7 @@ func (p *installedPane) render() {
 	u := p.u
 	all := u.state().Installed
 	p.renderMissing(all)
+	p.renderCompiler()
 	isC := func(m installedView) bool { return m.ItemKind == "contraption" }
 	nm, nc := 0, 0
 	for _, m := range all {
@@ -658,6 +660,29 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	}
 	return panelBox(container.NewBorder(nil, nil, vcenter(thumb), vcenter(actions),
 		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 8), vcenter(main))))
+}
+
+// renderCompiler explains that script mods need RE_PPG on 1.27 and later.
+func (p *installedPane) renderCompiler() {
+	st := p.u.state()
+	if st.NeedCompiler == 0 {
+		p.compiler.Hide()
+		return
+	}
+	pl := pal()
+	msg := fmt.Sprintf("%d installed mods are C# script mods. People Playground 1.27 and later can't run C# mods on its own (it removed its compiler after the worms); they need RE_PPG, a community loader. Contraptions and mods without scripts work as usual.", st.NeedCompiler)
+	if st.Loader.REPPG && st.Loader.REPPGDisabled {
+		msg = fmt.Sprintf("RE_PPG is installed but turned off (RE_PPG/disable-runtime.flag), so your %d C# script mods won't run.", st.NeedCompiler)
+	}
+	l := text(msg)
+	l.Importance = widget.WarningImportance
+	page := widget.NewButton("About RE_PPG", func() { p.u.openURL("https://github.com/AlibardaWasTaken/RE_PPG") })
+	page.Importance = widget.LowImportance
+	p.compiler.Objects = []fyne.CanvasObject{tintBox(container.New(&vlist{gap: 0}, l,
+		muted("RE_PPG runs mods with full access to your PC, like the game used to. ppgmods' checks still apply to everything you install here."),
+		container.NewHBox(page)), pl.warnBg)}
+	p.compiler.Refresh()
+	p.compiler.Show()
 }
 
 // renderMissing offers to restore tracked items whose folders disappeared.
@@ -923,6 +948,7 @@ type settingsView struct {
 	dirty     bool
 	nexus     *fyne.Container
 	paths     *widget.Label
+	setup     *fyne.Container
 	appInfo   *widget.Label
 	install   *widget.Button
 	uninstall *widget.Button
@@ -961,7 +987,7 @@ func narrow(w float32, o fyne.CanvasObject) fyne.CanvasObject { return container
 
 func newSettings(u *ui) *settingsView {
 	v := &settingsView{u: u, game: widget.NewEntry(), gameHint: muted(""), cooldown: widget.NewEntry(), nexus: container.New(&vlist{gap: 6}),
-		paths: widget.NewLabel(""), appInfo: muted(""), version: widget.NewLabel(""), about: muted("")}
+		paths: widget.NewLabel(""), appInfo: muted(""), setup: container.New(&vlist{gap: 4}), version: widget.NewLabel(""), about: muted("")}
 	v.paths.TextStyle = fyne.TextStyle{Monospace: true}
 	v.paths.SizeName = sSmall
 	v.paths.Wrapping = fyne.TextWrapBreak
@@ -1015,6 +1041,7 @@ func newSettings(u *ui) *settingsView {
 	}
 	v.root = view(container.New(&vlist{gap: 22},
 		tight(h1("Settings"), narrow(620, form)),
+		section("Game setup", narrow(720, panelBox(v.setup))),
 		section("Nexus Mods", narrow(720, panelBox(v.nexus))),
 		section("Folders", panelBox(v.paths), container.NewHBox(openData)),
 		section("This app", v.appInfo, container.NewHBox(v.install, v.uninstall)),
@@ -1054,6 +1081,7 @@ func (v *settingsView) update(st *stateView) {
 		"ppgmods data:  " + p.Data,
 	}, "\n"))
 	v.version.SetText("ppgmods " + st.Version)
+	v.renderSetup(st)
 	v.renderNexus(st.Nexus)
 }
 
@@ -1077,6 +1105,42 @@ func (v *settingsView) renderDesktop(st *stateView, where string) {
 	} else {
 		v.uninstall.Hide()
 	}
+}
+
+// renderSetup shows how C# mods run in this game: BepInEx and RE_PPG.
+func (v *settingsView) renderSetup(st *stateView) {
+	l := st.Loader
+	row := func(name string, ok bool, detail string) fyne.CanvasObject {
+		k, s := pNeutral, "not installed"
+		if ok {
+			k, s = pOK, "installed"
+		}
+		return container.NewHBox(widget.NewLabelWithStyle(name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			container.NewCenter(pill(s, k)), muted(detail))
+	}
+	if st.Paths.Game == "" {
+		v.setup.Objects = []fyne.CanvasObject{muted("Set the game folder above first.")}
+		v.setup.Refresh()
+		return
+	}
+	bepDetail := ""
+	if l.BepInExVersion != "" {
+		bepDetail = "version " + l.BepInExVersion
+	}
+	reDetail := "needed for C# mods on 1.27 and later"
+	if l.REPPG {
+		reDetail = orStr(map[bool]string{true: "version " + l.REPPGVersion}[l.REPPGVersion != ""], "")
+		if l.REPPGDisabled {
+			reDetail = "turned off (disable-runtime.flag)"
+		}
+	}
+	objs := []fyne.CanvasObject{
+		row("BepInEx", l.BepInEx, bepDetail),
+		row("RE_PPG", l.REPPG, reDetail),
+		muted(fmt.Sprintf("%d BepInEx plugins, %d patchers. Verify files (Installed) checks them for the worms.", len(l.Plugins), len(l.Patchers))),
+	}
+	v.setup.Objects = objs
+	v.setup.Refresh()
 }
 
 // renderNexus shows the account link. The key is typed once and never shown

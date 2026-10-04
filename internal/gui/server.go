@@ -32,6 +32,7 @@ import (
 
 	"github.com/DogeKingC/SWG/internal/app"
 	"github.com/DogeKingC/SWG/internal/desktop"
+	"github.com/DogeKingC/SWG/internal/game"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/selfupdate"
 	"github.com/DogeKingC/SWG/internal/sources"
@@ -787,16 +788,30 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	s.offerMu.Lock()
 	offer := s.nxmOffer
 	s.offerMu.Unlock()
+	loader := game.DetectLoader(paths.Game)
+	noCompiler := 0
+	if !loader.REPPG || loader.REPPGDisabled {
+		for _, m := range mods {
+			for f := range m.Files {
+				if strings.HasSuffix(strings.ToLower(f), ".cs") {
+					noCompiler++
+					break
+				}
+			}
+		}
+	}
 	writeJSON(w, map[string]any{
-		"nxm_offer":  offer,
-		"nexus":      nexusStatus(),
-		"version":    s.version,
-		"paths":      paths,
-		"installed":  mods,
-		"job":        j,
-		"settings":   settingsFrom(s.opt),
-		"cutoff":     manager.WormCutoff.Format("2006-01-02"),
-		"lastBackup": lastBackup(paths.Data),
+		"loader":                loader,
+		"scripts_need_compiler": noCompiler,
+		"nxm_offer":             offer,
+		"nexus":                 nexusStatus(),
+		"version":               s.version,
+		"paths":                 paths,
+		"installed":             mods,
+		"job":                   j,
+		"settings":              settingsFrom(s.opt),
+		"cutoff":                manager.WormCutoff.Format("2006-01-02"),
+		"lastBackup":            lastBackup(paths.Data),
 		"desktop": map[string]any{
 			"installed":    desktop.IsInstalled(),
 			"copy_exists":  desktop.InstalledCopyExists(),

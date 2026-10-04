@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/archive"
+	"github.com/DogeKingC/SWG/internal/game"
 	"github.com/DogeKingC/SWG/internal/scan"
 )
 
@@ -652,35 +653,65 @@ func (m *Manager) verifyGameCode() []Problem {
 	}
 	game := filepath.Dir(m.ModsDir)
 	var probs []Problem
-	check := func(dir, label, fix string) {
-		ents, err := os.ReadDir(dir)
-		if err != nil {
-			return
+	checkFile := func(p, label, fix string) {
+		why := ""
+		if h, err := fileSHA(p); err == nil && m.Blocklist != nil {
+			if b, ok := m.Blocklist.sha[h]; ok {
+				why = "blocklisted: " + b.Reason
+			}
 		}
-		for _, e := range ents {
-			if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".dll") {
-				continue
-			}
-			p := filepath.Join(dir, e.Name())
-			why := ""
-			if h, err := fileSHA(p); err == nil && m.Blocklist != nil {
-				if b, ok := m.Blocklist.sha[h]; ok {
-					why = "blocklisted: " + b.Reason
-				}
-			}
-			if why == "" {
-				why = scan.WormDLL(p)
-			}
-			if why != "" {
-				probs = append(probs, Problem{filepath.Join(label, e.Name()), "WORM: " + why + ". " + fix, true, ""})
-			}
+		if why == "" {
+			why = scan.WormDLL(p)
+		}
+		if why != "" {
+			probs = append(probs, Problem{label, "WORM: " + why + ". " + fix, true, ""})
+		}
+	}
+	check := func(dir, label, fix string) {
+		for _, rel := range gameDLLs(dir) {
+			checkFile(filepath.Join(dir, filepath.FromSlash(rel)), label+"/"+rel, fix)
 		}
 	}
 	check(filepath.Join(game, "CompiledMods"), "CompiledMods", "Delete the CompiledMods folder (the game rebuilds it), remove the mod it came from, and reset your Discord and Steam passwords.")
 	check(filepath.Join(game, "CompiledModAssemblies"), "CompiledModAssemblies", "Delete that folder (the game rebuilds it) and remove the mod it came from.")
 	check(filepath.Join(game, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (Steam: Properties → Installed Files → Verify integrity) and reset your Discord and Steam passwords.")
+	// BepInEx (used by RE_PPG) runs plugins before every mod and before the
+	// game's own checks: the most valuable place for malware to sit.
+	bepFix := "Delete that file, reinstall BepInEx and RE_PPG from their official releases, and reset your Discord and Steam passwords."
+	for _, sub := range []string{"plugins", "patchers", "core"} {
+		check(filepath.Join(game, "BepInEx", sub), "BepInEx/"+sub, bepFix)
+	}
+	check(filepath.Join(game, "RE_PPG"), "RE_PPG", bepFix)
+	for _, f := range []string{"winhttp.dll", "version.dll", "doorstop.dll"} {
+		if _, err := os.Stat(filepath.Join(game, f)); err == nil {
+			checkFile(filepath.Join(game, f), f, bepFix)
+		}
+	}
+	flagged := map[string]bool{}
+	for _, p := range probs {
+		flagged[p.Folder] = true
+	}
+	l := gameDetect(game)
+	for _, kind := range []struct {
+		dir  string
+		list []string
+	}{{"plugins", l.Plugins}, {"patchers", l.Patchers}} {
+		for _, rel := range kind.list {
+			up := strings.ToUpper(rel)
+			if strings.Contains(up, "RE_PPG") || flagged["BepInEx/"+kind.dir+"/"+rel] {
+				continue
+			}
+			probs = append(probs, Problem{"BepInEx/" + kind.dir + "/" + rel,
+				"BepInEx " + strings.TrimSuffix(kind.dir, "s") + " that is not part of RE_PPG: it runs before every mod with full access to your PC. Keep it only if you installed it on purpose.", false, ""})
+		}
+	}
 	return probs
 }
+
+var (
+	gameDLLs   = game.DLLsUnder
+	gameDetect = game.DetectLoader
+)
 
 // PrintReport prints findings at MEDIUM and above, grouped by rule.
 func PrintReport(logf func(string, ...any), rep *scan.Report, root string) {

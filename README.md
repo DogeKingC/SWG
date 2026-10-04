@@ -246,7 +246,16 @@ GameBanana file or mirror copy) and goes through every safety check again,
 or **Stop tracking**. **Verify files** offers the same for mods whose files
 were changed or added to, and checks the game's own code folders
 (`CompiledMods`, `CompiledModAssemblies`, `People Playground_Data/Managed`) for
-DLLs the FPS++ worms left there, with what to do about each. Items found on the PC with no mod site behind them
+DLLs the FPS++ worms left there, with what to do about each. It also checks
+BepInEx (`plugins`, `patchers`, `core`, its loader DLL) and the RE_PPG folder,
+and lists BepInEx plugins that are not part of RE_PPG, since they run before
+every mod.
+
+People Playground 1.27 removed the game's C# mod compiler after the worms;
+C# script mods need [RE_PPG](https://github.com/AlibardaWasTaken/RE_PPG), a
+community loader built on BepInEx. Settings → **Game setup** shows whether
+BepInEx and RE_PPG are installed, and Installed says when script mods have
+nothing to run them. Items found on the PC with no mod site behind them
 can't be downloaded again. If you didn't delete them yourself, check the PC
 for malware first: whatever deleted them can do it again.
 

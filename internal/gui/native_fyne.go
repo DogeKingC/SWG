@@ -20,6 +20,7 @@ import (
 
 	"github.com/DogeKingC/SWG/internal/app"
 	"github.com/DogeKingC/SWG/internal/desktop"
+	"github.com/DogeKingC/SWG/internal/game"
 )
 
 // The native window (Fyne). It shows the same things as the web page in
@@ -29,16 +30,18 @@ func init() { nativeUI = runNative }
 
 // stateView is /api/state.
 type stateView struct {
-	NXMOffer   *nxmOffer       `json:"nxm_offer"`
-	Nexus      nexusView       `json:"nexus"`
-	Version    string          `json:"version"`
-	Paths      app.Paths       `json:"paths"`
-	Installed  []installedView `json:"installed"`
-	Job        *job            `json:"job"`
-	Settings   settings        `json:"settings"`
-	Cutoff     string          `json:"cutoff"`
-	LastBackup string          `json:"lastBackup"`
-	Desktop    struct {
+	NXMOffer     *nxmOffer       `json:"nxm_offer"`
+	Nexus        nexusView       `json:"nexus"`
+	Version      string          `json:"version"`
+	Paths        app.Paths       `json:"paths"`
+	Loader       game.Loader     `json:"loader"`
+	NeedCompiler int             `json:"scripts_need_compiler"`
+	Installed    []installedView `json:"installed"`
+	Job          *job            `json:"job"`
+	Settings     settings        `json:"settings"`
+	Cutoff       string          `json:"cutoff"`
+	LastBackup   string          `json:"lastBackup"`
+	Desktop      struct {
 		Installed   bool   `json:"installed"`
 		CopyExists  bool   `json:"copy_exists"`
 		InstallPath string `json:"install_path"`
@@ -361,6 +364,7 @@ func (u *ui) refreshState() {
 		u.versionChip.Text = "ppgmods " + st.Version
 		u.versionChip.Refresh()
 		u.navs[1].setCount(fmt.Sprint(len(st.Installed)))
+		sig += fmt.Sprint(st.NeedCompiler)
 		if sig != u.installedSig {
 			u.installedSig = sig
 			u.installed.render()

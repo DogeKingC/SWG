@@ -99,3 +99,32 @@ func TestVerifyFindsWormInGameCode(t *testing.T) {
 		t.Errorf("want 1 worm problem, got %+v", probs)
 	}
 }
+
+func TestVerifyChecksBepInEx(t *testing.T) {
+	g := t.TempDir()
+	mods := filepath.Join(g, "Mods")
+	os.MkdirAll(mods, 0o755)
+	pl := filepath.Join(g, "BepInEx", "plugins")
+	os.MkdirAll(filepath.Join(pl, "RE_PPG"), 0o755)
+	os.WriteFile(filepath.Join(pl, "RE_PPG", "RE_PPG.Runtime.dll"), []byte("MZ clean"), 0o644)
+	os.WriteFile(filepath.Join(pl, "Helper.dll"), []byte("MZ clean"), 0o644)
+	os.WriteFile(filepath.Join(pl, "Evil.dll"), []byte("MZ RejectShadyCode NewCommunityFile"), 0o644)
+	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{}}}
+	probs, err := m.Verify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Problem{}
+	for _, p := range probs {
+		got[p.Folder] = p
+	}
+	if p := got["BepInEx/plugins/Evil.dll"]; !p.Bad || !strings.HasPrefix(p.Issue, "WORM") {
+		t.Errorf("Evil.dll: %+v", p)
+	}
+	if p, ok := got["BepInEx/plugins/Helper.dll"]; !ok || p.Bad {
+		t.Errorf("Helper.dll should be listed, not bad: %+v", p)
+	}
+	if _, ok := got["BepInEx/plugins/RE_PPG/RE_PPG.Runtime.dll"]; ok {
+		t.Errorf("RE_PPG's own plugin listed")
+	}
+}
