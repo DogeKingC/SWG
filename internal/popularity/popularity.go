@@ -68,7 +68,7 @@ type Index struct {
 }
 
 // Metric names what each source's counter counts.
-var Metric = map[string]string{"gb": "views", "tw": "downloads", "tm": "views"}
+var Metric = map[string]string{"gb": "views", "tw": "downloads", "tm": "views", "s01": "views"}
 
 // Compute fills each item's D/W/M from the snapshots (oldest first; the last
 // one is today's).

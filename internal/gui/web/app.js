@@ -300,7 +300,7 @@ function jobDone(j) {
   let extra = null;
   if (j.browser && j.retry) {
     body.splice(0, body.length,
-      el("p", {}, "modsbase.com didn't hand ppgmods the file from this connection (" + j.browser.reason + ")."),
+      el("p", {}, "This copy has to be downloaded in your browser: " + j.browser.reason + "."),
       el("p", {}, "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
     dialog("Download in your browser", body, { label: "Open download page", run: () => run(j.retry, "Waiting for the browser download") });
     $("#dlgExtra").className = "btn btn-primary";
@@ -369,10 +369,9 @@ function syncBrowse() {
   $("#sortSel").value = browse.sort;
   $("#periodSel").value = browse.period;
   $("#periodSel").hidden = browse.sort !== "popular";
-  // The Workshop mirrors only carry mods.
-  const mirrorsBtn = $(".seg-btn[data-src=sky]");
-  mirrorsBtn.hidden = browse.kind === "contraption";
-  if (mirrorsBtn.hidden && src === "sky") {
+  // The Workshop mirrors and 01 STUDIO only carry mods.
+  for (const b of $$(".seg-btn[data-src=sky], .seg-btn[data-src=s01]")) b.hidden = browse.kind === "contraption";
+  if (browse.kind === "contraption" && (src === "sky" || src === "s01")) {
     src = "all";
     $$(".seg-btn[data-src]").forEach((x) => x.classList.toggle("active", x.dataset.src === "all"));
   }
@@ -405,9 +404,9 @@ async function search(q, p) {
   const seq = ++searchSeq;
   const grid = $("#results");
   const errs = $("#searchErrors");
-  const parts = src === "all" ? ["tw", "gb", "ws"] : [src === "sky" ? "ws" : src];
+  const parts = src === "all" ? ["tw", "gb", "ws", "s01"] : [src === "sky" ? "ws" : src];
   const pending = new Set(parts);
-  const lists = { gb: [], tw: [], ws: [] };
+  const lists = { gb: [], tw: [], ws: [], s01: [] };
   const merged = new Set();
   const errors = [];
   const notes = new Set();
@@ -418,10 +417,20 @@ async function search(q, p) {
   const render = () => {
     if (seq !== searchSeq) return;
     pageLists = lists;
-    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, lists.ws);
+    // A 01 STUDIO mod that the Workshop mirrors also have is one card.
+    const wsByRef = new Map(lists.ws.map((x) => [x.ref, x]));
+    const s01 = lists.s01.filter((x) => {
+      const w = wsByRef.get(x.ref);
+      if (!w) return true;
+      if (!(w.mirrors || []).some((l) => l.startsWith("01 STUDIO"))) w.mirrors = [...(w.mirrors || []), ...(x.mirrors || ["01 STUDIO"])];
+      if (!w.image) w.image = x.image;
+      if (!w.author) w.author = x.author;
+      return false;
+    });
+    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, lists.ws, s01);
     [...grid.querySelectorAll(".mod")].slice(start).forEach((c) => c.remove());
     status.before(...shown.map(card));
-    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)" }[x]));
+    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO" }[x]));
     status.textContent = waiting.length ? "Still searching: " + waiting.join(", ") + "…" : (!shown.length && p === 1 ? "No mods found." : "");
     status.hidden = !status.textContent;
     errs.hidden = !errors.length;
@@ -440,6 +449,7 @@ async function search(q, p) {
       if (part === "gb") lists.gb = r.gamebanana || [];
       if (part === "tw") lists.tw = r.trueworkshop || [];
       if (part === "ws") { lists.ws = r.workshop || []; (r.merged_tw || []).forEach((x) => merged.add(x)); }
+      if (part === "s01") lists.s01 = r.studio01 || [];
       errors.push(...(r.errors || []));
     } catch (e) {
       errors.push(e.message);
@@ -465,7 +475,11 @@ function sourceBadges(m) {
     m.reviewed ? el("span", { class: "badge badge-ok", title: "Reviewed by True Workshop's maintainers" }, "✓ reviewed")
       : el("span", { class: "badge badge-warn", title: "Only passed True Workshop's automated scanner" }, "not reviewed"),
   ];
-  return [el("span", { class: "badge badge-sky" }, m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror")];
+  const has01 = m.source === "01 STUDIO" || (m.mirrors || []).some((l) => l.startsWith("01 STUDIO"));
+  const out = [];
+  if (m.source !== "01 STUDIO") out.push(el("span", { class: "badge badge-sky" }, m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror"));
+  if (has01) out.push(el("span", { class: "badge badge-01", title: "Published by 01 STUDIO on 01studio.dev" }, "01 STUDIO"));
+  return out;
 }
 
 function thumbURL(u) {
@@ -688,6 +702,7 @@ function renderMirrors(m, mirrors, chosen) {
     const tags = [];
     if (newestOK && mr.id === newestOK.id) tags.push(el("span", { class: "badge badge-ok" }, best ? "highest version" : "newest safe date"));
     if (mr.reviewed) tags.push(el("span", { class: "badge badge-tw" }, "reviewed"));
+    if (mr.browser) tags.push(el("span", { class: "badge", title: "Downloaded in your browser, where you are signed in to 01studio.dev; ppgmods picks the file up from Downloads and scans it" }, "in your browser"));
     if (mr.gone) tags.push(el("span", { class: "badge badge-bad", title: "This mirror no longer has the file" }, "file gone"));
     if (mr.after_cutoff) tags.push(el("span", { class: "badge badge-bad" }, "after worm cutoff"));
     if (chosen && mr.id === chosen) tags.push(el("span", { class: "badge" }, "checked below"));
@@ -725,7 +740,7 @@ function showCheck(m, p) {
     review: ["verdict-warn", "⚠ Needs your review before installing."],
     blocked: ["verdict-bad", "✕ ppgmods will not install this mod."],
     risk: ["verdict-bad", "✕ CRITICAL findings. ppgmods won't install this unless you read them and accept the risk."],
-    browser: ["verdict-warn", "modsbase.com didn't hand ppgmods the file from this connection."],
+    browser: ["verdict-warn", "This copy has to be downloaded in your browser."],
     unavailable: ["verdict-bad", "✕ This mod's mirror copy is gone."],
   }[p.verdict] || ["verdict-bad", p.verdict];
   box.push(el("div", { class: "verdict " + text[0] }, text[1]));

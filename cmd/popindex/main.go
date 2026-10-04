@@ -74,6 +74,11 @@ func run() error {
 	} else {
 		snap.Sources = append(snap.Sources, "tw")
 	}
+	if err := collect01(add); err != nil {
+		fmt.Fprintln(os.Stderr, "01 STUDIO:", err)
+	} else {
+		snap.Sources = append(snap.Sources, "s01")
+	}
 	if err := collectTM(add); err != nil {
 		fmt.Fprintln(os.Stderr, "top-mods:", err)
 	} else {
@@ -140,6 +145,22 @@ func collectTW(add func(popularity.Item)) error {
 		}
 		add(popularity.Item{Ref: fmt.Sprintf("tw:%d", it.ID), Src: "tw", Name: it.Title, Author: it.Author, Image: it.Thumb(),
 			Kind: kind, Date: it.CreatedTime().Format("2006-01-02"), URL: it.Page(), Reviewed: it.Reviewed(), N: it.Downloads})
+	}
+	return nil
+}
+
+func collect01(add func(popularity.Item)) error {
+	all, err := sources.S01All()
+	if err != nil {
+		return err
+	}
+	for _, m := range all {
+		if ws := m.WorkshopID(); ws != "" {
+			// Ref "s01:" keeps its counter apart from top-mods' views of the
+			// same Workshop item; the window turns it back into sky:<id>.
+			add(popularity.Item{Ref: "s01:" + ws, Src: "s01", Name: m.Title, Author: "01 STUDIO", Image: m.Image(),
+				Kind: "mod", KindChecked: true, Category: m.Category, Date: m.CreatedTime().Format("2006-01-02"), URL: m.Page(), N: m.Views})
+		}
 	}
 	return nil
 }

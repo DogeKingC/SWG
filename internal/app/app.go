@@ -144,6 +144,7 @@ type SearchResults struct {
 	GameBanana []SearchResult `json:"gamebanana"`
 	TrueWS     []SearchResult `json:"trueworkshop"` // True Workshop uploads (maintainer-reviewed archive)
 	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
+	Studio01   []SearchResult `json:"studio01"`     // 01 STUDIO's own catalogue (each is also a Workshop item)
 	Errors     []string       `json:"errors,omitempty"`
 	MergedTW   []string       `json:"merged_tw,omitempty"` // True Workshop refs shown inside a Workshop card
 	Notes      []string       `json:"notes,omitempty"`     // how the results were chosen, when not obvious
@@ -190,6 +191,9 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		return searchTrending(q, page, parts, opt)
 	}
 	var r SearchResults
+	if parts["s01"] {
+		search01(&r, q, page, opt)
+	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	addErr := func(e string) { mu.Lock(); r.Errors = append(r.Errors, e); mu.Unlock() }
@@ -423,6 +427,48 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	return r
 }
 
+// s01Result is a search card for a 01 STUDIO mod. Its ref is the Workshop
+// item, so installing uses every copy (and 01 STUDIO's own via the browser).
+func s01Result(m sources.S01Mod) SearchResult {
+	r := SearchResult{Ref: "sky:" + m.WorkshopID(), Source: "01 STUDIO", Name: m.Title, Author: "01 STUDIO",
+		Category: m.Category, Date: FmtTime(m.CreatedTime()), URL: m.Page(), Image: m.Image(), Kind: manager.KindMod,
+		Mirrors: []string{"01 STUDIO"}}
+	if m.Version != "" {
+		r.Version = m.Version
+		r.Mirrors = []string{"01 STUDIO v" + m.Version}
+	}
+	return r
+}
+
+// search01 lists 01 STUDIO's catalogue: most viewed first for relevance and
+// popularity, newest first for "updated".
+func search01(r *SearchResults, q string, page int, opt SearchOpts) {
+	if opt.Kind == manager.KindContraption {
+		r.Notes = append(r.Notes, "01 STUDIO publishes mods, not contraptions.")
+		return
+	}
+	all, err := sources.S01All()
+	if err != nil {
+		r.Errors = append(r.Errors, "01 STUDIO: "+err.Error())
+		return
+	}
+	var list []sources.S01Mod
+	for _, m := range all {
+		if m.WorkshopID() != "" && sources.S01Matches(m, q) {
+			list = append(list, m)
+		}
+	}
+	if opt.Sort == "updated" {
+		sort.SliceStable(list, func(i, j int) bool { return list[i].CreatedTime().After(list[j].CreatedTime()) })
+	} else {
+		sort.SliceStable(list, func(i, j int) bool { return list[i].Views > list[j].Views })
+	}
+	const per = 24
+	for i := (page - 1) * per; i < len(list) && i < page*per; i++ {
+		r.Studio01 = append(r.Studio01, s01Result(list[i]))
+	}
+}
+
 // gbKind is what a GameBanana upload is: from its archive's contents when
 // known, else from its category.
 func gbKind(m sources.GBMod, kinds map[int]string) string {
@@ -541,8 +587,8 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 		return res
 	}
 	const per = 24
-	for _, src := range []string{"gb", "tw", "tm"} {
-		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws"}[src]
+	for _, src := range []string{"gb", "tw", "tm", "s01"} {
+		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws", "s01": "s01"}[src]
 		if !parts[part] {
 			continue
 		}
@@ -553,6 +599,10 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 				r.GameBanana = append(r.GameBanana, res)
 			case "tw":
 				r.TrueWS = append(r.TrueWS, res)
+			case "s01":
+				res.Ref = "sky:" + strings.TrimPrefix(it.Ref, "s01:")
+				res.Source, res.Mirrors = "01 STUDIO", []string{"01 STUDIO"}
+				r.Studio01 = append(r.Studio01, res)
 			default:
 				rememberTitle(strings.TrimPrefix(it.Ref, "sky:"), it.Name, it.URL)
 				r.Workshop = append(r.Workshop, res)
@@ -611,6 +661,8 @@ type NeedsBrowser struct {
 	URL        string `json:"url"`
 	Reason     string `json:"reason"`
 	WorkshopID string `json:"workshop_id"`
+	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO)
+	Mirror     string `json:"mirror,omitempty"`
 }
 
 func (e *NeedsBrowser) Error() string {
@@ -803,13 +855,25 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	}
 	since := time.Now()
 	OpenBrowser(nb.URL)
-	a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
-	file, err := waitForDownload(dl, nb.WorkshopID, since, a.Opt.Wait)
+	prefix := nb.WorkshopID
+	if nb.AnyFile {
+		prefix = "" // any archive that appears from now on
+		a.logf("Waiting for a new .zip/.rar/.7z in %s (up to %s)...", dl, a.Opt.Wait)
+	} else {
+		a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
+	}
+	file, err := waitForDownload(dl, prefix, since, a.Opt.Wait)
 	if err != nil {
 		return nil, fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, nb.WorkshopID)
 	}
 	a.logf("got %s", filepath.Base(file))
-	return a.with(func(o *Options) { o.WorkshopID = nb.WorkshopID }).candidate(file)
+	c, err := a.with(func(o *Options) { o.WorkshopID = nb.WorkshopID }).candidate(file)
+	if err == nil && c != nil && strings.HasPrefix(nb.Mirror, "01studio:") {
+		// From the author's own site, not a Steam copy: the worm-cutoff date
+		// check doesn't apply (the scanner and the rest of the policy do).
+		c.SteamOrig, c.Revision, c.Mirror, c.Source = false, time.Time{}, nb.Mirror, nb.URL
+	}
+	return c, err
 }
 
 // DownloadFolder returns the user's browser download folder.
@@ -871,7 +935,7 @@ func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (st
 // from scraped pages, so anything else (file:, other programs' URL schemes,
 // a link to an .exe on some other host) is refused.
 var browserHosts = []string{"gamebanana.com", "steamcommunity.com", "github.com", "catalogue.smods.ru",
-	"top-mods.com", "ppgworkshop.onrender.com", "modsbase.com", "modsfire.com"}
+	"top-mods.com", "ppgworkshop.onrender.com", "modsbase.com", "modsfire.com", "01studio.dev"}
 
 // AllowedURL reports whether ppgmods may open u in the browser: https on one
 // of browserHosts (or a subdomain), or this app's own window on 127.0.0.1.

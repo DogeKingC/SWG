@@ -37,10 +37,12 @@ type Mirror struct {
 	Gone        bool      `json:"gone,omitempty"`          // the mirror no longer has the file
 	invalid     string    // set once downloaded: why the copy is not offered
 	Reviewed    bool      `json:"reviewed,omitempty"` // True Workshop: reviewed by its maintainers
+	Browser     bool      `json:"browser,omitempty"`  // downloaded in the person's browser (01 STUDIO: needs their account)
 
 	sky *sources.SkyItem
 	tm  *sources.TMItem
 	tw  *sources.TWItem
+	s01 *sources.S01Mod
 }
 
 var reSkyArchive = regexp.MustCompile(`/archives/(\d+)`)
@@ -64,6 +66,19 @@ func tmMirror(it *sources.TMItem) Mirror {
 // twMirror is a True Workshop upload of a Workshop item. Its date is the
 // upload date, not the Steam revision, so copies are compared by the
 // ModVersion in mod.json instead.
+// s01Mirror is the author's own copy on 01studio.dev. Its files are only
+// given to signed-in users, so it is downloaded in the browser, when picked.
+func s01Mirror(it sources.S01Mod) Mirror {
+	v := "on 01studio.dev"
+	if it.Version != "" {
+		v = "v" + it.Version + " on 01studio.dev"
+	}
+	return Mirror{
+		ID: "01studio:" + it.Slug, Source: "01 STUDIO", Title: it.Title, Author: "01 STUDIO",
+		Version: v, VersionTime: it.CreatedTime(), Page: it.Page(), Image: it.Image(), Browser: true, s01: &it,
+	}
+}
+
 func twMirror(it sources.TWItem) Mirror {
 	return Mirror{
 		ID: fmt.Sprintf("trueworkshop:%d", it.ID), Source: "True Workshop", Title: it.Title, Author: it.Author,
@@ -208,6 +223,13 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 		}
 	} else if !strings.Contains(err.Error(), "not found") {
 		errs = append(errs, "Skymods: "+err.Error())
+	}
+	// 01 STUDIO's own site lists its mods with their Workshop IDs.
+	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil {
+		list = append(list, s01Mirror(*it))
+		if titleHint == "" {
+			titleHint = it.Title
+		}
 	}
 	knownMu.Lock()
 	if titleHint == "" {
@@ -560,6 +582,17 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 	for _, mr := range usable {
 		if len(copies) == 4 {
 			break
+		}
+		if mr.s01 != nil {
+			nb := &NeedsBrowser{URL: mr.Page, WorkshopID: ws, AnyFile: true, Mirror: mr.ID,
+				Reason: "01 STUDIO gives its files to signed-in users: download it on its page"}
+			if a.Opt.Mirror == mr.ID {
+				return nil, nb // picked: download it in the browser
+			}
+			if browser == nil {
+				browser = nb // only if no mirror can provide a copy
+			}
+			continue
 		}
 		if ci := copyState(mr.ID); a.Opt.Mirror == "" && (ci.gone || ci.invalid != "") {
 			why := ci.invalid

@@ -322,3 +322,5 @@ dialog.details:not([open]) { display: none; }
 .mirror-off { opacity: .55; cursor: not-allowed; }
 .search-status { padding: 18px 0; font-size: 13px; }
 #searchNotes { background: var(--surface-2); color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.badge-01 { background: #1b02ff1a; color: #3b2bff; }
+@media (prefers-color-scheme: dark) { .badge-01 { background: #2a2470; color: #b9b2ff; } }
