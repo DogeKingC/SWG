@@ -1,6 +1,43 @@
 {
- "generated": "2026-10-04T21:08:30.720363912Z",
+ "generated": "2026-10-04T21:14:10.741694985Z",
  "entries": [
+  {
+   "slug": "lite-pixel-blood-v5",
+   "name": "Lite Pixel Blood V5",
+   "author": "Gander18",
+   "kind": "mod",
+   "version": "5.0",
+   "workshop_id": "3736146267",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/lite-pixel-blood-v5-5.0-c566b3a39174.zip",
+   "sha256": "c566b3a39174cbebe772f693871b2d64a9eb9d986074da42b46c81d484240c9f",
+   "size": 1055128,
+   "scan_max": "CRITICAL",
+   "findings": [
+    "[CRITICAL reflection-sensitive-type] Lite Pixel Blood 5.0 [sky-3736146267]/ModInvoker.cs: string \"System.Reflection.Assembly\" is used with reflection",
+    "[CRITICAL code-loader] Lite Pixel Blood 5.0 [sky-3736146267]/ModInvoker.cs: string names the Assembly type, by name (to load code through reflection)",
+    "[CRITICAL executable-file] Lite Pixel Blood 5.0 [sky-3736146267]/build/PixelBloodMod.dll: unknown compiled library (.dll): its code cannot be checked",
+    "[HIGH reflection-by-name] Lite Pixel Blood 5.0 [sky-3736146267]/ModInvoker.cs: looks up types or members by name: GetType(...)",
+    "[HIGH reflection-file-access] Lite Pixel Blood 5.0 [sky-3736146267]/ModInvoker.cs: string \"System.IO.Directory\" is used with reflection (gets around the game's block on file access)",
+    "[MEDIUM namespace] Lite Pixel Blood 5.0 [sky-3736146267]/ModInvoker.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T21:14:10.741202131Z",
+   "first": "2026-10-04T21:14:10.741202131Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "issue": 3,
+   "approved": true,
+   "rules": [
+    "code-loader",
+    "executable-file",
+    "namespace",
+    "reflection-by-name",
+    "reflection-file-access",
+    "reflection-sensitive-type"
+   ]
+  },
   {
    "slug": "measurements-mod",
    "name": "Measurements Mod",
