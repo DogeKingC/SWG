@@ -150,16 +150,25 @@ func issue(args []string) error {
 	return os.WriteFile("outcome.json", b, 0o644) // read by the workflow
 }
 
+// entryForIssue is the entry published from this issue or, for an author
+// acting on an older issue of their mod, their entry the issue names. The
+// issue text is the author's to edit, so a name in it never reaches an
+// entry someone else owns.
 func entryForIssue(ix *workshop.Index, ev event) *workshop.Entry {
+	var named *workshop.Entry
 	if s, err := workshop.SubmissionFromIssue(ev.body, ev.author); err == nil {
-		if e := ix.Find(workshop.Slugify(s.Name)); e != nil {
-			return e
-		}
+		named = ix.Find(workshop.Slugify(s.Name))
+	}
+	if named != nil && named.Issue == ev.number {
+		return named
 	}
 	for i := range ix.Entries {
 		if ix.Entries[i].Issue == ev.number {
 			return &ix.Entries[i]
 		}
+	}
+	if named != nil && strings.EqualFold(named.Owner, ev.author) {
+		return named
 	}
 	return nil
 }
@@ -315,13 +324,16 @@ func accountAge(login string) (time.Duration, error) {
 	return time.Since(u.Created), nil
 }
 
+// markReviewed vouches for the version published from this issue, and only
+// that one: a newer version (published from another issue) skips the
+// install cooldown only once it is reviewed itself.
 func markReviewed(ix *workshop.Index, ev event) *outcome {
 	e := entryForIssue(ix, ev)
-	if e == nil {
-		return &outcome{Reply: "Nothing published from this issue to mark as reviewed."}
+	if e == nil || e.Issue != ev.number {
+		return &outcome{Reply: "Nothing published from this issue to mark as reviewed (a newer version, if any, is reviewed on its own issue)."}
 	}
 	e.Reviewed = true
-	return &outcome{Reply: fmt.Sprintf("%s %s is now marked **reviewed**.", e.Name, e.Version)}
+	return &outcome{Reply: fmt.Sprintf("%s %s (file SHA-256 `%s`) is now marked **reviewed**.", e.Name, e.Version, e.SHA256)}
 }
 
 func withdraw(ix *workshop.Index, ev event, reason string) *outcome {
