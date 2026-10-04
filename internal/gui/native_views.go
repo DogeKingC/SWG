@@ -738,8 +738,14 @@ func newRecover(u *ui) *recoverView {
 }
 
 func (r *recoverView) update(st *stateView) {
+	r.u.mu.Lock()
+	running := r.u.running
+	r.u.mu.Unlock()
 	if len(st.Paths.Workshop) > 0 {
 		r.cache.SetText("Found: " + strings.Join(st.Paths.Workshop, "\n"))
+		if !running {
+			r.backup.Enable()
+		}
 	} else {
 		r.cache.SetText("No Workshop cache found on this PC.")
 		r.backup.Disable()

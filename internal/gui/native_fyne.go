@@ -98,6 +98,17 @@ func runNative(s *server) error {
 	u.win = a.NewWindow(desktop.AppName)
 	u.win.Resize(fyne.NewSize(1200, 820))
 	u.win.SetMaster()
+	u.win.SetCloseIntercept(func() {
+		u.mu.Lock()
+		running := u.running
+		u.mu.Unlock()
+		if !running {
+			u.win.Close()
+			return
+		}
+		u.confirm("A task is still running", text("Closing now stops it halfway (an install or update could be left incomplete). Quit anyway?"),
+			"Quit anyway", true, func() { u.win.Close() })
+	})
 	u.build()
 	go func() {
 		for {
