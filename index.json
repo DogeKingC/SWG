@@ -1,6 +1,2373 @@
 {
- "generated": "2026-10-04T21:15:17.05111776Z",
+ "generated": "2026-10-04T23:34:53.189493181Z",
  "entries": [
+  {
+   "slug": "60m-mega-bloc-v5-2385213638",
+   "name": "60m mega bloc v5",
+   "author": "unknown (Steam Workshop 2385213638)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2385213638 by unknown (Steam Workshop 2385213638), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2385213638",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/60m-mega-bloc-v5-2385213638-1.0-57452488d792.zip",
+   "sha256": "57452488d7923d337e82e460da3314025fd865ba99040907b4f944a5e680894f",
+   "size": 732548,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:39.538607211Z",
+   "first": "2026-10-04T23:33:39.538607211Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "a-50-3502713531",
+   "name": "A-50",
+   "author": "unknown (Steam Workshop 3502713531)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3502713531 by unknown (Steam Workshop 3502713531), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3502713531",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/a-50-3502713531-1.0-0fddbae47f57.zip",
+   "sha256": "0fddbae47f5798c39948aac82df30f203d1519370652b3055a3b47e98b694b86",
+   "size": 831272,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:39.795055926Z",
+   "first": "2026-10-04T23:34:39.795055926Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "aby-s-realistic-f35-modern-fighter-jet-v4-3295908401",
+   "name": "Aby's Realistic F35 Modern Fighter Jet v4",
+   "author": "unknown (Steam Workshop 3295908401)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3295908401 by unknown (Steam Workshop 3295908401), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3295908401",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/aby-s-realistic-f35-modern-fighter-jet-v4-3295908401-1.0-afb394031541.zip",
+   "sha256": "afb39403154168f821711a46a0eaf436d91fd1a16937af13cb01810bc903beed",
+   "size": 433764,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:18.826414183Z",
+   "first": "2026-10-04T23:34:18.826414183Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "acid-sea-fixed-2759438689",
+   "name": "Acid Sea (FIXED)",
+   "author": "Dyadyushka Dyadya",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds an item that changes the Sea to Acid Sea..\n\nArchived copy of Steam Workshop item 2759438689 by Dyadyushka Dyadya, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2759438689",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/acid-sea-fixed-2759438689-1.0-0f81188569b8.zip",
+   "sha256": "0f81188569b808047a569b3bd8d72c288e34e98e53620dc62ddb50ac5c1ee08a",
+   "size": 667053,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2759438689/scripts.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:56.143146315Z",
+   "first": "2026-10-04T23:33:56.143146315Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "advanced-zombie-injector-v1-2-2815591838",
+   "name": "Advanced Zombie Injector (v1.2)",
+   "author": "Maxe \u0026 Dyadya",
+   "kind": "mod",
+   "version": "1.2",
+   "description": "This mod will add an injector, with an advanced zombie virus in it, more of the details are on the workshop.\n\nArchived copy of Steam Workshop item 2815591838 by Maxe \u0026 Dyadya, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2815591838",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/advanced-zombie-injector-v1-2-2815591838-1.2-1f8d5432cc9c.zip",
+   "sha256": "1f8d5432cc9c089552d02ab4a567f0a9de8509eb3061d89123601bc08c264007",
+   "size": 281258,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:00.359515104Z",
+   "first": "2026-10-04T23:34:00.359515104Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "aed-automatic-external-defib-2502740785",
+   "name": "AED (Automatic External Defib)",
+   "author": "unknown (Steam Workshop 2502740785)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2502740785 by unknown (Steam Workshop 2502740785), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2502740785",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/aed-automatic-external-defib-2502740785-1.0-0a72507a7b0f.zip",
+   "sha256": "0a72507a7b0f26924e1f21d7db8cab7f22464416882f13dfc75c929e1592abc1",
+   "size": 314226,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:49.045744127Z",
+   "first": "2026-10-04T23:33:49.045744127Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "aimbot-gun-2327621346",
+   "name": "Aimbot Gun",
+   "author": "Morzzic",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds a Aimbot Gun.\n\nArchived copy of Steam Workshop item 2327621346 by Morzzic, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2327621346",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/aimbot-gun-2327621346-1.0-62974e88fe2a.zip",
+   "sha256": "62974e88fe2a15998c324957cf11961d06f26dc37b498462ac9d78cb6a90cb81",
+   "size": 295008,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:33.72765209Z",
+   "first": "2026-10-04T23:33:33.72765209Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "alien-vs-predator-mod-2379195521",
+   "name": "Alien Vs Predator Mod",
+   "author": "Kyrelink",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Some things and npcs from Alien and predator movies and games\n\nArchived copy of Steam Workshop item 2379195521 by Kyrelink, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2379195521",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/alien-vs-predator-mod-2379195521-1.0-a6503324e024.zip",
+   "sha256": "a6503324e024ba88d28a1c15d084e9fbefb52bc4bd8ca2f542f8f2fd27abc7d3",
+   "size": 4526798,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2379195521/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2379195521/IgnoreArmor.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2379195521/Weapon.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:38.099255031Z",
+   "first": "2026-10-04T23:33:38.099255031Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "android-injectors-2381177128",
+   "name": "Android Injectors",
+   "author": "jimmyl",
+   "kind": "mod",
+   "version": "1.4",
+   "description": "Adds syringes for androids.\n\nArchived copy of Steam Workshop item 2381177128 by jimmyl, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2381177128",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/android-injectors-2381177128-1.4-e6a8d1e48583.zip",
+   "sha256": "e6a8d1e4858395a9b7445dba72b431ddfd214371271769501b1ffbbe3a390aa0",
+   "size": 1505530,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:38.635090939Z",
+   "first": "2026-10-04T23:33:38.635090939Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "apartments-3556529650",
+   "name": "Apartments",
+   "author": "unknown (Steam Workshop 3556529650)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3556529650 by unknown (Steam Workshop 3556529650), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3556529650",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/apartments-3556529650-1.0-9d06d99543d3.zip",
+   "sha256": "9d06d99543d34c30443687a4f91b4a7b36e368120d6d38b2678351465499365a",
+   "size": 967222,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:46.297989466Z",
+   "first": "2026-10-04T23:34:46.297989466Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "assasins-mod-2208700490",
+   "name": "Assasins Mod",
+   "author": "EasyCat",
+   "kind": "mod",
+   "version": "0.1",
+   "description": "Kill like an assasins.\n\nArchived copy of Steam Workshop item 2208700490 by EasyCat, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2208700490",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/assasins-mod-2208700490-0.1-9d38fdd620fd.zip",
+   "sha256": "9d38fdd620fd3084152c8fc2c878df441425676f2cdbfd3a97a90dd6dc6f7aba",
+   "size": 185117,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2208700490/Assasins.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:29.918561382Z",
+   "first": "2026-10-04T23:33:29.918561382Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "atomics-fuel-cell-3468774521",
+   "name": "[ATOMICS] Fuel Cell",
+   "author": "unknown (Steam Workshop 3468774521)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3468774521 by unknown (Steam Workshop 3468774521), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3468774521",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/atomics-fuel-cell-3468774521-1.0-5aced11ac036.zip",
+   "sha256": "5aced11ac036ed170713dc9d15ca302420cde3bd8aad69a2cdb784cee9bf51d5",
+   "size": 231091,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:33.36466148Z",
+   "first": "2026-10-04T23:34:33.36466148Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "atomics-rbmk-1000-3468827047",
+   "name": "[ATOMICS] RBMK - 1000",
+   "author": "unknown (Steam Workshop 3468827047)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3468827047 by unknown (Steam Workshop 3468827047), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3468827047",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/atomics-rbmk-1000-3468827047-1.0-4b275a4c257e.zip",
+   "sha256": "4b275a4c257e87372c629a8d98a83831b74ad38357a7a31002422a1fc55690dc",
+   "size": 231268,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:33.583139293Z",
+   "first": "2026-10-04T23:34:33.583139293Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "attachable-2866743610",
+   "name": "Attachable",
+   "author": "Mr_kWKD",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Attachable - Adjective, capable of being fastened or added to something else\n\nArchived copy of Steam Workshop item 2866743610 by Mr_kWKD, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2866743610",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/attachable-2866743610-1.0-fbda99f4647a.zip",
+   "sha256": "fbda99f4647a87c5bdf1415f3cb25ceb9f91f3ba13dd0e93f7b5a88437d2dec6",
+   "size": 1483206,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2866743610/Attachable.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:03.522485276Z",
+   "first": "2026-10-04T23:34:03.522485276Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "bar-3484335364",
+   "name": "Bar",
+   "author": "unknown (Steam Workshop 3484335364)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3484335364 by unknown (Steam Workshop 3484335364), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3484335364",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/bar-3484335364-1.0-e214a3cf9ced.zip",
+   "sha256": "e214a3cf9ced57ba3447bc78ff5e108888a6191e20b0093a8deda5e6226aa498",
+   "size": 731686,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:38.909340144Z",
+   "first": "2026-10-04T23:34:38.909340144Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "barbeq-s-black-mesa-research-facility-2893048175",
+   "name": "BarBeQ's Black Mesa Research Facility",
+   "author": "KOR_BarBeQ",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Prepare for unforeseen consequences.\n\nArchived copy of Steam Workshop item 2893048175 by KOR_BarBeQ, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2893048175",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/barbeq-s-black-mesa-research-facility-2893048175-1.0-983e448f3447.zip",
+   "sha256": "983e448f34477ede57c2fc4fdbac95a16850abc3423fd1733e95d583a5a08f1c",
+   "size": 7253743,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:08.008413869Z",
+   "first": "2026-10-04T23:34:08.008413869Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "better-bandage-mod-3432556790",
+   "name": "Better Bandage Mod",
+   "author": "Kasztan, TFallenAngel",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3432556790 by Kasztan, TFallenAngel, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3432556790",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/better-bandage-mod-3432556790-1.0-f4eb228681df.zip",
+   "sha256": "f4eb228681df1920c575618e27a5fef7510971fbfa495d88bfdeec14bd63dbb6",
+   "size": 2844186,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3432556790/main.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:28.304552035Z",
+   "first": "2026-10-04T23:34:28.304552035Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "better-black-hole-3323896785",
+   "name": "Better Black Hole",
+   "author": "unknown (Steam Workshop 3323896785)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3323896785 by unknown (Steam Workshop 3323896785), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3323896785",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/better-black-hole-3323896785-1.0-01ddee0921db.zip",
+   "sha256": "01ddee0921dbb1479a4ad24346e94beb141adeaca8f135bc4644319c26a7c1cf",
+   "size": 350877,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:21.461356238Z",
+   "first": "2026-10-04T23:34:21.461356238Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "betterlighting-beta-3609516471",
+   "name": "BetterLighting (BETA)",
+   "author": "Meshok_Snega",
+   "kind": "mod",
+   "version": "0.1.0",
+   "description": "Realistic light occlusion with white radial/cone lights. Supports transparent objects, integrates with vanilla PPG lights, optimized for performance. Educational mod.\n\nArchived copy of Steam Workshop item 3609516471 by Meshok_Snega, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3609516471",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/betterlighting-beta-3609516471-0.1.0-34b60ba3b7e6.zip",
+   "sha256": "34b60ba3b7e681c717cd9b73695c4b9725db251d8c69987557bccf2b9cf5f037",
+   "size": 2383692,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:47.637194179Z",
+   "first": "2026-10-04T23:34:47.637194179Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "black-hole-syringe-2379658123",
+   "name": "Black Hole Syringe",
+   "author": "Frosty",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Title explains it all.\n\nArchived copy of Steam Workshop item 2379658123 by Frosty, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2379658123",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/black-hole-syringe-2379658123-1.0-ef4680383c27.zip",
+   "sha256": "ef4680383c2719b871a716ea58df0a969e94580309966e03443ecbbb8edb3994",
+   "size": 210664,
+   "scan_max": "INFO",
+   "published": "2026-10-04T23:33:38.36097888Z",
+   "first": "2026-10-04T23:33:38.36097888Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "blitzpunk-3373994598",
+   "name": "Blitzpunk",
+   "author": "KatanaNoob",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This mod brings a cyberpunk twist to ideological warfare. Far-right extremists, fueled by a vision of unyielding supremacy, clash with far-left radicals, bent on reshaping the neon-lit dystopia into their twisted image. Brutal ideologies collide in a savage, high-tech battle for dominance amidst the chaos of a dark future.\n\nArchived copy of Steam Workshop item 3373994598 by KatanaNoob, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3373994598",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/blitzpunk-3373994598-1.0-e415acf37ee5.zip",
+   "sha256": "e415acf37ee5c97f4975a3e8eef24894fdc1b6759ff57ab7eed21fdf78e9d1d8",
+   "size": 34862435,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3373994598/LimbSlice.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 3373994598/Regen.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 3373994598/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:25.809007061Z",
+   "first": "2026-10-04T23:34:25.809007061Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "blocksify-s-crazy-syringes-mod-2498890172",
+   "name": "Blocksify's Crazy Syringes Mod",
+   "author": "Blocksify \u0026 Frevv",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This mod is a cool mod that adds syringes of all kinds. We're adding Superhero syringes, Color/Colour Syringes and more! Hope you enjoy! -Blocksify\n\nArchived copy of Steam Workshop item 2498890172 by Blocksify \u0026 Frevv, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2498890172",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/blocksify-s-crazy-syringes-mod-2498890172-1.0-10859df8cbeb.zip",
+   "sha256": "10859df8cbeb0b899a331322a66aca42880ecfea28e4ad10de372dc38ce86961",
+   "size": 1296266,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2498890172/Script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:47.360030613Z",
+   "first": "2026-10-04T23:33:47.360030613Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "blocksify-s-mafia-mod-2471624645",
+   "name": "Blocksify's Mafia Mod",
+   "author": "Blocksify",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2471624645 by Blocksify, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2471624645",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/blocksify-s-mafia-mod-2471624645-1.0-f433d7dbc610.zip",
+   "sha256": "f433d7dbc610956ebb217f953fc1d53c53c91c36a66ca1c970f6f1c2221dc190",
+   "size": 25530603,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2471624645/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2471624645/IgnoreArmor.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2471624645/ShieldBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2471624645/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:46.458074412Z",
+   "first": "2026-10-04T23:33:46.458074412Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "blocksify-s-mafia-mod-lite-2499609454",
+   "name": "Blocksify's Mafia Mod Lite",
+   "author": "Blocksify And Frevv",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Lite version of the popular Blocksify's Mafia Mod\n\nArchived copy of Steam Workshop item 2499609454 by Blocksify And Frevv, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2499609454",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/blocksify-s-mafia-mod-lite-2499609454-1.0-6efecc664988.zip",
+   "sha256": "6efecc664988f429e2ca26c1eaa6945409ae48845e140122161feba9d51881a9",
+   "size": 8779390,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2499609454/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:48.221082483Z",
+   "first": "2026-10-04T23:33:48.221082483Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "blood-eye-retexture-2392393621",
+   "name": "Blood eye retexture",
+   "author": "Woowz11",
+   "kind": "mod",
+   "version": "0.1",
+   "description": "Blood eye mod\n\nArchived copy of Steam Workshop item 2392393621 by Woowz11, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2392393621",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/blood-eye-retexture-2392393621-0.1-b72a63118be2.zip",
+   "sha256": "b72a63118be282e6986fd92838dbe58b4bde720316f12da5ef9c9c952a658c6c",
+   "size": 33598,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2392393621/MyScriptThis.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:41.67633553Z",
+   "first": "2026-10-04T23:33:41.67633553Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "bones-break-on-shot-2674775028",
+   "name": "Bones Break On Shot",
+   "author": "pjstarr12",
+   "kind": "mod",
+   "version": "1.02",
+   "description": "https://discord.gg/ZJaTzsCfGQ\n\nArchived copy of Steam Workshop item 2674775028 by pjstarr12, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2674775028",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/bones-break-on-shot-2674775028-1.02-54825f058a89.zip",
+   "sha256": "54825f058a89203a1990cb1b6e70dd74f68ec2b804b250f9f2ba1f6f2f3aac2e",
+   "size": 603965,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:55.597577232Z",
+   "first": "2026-10-04T23:33:55.597577232Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "break-action-pistol-3-2915526843",
+   "name": "break action pistol 3",
+   "author": "unknown (Steam Workshop 2915526843)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2915526843 by unknown (Steam Workshop 2915526843), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2915526843",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/break-action-pistol-3-2915526843-1.0-3bc26c641448.zip",
+   "sha256": "3bc26c6414489aedd2a7c5bfdfe11e97f6b2938c182371da34507a5840797572",
+   "size": 244504,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:08.964811022Z",
+   "first": "2026-10-04T23:34:08.964811022Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "break-action-v3-2091325214",
+   "name": "break-action v3",
+   "author": "unknown (Steam Workshop 2091325214)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2091325214 by unknown (Steam Workshop 2091325214), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2091325214",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/break-action-v3-2091325214-1.0-f0e1fbf7f525.zip",
+   "sha256": "f0e1fbf7f525d4973a60bab6bb867170eed664a3931380d59f0927437ac28345",
+   "size": 250446,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:26.224743489Z",
+   "first": "2026-10-04T23:33:26.224743489Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "bullet-casing-sfx-mod-3632113618",
+   "name": "Bullet Casing SFX Mod",
+   "author": "FEX",
+   "kind": "mod",
+   "version": "1.5",
+   "description": "Adds sound effects to bullet casings which change depending on the type of cartridge.\n\nArchived copy of Steam Workshop item 3632113618 by FEX, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3632113618",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/bullet-casing-sfx-mod-3632113618-1.5-d53f20a82eca.zip",
+   "sha256": "d53f20a82eca2aadbe8877605cdc75da2f3d6059b608b6ae6eebc7d304617365",
+   "size": 696756,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:48.153031672Z",
+   "first": "2026-10-04T23:34:48.153031672Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "chumplebean-s-wild-west-mod-2611179824",
+   "name": "Chumplebean's Wild West Mod",
+   "author": "Chumplebean",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Western Items\n\nArchived copy of Steam Workshop item 2611179824 by Chumplebean, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2611179824",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/chumplebean-s-wild-west-mod-2611179824-1.0-ae52b971a9af.zip",
+   "sha256": "ae52b971a9afd87054c62d0d2c763c8c8c3315f18a89670a2146f0094ccca867",
+   "size": 962984,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2611179824/wwm.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:53.466494237Z",
+   "first": "2026-10-04T23:33:53.466494237Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "combat-props-pack-2137926802",
+   "name": "COMBAT Props Pack",
+   "author": "kortl",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "17 NEW OBJECTS! A lot of new! Thank you for download!\n\nArchived copy of Steam Workshop item 2137926802 by kortl, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2137926802",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/combat-props-pack-2137926802-1.0-e34ffcc58750.zip",
+   "sha256": "e34ffcc587505b96d39622b8ec28c410cf4f9f2ded11741ba99eb6f5c86b4642",
+   "size": 192352,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2137926802/CombatProps.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:26.688149606Z",
+   "first": "2026-10-04T23:33:26.688149606Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "combat-spec-ops-map-2434956253",
+   "name": "COMBAT SPEC-OPS MAP",
+   "author": "kortl",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "NEW MAP FOR SCENARIOUS. AIRCRAFT, BUILDINGS, HOUSES.\n\nArchived copy of Steam Workshop item 2434956253 by kortl, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2434956253",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/combat-spec-ops-map-2434956253-1.0-2d0fb64b1f0b.zip",
+   "sha256": "2d0fb64b1f0b47b46c4ebdcbd5c8fb2a6bc6a99e87cd2e93d414930efec3e484",
+   "size": 778706,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2434956253/main.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:43.433086217Z",
+   "first": "2026-10-04T23:33:43.433086217Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "combat-special-operations-fixed-2993932356",
+   "name": "Combat Special Operations (FIXED)",
+   "author": "kortl",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "decided to take the time and fix some of the issues\n\nArchived copy of Steam Workshop item 2993932356 by kortl, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2993932356",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/combat-special-operations-fixed-2993932356-1.0-9af1a0e08cac.zip",
+   "sha256": "9af1a0e08cac9f2361f7cdb71ede46ee43c0a91965df5036d400fa5f9cf3f004",
+   "size": 19679862,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2993932356/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2993932356/specops.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:11.702743708Z",
+   "first": "2026-10-04T23:34:11.702743708Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "controlled-sea-fixed-for-1-24-2776630725",
+   "name": "Controlled Sea (FIXED FOR 1.24)",
+   "author": "Dyadyushka Dyadya",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2776630725 by Dyadyushka Dyadya, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2776630725",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/controlled-sea-fixed-for-1-24-2776630725-1.0-87edfa2acbec.zip",
+   "sha256": "87edfa2acbec5672591e78b27747a5799d953215371206100f057142371b2993",
+   "size": 272432,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2776630725/scripts.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:56.778023533Z",
+   "first": "2026-10-04T23:33:56.778023533Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "d1-2424624623",
+   "name": "D1",
+   "author": "unknown (Steam Workshop 2424624623)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2424624623 by unknown (Steam Workshop 2424624623), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2424624623",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/d1-2424624623-1.0-01181e35da68.zip",
+   "sha256": "01181e35da6886eb0dff4413438f25540f114e3aab386e42e1bd8e5047858aaa",
+   "size": 424252,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:42.857513869Z",
+   "first": "2026-10-04T23:33:42.857513869Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "detailed-mobile-task-forces-2788364899",
+   "name": "Detailed Mobile Task Forces",
+   "author": "loudyfam",
+   "kind": "mod",
+   "version": "1",
+   "description": "DESCRIPTION HERE\n\nArchived copy of Steam Workshop item 2788364899 by loudyfam, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2788364899",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/detailed-mobile-task-forces-2788364899-1-cca5f84697c7.zip",
+   "sha256": "cca5f84697c71673675ec9492c6bbaf302738bff73994c5fb668978712710459",
+   "size": 22420253,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2788364899/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2788364899/IgnoreArmor.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2788364899/all.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:58.011142657Z",
+   "first": "2026-10-04T23:33:58.011142657Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "double-barrel-shotgun-2903906406",
+   "name": "double barrel shotgun",
+   "author": "unknown (Steam Workshop 2903906406)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2903906406 by unknown (Steam Workshop 2903906406), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2903906406",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/double-barrel-shotgun-2903906406-1.0-cbcefc03c383.zip",
+   "sha256": "cbcefc03c3838cd3247b7603e267ccfa08774e4555f9898dc7785c6780575a57",
+   "size": 855702,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:08.245926871Z",
+   "first": "2026-10-04T23:34:08.245926871Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "double-barrel-v4-2091325982",
+   "name": "double barrel v4",
+   "author": "unknown (Steam Workshop 2091325982)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2091325982 by unknown (Steam Workshop 2091325982), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2091325982",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/double-barrel-v4-2091325982-1.0-473228a85e1a.zip",
+   "sha256": "473228a85e1aaf85019a6188471f88255bd747a47bb8b25269ee897b79aa04a9",
+   "size": 256606,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:26.471053943Z",
+   "first": "2026-10-04T23:33:26.471053943Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "dynamic-animation-clearing-3458269282",
+   "name": "Dynamic Animation Clearing",
+   "author": "Insultifying",
+   "kind": "mod",
+   "version": "1.1",
+   "description": "This mod clears human's animation overrides at appropriate times, so you can make more fun crash scenes\n\nArchived copy of Steam Workshop item 3458269282 by Insultifying, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3458269282",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/dynamic-animation-clearing-3458269282-1.1-d9698ff173e5.zip",
+   "sha256": "d9698ff173e516254a3ea9ad97e3ca433f86835a8a88c4d2e394c9f4fd3967ff",
+   "size": 306129,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:32.006682171Z",
+   "first": "2026-10-04T23:34:32.006682171Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "elevating-chamber-breechloader-2818733464",
+   "name": "elevating chamber breechloader",
+   "author": "unknown (Steam Workshop 2818733464)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2818733464 by unknown (Steam Workshop 2818733464), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2818733464",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/elevating-chamber-breechloader-2818733464-1.0-11a686a205eb.zip",
+   "sha256": "11a686a205eb1fefa92e6c211dff9542e557d6da7092986333025bc46e8a08dc",
+   "size": 250661,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:00.57171755Z",
+   "first": "2026-10-04T23:34:00.57171755Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "extend-wire-length-3530638905",
+   "name": "Extend Wire Length",
+   "author": "Chesvin1",
+   "kind": "mod",
+   "version": "2.0",
+   "description": "Adds a button that lets you type any number and extend (or shorten) every wire attached to the selected object(s) by that amount.\n\nArchived copy of Steam Workshop item 3530638905 by Chesvin1, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3530638905",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/extend-wire-length-3530638905-2.0-cb435024646d.zip",
+   "sha256": "cb435024646d1e7a4bcc998761b826fb9ba044bb81701ffd64b278fa2a990c2b",
+   "size": 206131,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:42.897992113Z",
+   "first": "2026-10-04T23:34:42.897992113Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "flipping-heck-2448120172",
+   "name": "flipping heck",
+   "author": "zooi",
+   "kind": "mod",
+   "version": "1.7",
+   "description": "Adds a menu option to flip anything after it has been spawned\n\nArchived copy of Steam Workshop item 2448120172 by zooi, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2448120172",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/flipping-heck-2448120172-1.7-faeada7d9955.zip",
+   "sha256": "faeada7d9955c0756b31100f9c33426c5a2c03a72aa0593ba5b28e707e633093",
+   "size": 10899,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:44.666568275Z",
+   "first": "2026-10-04T23:33:44.666568275Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "full-glados-2871879626",
+   "name": "FULL GLaDOS",
+   "author": "unknown (Steam Workshop 2871879626)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2871879626 by unknown (Steam Workshop 2871879626), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2871879626",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/full-glados-2871879626-1.0-ae509b029aec.zip",
+   "sha256": "ae509b029aec9cff0f77aa30d0b6b2effb3e7dd5dbabbf094d87ec94b43b22dc",
+   "size": 189138,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:04.541862539Z",
+   "first": "2026-10-04T23:34:04.541862539Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "futuristic-weapons-mod-2494447929",
+   "name": "Futuristic Weapons Mod +",
+   "author": "Gun_O",
+   "kind": "mod",
+   "version": "0.3",
+   "description": "Futuristic weapons that shoot lasers! V0.4 is here! Several changes to textures and thumbnails and several new weapons!\n\nArchived copy of Steam Workshop item 2494447929 by Gun_O, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2494447929",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/futuristic-weapons-mod-2494447929-0.3-8b7d6215d003.zip",
+   "sha256": "8b7d6215d003e4e178addb3f87f5ebc126b77460da68438e39b019374f3ae106",
+   "size": 1928004,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:47.100360012Z",
+   "first": "2026-10-04T23:33:47.100360012Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "fwm-forest-war-map-2970024658",
+   "name": "FWM -- Forest War Map",
+   "author": "People Playground mapper",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "...\n\nArchived copy of Steam Workshop item 2970024658 by People Playground mapper, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2970024658",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/fwm-forest-war-map-2970024658-1.0-da9f054e8b4e.zip",
+   "sha256": "da9f054e8b4e050059816e5f676461fe6db5b1cb5d07c76eaf1c67ae74a1e7c1",
+   "size": 878661,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2970024658/main.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:10.29971519Z",
+   "first": "2026-10-04T23:34:10.29971519Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "glados-core-2870935953",
+   "name": "GLaDOS CORE",
+   "author": "unknown (Steam Workshop 2870935953)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2870935953 by unknown (Steam Workshop 2870935953), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2870935953",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/glados-core-2870935953-1.0-7c5a4a2dc4da.zip",
+   "sha256": "7c5a4a2dc4da05d56af54f2fecb49d9bc24f2da84196cf36737115e0456fe530",
+   "size": 107804,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:04.339562995Z",
+   "first": "2026-10-04T23:34:04.339562995Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "gold-items-mod-2545282100",
+   "name": "Gold Items Mod",
+   "author": "um, idk",
+   "kind": "mod",
+   "version": "1.3",
+   "description": "w\n\nArchived copy of Steam Workshop item 2545282100 by um, idk, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2545282100",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/gold-items-mod-2545282100-1.3-ed40b38865d8.zip",
+   "sha256": "ed40b38865d87366dab3964d3f2e3d430b016bf323ff4f6d0dd1e23401af3ad3",
+   "size": 5954878,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2545282100/ArmorIgnore.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2545282100/Gold.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:50.87065981Z",
+   "first": "2026-10-04T23:33:50.87065981Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "grips-objects-no-collide-3023377752",
+   "name": "Grips Objects No Collide",
+   "author": "Dyadyushka Dyadya",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "The mod was ordered by Finest Sneak Disser In History\n\nArchived copy of Steam Workshop item 3023377752 by Dyadyushka Dyadya, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3023377752",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/grips-objects-no-collide-3023377752-1.0-9e489883a258.zip",
+   "sha256": "9e489883a258e1616b6edec3a275fdbef92177cecc4294a014547abf8f40d57b",
+   "size": 287540,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3023377752/scripts.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 3023377752/scripts.cs: uses System.Reflection (reflection)"
+   ],
+   "published": "2026-10-04T23:34:13.098789712Z",
+   "first": "2026-10-04T23:34:13.098789712Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "guillotine-2761084175",
+   "name": "guillotine",
+   "author": "unknown (Steam Workshop 2761084175)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2761084175 by unknown (Steam Workshop 2761084175), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2761084175",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/guillotine-2761084175-1.0-19ef12b7bcec.zip",
+   "sha256": "19ef12b7bcec134248ee749d9fa2bafff4a5278bf91c3fc06502a57c8ed10c11",
+   "size": 717830,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:56.391125585Z",
+   "first": "2026-10-04T23:33:56.391125585Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "half-life-alyx-mod-2591067503",
+   "name": "Half Life Alyx mod",
+   "author": "Hoodirony360(Snooseal)",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds stuff from Half Life Alyx. The game only rich people can play. If you read this in a workshop mods description, it means that the mod is stolen and reuploaded by a bot. Bleep bloop i am gay\n\nArchived copy of Steam Workshop item 2591067503 by Hoodirony360(Snooseal), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2591067503",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/half-life-alyx-mod-2591067503-1.0-6048c71cc1fa.zip",
+   "sha256": "6048c71cc1fa93292b72bf50c18abbbc0bded4b269ed8319b089c581f27de09f",
+   "size": 32231647,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2591067503/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:53.209768572Z",
+   "first": "2026-10-04T23:33:53.209768572Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "hazal01-3565572383",
+   "name": "hazal01",
+   "author": "unknown (Steam Workshop 3565572383)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3565572383 by unknown (Steam Workshop 3565572383), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3565572383",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal01-3565572383-1.0-fa51578a14a7.zip",
+   "sha256": "fa51578a14a7126eaf27373182d9e32d3f6db851273b6c65aa2b3b86abef431a",
+   "size": 687876,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:47.040971579Z",
+   "first": "2026-10-04T23:34:47.040971579Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal02-3636873100",
+   "name": "hazal02",
+   "author": "unknown (Steam Workshop 3636873100)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3636873100 by unknown (Steam Workshop 3636873100), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3636873100",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal02-3636873100-1.0-91900e13d613.zip",
+   "sha256": "91900e13d6132d40ba778edca23b4af49f0decfc6011a712e1d43ce6870c0f06",
+   "size": 617532,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:49.042193783Z",
+   "first": "2026-10-04T23:34:49.042193783Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal03-3636874665",
+   "name": "hazal03",
+   "author": "unknown (Steam Workshop 3636874665)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3636874665 by unknown (Steam Workshop 3636874665), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3636874665",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal03-3636874665-1.0-6af79a0349f8.zip",
+   "sha256": "6af79a0349f836632e0456efdebc5b05d7e3968309777ed5164f3db3d61f3763",
+   "size": 618518,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:49.292317196Z",
+   "first": "2026-10-04T23:34:49.292317196Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal04-3636875027",
+   "name": "hazal04",
+   "author": "unknown (Steam Workshop 3636875027)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3636875027 by unknown (Steam Workshop 3636875027), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3636875027",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal04-3636875027-1.0-e63bd7d27587.zip",
+   "sha256": "e63bd7d27587ee7a0dd217218242533b2da29151d350f8c21fc5801609224a16",
+   "size": 653988,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:49.528558281Z",
+   "first": "2026-10-04T23:34:49.528558281Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal05-3636875377",
+   "name": "hazal05",
+   "author": "unknown (Steam Workshop 3636875377)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3636875377 by unknown (Steam Workshop 3636875377), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3636875377",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal05-3636875377-1.0-08b315e490f9.zip",
+   "sha256": "08b315e490f9de5abb5239e91b48d482c7f189c7477049fcfb8bbff1f0e7b7da",
+   "size": 617573,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:49.823557805Z",
+   "first": "2026-10-04T23:34:49.823557805Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal09-3635674725",
+   "name": "hazal09",
+   "author": "unknown (Steam Workshop 3635674725)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3635674725 by unknown (Steam Workshop 3635674725), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3635674725",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal09-3635674725-1.0-35c427147736.zip",
+   "sha256": "35c4271477364684748239ad2b39d14044341dd230274ce6958fcccde6f9fbc1",
+   "size": 744649,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:48.617927644Z",
+   "first": "2026-10-04T23:34:48.617927644Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal10-3636876457",
+   "name": "hazal10",
+   "author": "unknown (Steam Workshop 3636876457)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3636876457 by unknown (Steam Workshop 3636876457), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3636876457",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal10-3636876457-1.0-f964322b8ef3.zip",
+   "sha256": "f964322b8ef3e3668f38ce156406a1e1fd31ee52865e7735c598f47882f161cb",
+   "size": 655210,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:50.077603901Z",
+   "first": "2026-10-04T23:34:50.077603901Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal11-3637491733",
+   "name": "hazal11",
+   "author": "unknown (Steam Workshop 3637491733)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3637491733 by unknown (Steam Workshop 3637491733), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3637491733",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal11-3637491733-1.0-c91286248874.zip",
+   "sha256": "c91286248874faae9b3e6806fb394198a0b693fe00c3bd18f6a60474f2ff5b63",
+   "size": 685947,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:50.339649355Z",
+   "first": "2026-10-04T23:34:50.339649355Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal12-3637635258",
+   "name": "hazal12",
+   "author": "unknown (Steam Workshop 3637635258)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3637635258 by unknown (Steam Workshop 3637635258), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3637635258",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal12-3637635258-1.0-4f8281731273.zip",
+   "sha256": "4f828173127376436f3c8bc4b69cc1924586b7991347121122032fd544390142",
+   "size": 699253,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:50.596197033Z",
+   "first": "2026-10-04T23:34:50.596197033Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazal13-3638240681",
+   "name": "hazal13",
+   "author": "unknown (Steam Workshop 3638240681)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3638240681 by unknown (Steam Workshop 3638240681), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3638240681",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazal13-3638240681-1.0-f81fa681176e.zip",
+   "sha256": "f81fa681176e5767dc7b88b51461cffef26f13ebaa2d930bea4ae6a7868123e6",
+   "size": 718625,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:50.872692509Z",
+   "first": "2026-10-04T23:34:50.872692509Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazard01-3480573775",
+   "name": "hazard01",
+   "author": "unknown (Steam Workshop 3480573775)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480573775 by unknown (Steam Workshop 3480573775), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480573775",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazard01-3480573775-1.0-113d2b10fdf5.zip",
+   "sha256": "113d2b10fdf513be3d938772ad074c82a6a82552363c8d3787e2f7907698dc48",
+   "size": 649562,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:36.157690974Z",
+   "first": "2026-10-04T23:34:36.157690974Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazard02-3480573965",
+   "name": "hazard02",
+   "author": "unknown (Steam Workshop 3480573965)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480573965 by unknown (Steam Workshop 3480573965), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480573965",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazard02-3480573965-1.0-f18d89a32875.zip",
+   "sha256": "f18d89a32875b357f50b895e1af35be7ab7102ca8f9f56656fd7ecf08c895881",
+   "size": 611575,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:36.415097396Z",
+   "first": "2026-10-04T23:34:36.415097396Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazard03-3480574103",
+   "name": "hazard03",
+   "author": "unknown (Steam Workshop 3480574103)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480574103 by unknown (Steam Workshop 3480574103), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480574103",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazard03-3480574103-1.0-a0e153baf0b0.zip",
+   "sha256": "a0e153baf0b0b4e9321265255eba94b7cc0f7b3a07ec417373a948caedddb247",
+   "size": 620972,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:36.665767515Z",
+   "first": "2026-10-04T23:34:36.665767515Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazard04-3480574244",
+   "name": "hazard04",
+   "author": "unknown (Steam Workshop 3480574244)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480574244 by unknown (Steam Workshop 3480574244), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480574244",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazard04-3480574244-1.0-97b56f26cfee.zip",
+   "sha256": "97b56f26cfeeb79bb98eeba768bc3c13677c8eb51e1717065f7eb17d8e50d4e1",
+   "size": 620244,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:36.941265733Z",
+   "first": "2026-10-04T23:34:36.941265733Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazard06-3558124484",
+   "name": "hazard06",
+   "author": "unknown (Steam Workshop 3558124484)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3558124484 by unknown (Steam Workshop 3558124484), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3558124484",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazard06-3558124484-1.0-acd7a92411b3.zip",
+   "sha256": "acd7a92411b389dcf6b1f8c50da4c95cd9f41856876682ca14d5955e5395a119",
+   "size": 597356,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:46.524787343Z",
+   "first": "2026-10-04T23:34:46.524787343Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat-mod-remastered-2217857980",
+   "name": "Hazmat Mod Remastered",
+   "author": "Golden",
+   "kind": "mod",
+   "version": "1.3.1",
+   "description": "Prepared for (almost) anything!\n\nArchived copy of Steam Workshop item 2217857980 by Golden, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2217857980",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat-mod-remastered-2217857980-1.3.1-fb3975159bfd.zip",
+   "sha256": "fb3975159bfd548701e7ef5141bb397215eeb7c75a87b7ddbb286ba6232c97b6",
+   "size": 1088054,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2217857980/mainscript.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:30.166266242Z",
+   "first": "2026-10-04T23:33:30.166266242Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "hazmat01-3480572780",
+   "name": "hazmat01",
+   "author": "unknown (Steam Workshop 3480572780)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480572780 by unknown (Steam Workshop 3480572780), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480572780",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat01-3480572780-1.0-c18d18d140cf.zip",
+   "sha256": "c18d18d140cf8754eec28411a73d2a77e9de9f38c8dc517e65a5663df435d3dd",
+   "size": 641489,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:35.190009837Z",
+   "first": "2026-10-04T23:34:35.190009837Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat02-3480572946",
+   "name": "hazmat02",
+   "author": "unknown (Steam Workshop 3480572946)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480572946 by unknown (Steam Workshop 3480572946), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480572946",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat02-3480572946-1.0-ed82a474becc.zip",
+   "sha256": "ed82a474becc4b69718f4eb72819042dd00ef8f6ba8f12baa7430079c4bd40c3",
+   "size": 619688,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:35.432253884Z",
+   "first": "2026-10-04T23:34:35.432253884Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat03-3480573168",
+   "name": "hazmat03",
+   "author": "unknown (Steam Workshop 3480573168)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480573168 by unknown (Steam Workshop 3480573168), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480573168",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat03-3480573168-1.0-cd0245e572f7.zip",
+   "sha256": "cd0245e572f761240b738275dc763ff48337c364689afb59522edc529e42dbaa",
+   "size": 631400,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:35.666826428Z",
+   "first": "2026-10-04T23:34:35.666826428Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat04-3480573473",
+   "name": "hazmat04",
+   "author": "unknown (Steam Workshop 3480573473)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3480573473 by unknown (Steam Workshop 3480573473), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3480573473",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat04-3480573473-1.0-7166d9618a1d.zip",
+   "sha256": "7166d9618a1d105b009d1ced59cb49f644b8650f3c163e0a8f85b7c0beb56a68",
+   "size": 570243,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:35.9262613Z",
+   "first": "2026-10-04T23:34:35.9262613Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat08-3545513735",
+   "name": "hazmat08",
+   "author": "unknown (Steam Workshop 3545513735)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3545513735 by unknown (Steam Workshop 3545513735), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3545513735",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat08-3545513735-1.0-c9fd25573078.zip",
+   "sha256": "c9fd255730785623aca115637d5153acbd82f136fee0aa9bb8e6908e2669bc09",
+   "size": 662141,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:43.911438172Z",
+   "first": "2026-10-04T23:34:43.911438172Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat09-3551916742",
+   "name": "hazmat09",
+   "author": "unknown (Steam Workshop 3551916742)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3551916742 by unknown (Steam Workshop 3551916742), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3551916742",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat09-3551916742-1.0-273a4c0e56ba.zip",
+   "sha256": "273a4c0e56bacc82e730e86a613c332ce90a796b251161357cc29f393da4ebc5",
+   "size": 572277,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:45.359249755Z",
+   "first": "2026-10-04T23:34:45.359249755Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat10-3551916936",
+   "name": "hazmat10",
+   "author": "unknown (Steam Workshop 3551916936)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3551916936 by unknown (Steam Workshop 3551916936), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3551916936",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat10-3551916936-1.0-c744eecddea9.zip",
+   "sha256": "c744eecddea9a3d9e6224919de7c8af18b0c4819e5285f21dbc9731cbee5e1b9",
+   "size": 569026,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:45.623670865Z",
+   "first": "2026-10-04T23:34:45.623670865Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazmat11-3551917059",
+   "name": "hazmat11",
+   "author": "unknown (Steam Workshop 3551917059)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3551917059 by unknown (Steam Workshop 3551917059), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3551917059",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazmat11-3551917059-1.0-a40e1f9ec16f.zip",
+   "sha256": "a40e1f9ec16f8d68c705fdcb7b26f80136b6c43e0f6ec4e0a05354b45a0b6642",
+   "size": 573990,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:45.854805056Z",
+   "first": "2026-10-04T23:34:45.854805056Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "haznat06-3645604659",
+   "name": "haznat06",
+   "author": "unknown (Steam Workshop 3645604659)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3645604659 by unknown (Steam Workshop 3645604659), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3645604659",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/haznat06-3645604659-1.0-31f47fbf87d9.zip",
+   "sha256": "31f47fbf87d92f60c5bb20c395800c7959ee673624e585f9b29ee1e62b994f45",
+   "size": 552442,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:52.939350435Z",
+   "first": "2026-10-04T23:34:52.939350435Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "haznat07-3643343782",
+   "name": "haznat07",
+   "author": "unknown (Steam Workshop 3643343782)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3643343782 by unknown (Steam Workshop 3643343782), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3643343782",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/haznat07-3643343782-1.0-40213036bdd1.zip",
+   "sha256": "40213036bdd15f5a05f08a6dba26dab2a8906e3479cebd3ea958fcf8e8a1fd9e",
+   "size": 719001,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:51.660874355Z",
+   "first": "2026-10-04T23:34:51.660874355Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hazsec02-3645303713",
+   "name": "hazsec02",
+   "author": "unknown (Steam Workshop 3645303713)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3645303713 by unknown (Steam Workshop 3645303713), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3645303713",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hazsec02-3645303713-1.0-7ba2b70d885b.zip",
+   "sha256": "7ba2b70d885b96b11e80f0f34f6123d9c8b1b4051e2af3ccf8eb414b3bfce3df",
+   "size": 710597,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:52.655201399Z",
+   "first": "2026-10-04T23:34:52.655201399Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "hitman-mod-2279170186",
+   "name": "Hitman Mod",
+   "author": "enigmaburrito21",
+   "kind": "mod",
+   "version": "1.5",
+   "description": "Enter the World of Assassination.\n\nArchived copy of Steam Workshop item 2279170186 by enigmaburrito21, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2279170186",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hitman-mod-2279170186-1.5-d52a73579daf.zip",
+   "sha256": "d52a73579dafe899663f1b4fa0ef0a32413fc3d6dcea438e2f8b6a3f6d7bdb03",
+   "size": 1569837,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2279170186/Weapon.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:33.241366181Z",
+   "first": "2026-10-04T23:33:33.241366181Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "hunting-rifle-mod-2343365714",
+   "name": "Hunting Rifle Mod",
+   "author": "palmaman33",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Hunting rifle...\n\nArchived copy of Steam Workshop item 2343365714 by palmaman33, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2343365714",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hunting-rifle-mod-2343365714-1.0-f123f246b7bc.zip",
+   "sha256": "f123f246b7bc2377890f5c4cd2f06fc47e3f4d3e1565486e53ce0d0848cee4da",
+   "size": 446987,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2343365714/HuntingRifle.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:34.021696097Z",
+   "first": "2026-10-04T23:33:34.021696097Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "hyperr-s-dramatic-ragdoll-enhancements-3465897431",
+   "name": "Hyperr's Dramatic Ragdoll Enhancements",
+   "author": "Hyperr Hydra \u0026 Insultifying",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This mod improves the feel of ragdolls and adds wound grabbing, and adds extra reactions to deaths caused by traumatic brain injuries.\n\nArchived copy of Steam Workshop item 3465897431 by Hyperr Hydra \u0026 Insultifying, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3465897431",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/hyperr-s-dramatic-ragdoll-enhancements-3465897431-1.0-63bc9aacc872.zip",
+   "sha256": "63bc9aacc87223973a98e6bf74c6e9030becab2176df2a35f770b9de7c956ce5",
+   "size": 516216,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:32.886770376Z",
+   "first": "2026-10-04T23:34:32.886770376Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "improved-pickup-advanced-pickup-anything-2863389507",
+   "name": "[Improved] Pickup Advanced (Pickup anything)",
+   "author": "Dyadyushka Dyadya, ibiglaser improvement",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2863389507 by Dyadyushka Dyadya, ibiglaser improvement, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2863389507",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/improved-pickup-advanced-pickup-anything-2863389507-1.0-31584da8ac97.zip",
+   "sha256": "31584da8ac97d2c7e9d630ddf955c1af2dc236ffdaf70c7140164b977755ce80",
+   "size": 556664,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2863389507/scripts.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2863389507/scripts.cs: uses System.Reflection (reflection)"
+   ],
+   "published": "2026-10-04T23:34:03.203389113Z",
+   "first": "2026-10-04T23:34:03.203389113Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "item-plus-2612273009",
+   "name": "Item Plus",
+   "author": "Nightzz",
+   "kind": "mod",
+   "version": "6.0",
+   "description": "Random things you can find useful.\n\nArchived copy of Steam Workshop item 2612273009 by Nightzz, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2612273009",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/item-plus-2612273009-6.0-88a09a2a6fe6.zip",
+   "sha256": "88a09a2a6fe61258e088c94a0388e1dd6753240a3b1b6d5a6fd0bc22391a5611",
+   "size": 3348035,
+   "scan_max": "INFO",
+   "published": "2026-10-04T23:33:53.791622069Z",
+   "first": "2026-10-04T23:33:53.791622069Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "jmc-s-scp-173-mod-2870118211",
+   "name": "JMC's SCP-173  Mod",
+   "author": "JulianMagicCraft",
+   "kind": "mod",
+   "version": "1.4.1",
+   "description": "Adds the fully working SCP-173 to the Game\n\nArchived copy of Steam Workshop item 2870118211 by JulianMagicCraft, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2870118211",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/jmc-s-scp-173-mod-2870118211-1.4.1-9a2b82270e29.zip",
+   "sha256": "9a2b82270e29ec57dd8d537318ab3ff6ace45df2093c832a0e846137cc902d73",
+   "size": 345301,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2870118211/script.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2870118211/script.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2870118211/script.cs: uses System.Reflection (reflection)"
+   ],
+   "published": "2026-10-04T23:34:03.76732735Z",
+   "first": "2026-10-04T23:34:03.76732735Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "katana-mod-2146154723",
+   "name": "Katana Mod",
+   "author": "Portal Turret1010",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds a katana\n\nArchived copy of Steam Workshop item 2146154723 by Portal Turret1010, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2146154723",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/katana-mod-2146154723-1.0-69218e73a88f.zip",
+   "sha256": "69218e73a88f249c6b688401688676ed05a81934d28d9df14beb00d9470f26bd",
+   "size": 227604,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2146154723/katana.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:26.908656994Z",
+   "first": "2026-10-04T23:33:26.908656994Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "kboomy-sring-2186902116",
+   "name": "KBOOMY SRING",
+   "author": "unknown (Steam Workshop 2186902116)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2186902116 by unknown (Steam Workshop 2186902116), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2186902116",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/kboomy-sring-2186902116-1.0-261e6dbf8390.zip",
+   "sha256": "261e6dbf83902dd91f209ebac646ac3f4b8fa795f2b61d3b685b555a3f074777",
+   "size": 219945,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:29.162807233Z",
+   "first": "2026-10-04T23:33:29.162807233Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "laser-ak47-2525434017",
+   "name": "laser ak47",
+   "author": "unknown (Steam Workshop 2525434017)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2525434017 by unknown (Steam Workshop 2525434017), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2525434017",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/laser-ak47-2525434017-1.0-1ef6840a50db.zip",
+   "sha256": "1ef6840a50db238933e3f803dbf14f062436f0d53a56bb54b54760eb3f872426",
+   "size": 337033,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:50.155370264Z",
+   "first": "2026-10-04T23:33:50.155370264Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "lawless-high-profile-operations-2457776308",
+   "name": "Lawless - High Profile Operations",
+   "author": "Evalarian",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Entities like security guards and operatives to be used for heist/espionage roleplay.\n\nArchived copy of Steam Workshop item 2457776308 by Evalarian, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2457776308",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/lawless-high-profile-operations-2457776308-1.0-3453fe7044df.zip",
+   "sha256": "3453fe7044df80947246be4dd35307b122940eb00f7866b2107f99659a80cb52",
+   "size": 437845,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2457776308/SpaceAge.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:44.918239005Z",
+   "first": "2026-10-04T23:33:44.918239005Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "lever-action-repeater-v2-2792631288",
+   "name": "lever action repeater v2",
+   "author": "unknown (Steam Workshop 2792631288)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2792631288 by unknown (Steam Workshop 2792631288), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2792631288",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/lever-action-repeater-v2-2792631288-1.0-8928ef58e206.zip",
+   "sha256": "8928ef58e206ba60e2536f722b3973fe536283a71bcf775691d8c4b33664620c",
+   "size": 263230,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:58.968231294Z",
+   "first": "2026-10-04T23:33:58.968231294Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "lifelike-human-2385353775",
+   "name": "Lifelike Human",
+   "author": "Orange Mocha Frappuccino",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "It's all too real now.\n\nArchived copy of Steam Workshop item 2385353775 by Orange Mocha Frappuccino, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2385353775",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/lifelike-human-2385353775-1.0-ffd59d37e597.zip",
+   "sha256": "ffd59d37e59798e9fff2af70dc26c4f1375a39e693d9c4b80d6495d69f2405a6",
+   "size": 67133,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2385353775/lifelike.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:39.742580261Z",
+   "first": "2026-10-04T23:33:39.742580261Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "lightning-spear-2391517150",
+   "name": "Lightning Spear",
+   "author": "unknown (Steam Workshop 2391517150)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2391517150 by unknown (Steam Workshop 2391517150), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2391517150",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/lightning-spear-2391517150-1.0-9282497c960c.zip",
+   "sha256": "9282497c960cdcd5ef2f2a208da146218848c6abfe9f4b454f581f3f6202f2c3",
+   "size": 335417,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:41.475791349Z",
+   "first": "2026-10-04T23:33:41.475791349Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "liquid-related-machinery-2550340103",
+   "name": "Liquid-related Machinery",
+   "author": "jimmyl",
+   "kind": "mod",
+   "version": "0.6",
+   "description": "Nanomachines son.\n\nArchived copy of Steam Workshop item 2550340103 by jimmyl, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2550340103",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/liquid-related-machinery-2550340103-0.6-8ebdd28f2890.zip",
+   "sha256": "8ebdd28f2890cb7731aa42a23083bd90d12a58fc2ad4ef8d5add787c2ceda6b8",
+   "size": 3421203,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:51.249638312Z",
+   "first": "2026-10-04T23:33:51.249638312Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
   {
    "slug": "lite-pixel-blood-v5",
    "name": "Lite Pixel Blood V5",
@@ -40,6 +2407,93 @@
    ]
   },
   {
+   "slug": "little-nightmares-1-2-mod-2386667798",
+   "name": "Little Nightmares 1\u00262 (MOD)",
+   "author": "cttc321",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Have fun with it! :D\n\nArchived copy of Steam Workshop item 2386667798 by cttc321, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2386667798",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/little-nightmares-1-2-mod-2386667798-1.0-b3ea2b2ca16b.zip",
+   "sha256": "b3ea2b2ca16ba4e09c7a5fd333e8ef4af9a57e7b084659e2e198673961a81932",
+   "size": 7228901,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2386667798/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2386667798/EMP4.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2386667798/ShieldBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2386667798/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:40.695281129Z",
+   "first": "2026-10-04T23:33:40.695281129Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "map-debris-3110160244",
+   "name": "Map Debris",
+   "author": "zuccian",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "a mod that adds particles to explosions and impacts\n\nArchived copy of Steam Workshop item 3110160244 by zuccian, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3110160244",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/map-debris-3110160244-1.0-95ef04189087.zip",
+   "sha256": "95ef041890875adf1939920984858d50b6721360fe9c6919ffbf7536b2028f5a",
+   "size": 660161,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:14.754081946Z",
+   "first": "2026-10-04T23:34:14.754081946Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "map-portal-3354870765",
+   "name": "Map Portal",
+   "author": "MrLlama",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "quickly change through maps\n\nArchived copy of Steam Workshop item 3354870765 by MrLlama, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3354870765",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/map-portal-3354870765-1.0-3685b5e47d5f.zip",
+   "sha256": "3685b5e47d5f17267e3a82c952edf330c683ec694ea9481dc5bd42af17a90639",
+   "size": 2398676,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3354870765/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:22.887059462Z",
+   "first": "2026-10-04T23:34:22.887059462Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
    "slug": "measurements-mod",
    "name": "Measurements Mod",
    "author": "MC studios",
@@ -61,6 +2515,1487 @@
    "owner": "Trlydev",
    "issue": 2,
    "reviewed": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "measurements-mod-3348638857",
+   "name": "Measurements Mod",
+   "author": "MC studios",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Measurement Items\n\nArchived copy of Steam Workshop item 3348638857 by MC studios, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3348638857",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/measurements-mod-3348638857-1.0-73bea61e6568.zip",
+   "sha256": "73bea61e6568964bdc973dd038b2f0df48fc89b4ad1356f6546ccc2b27de2fa4",
+   "size": 479792,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3348638857/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:22.597360494Z",
+   "first": "2026-10-04T23:34:22.597360494Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "military-2390021263",
+   "name": "Military+",
+   "author": "Mr_kWKD",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds a military faction to the game, along with an unknown alien enemy that looks familiar. Thanks to odriw for allowing me to have functional armor in this mod.\n\nArchived copy of Steam Workshop item 2390021263 by Mr_kWKD, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2390021263",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/military-2390021263-1.0-1b6214e612d3.zip",
+   "sha256": "1b6214e612d30823e7c320def246eec1328753104f7d7fa972fcfe378aeed7b0",
+   "size": 152726,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2390021263/ArmorBehaviourTest.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2390021263/IgnoreArmorTest.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2390021263/Military.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2390021263/ShieldBehaviourTest.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:41.213223924Z",
+   "first": "2026-10-04T23:33:41.213223924Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "military-mod-update-usmc-2400567827",
+   "name": "Military mod Update USMC",
+   "author": "Your_cat",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "USMC upadate.\n\nArchived copy of Steam Workshop item 2400567827 by Your_cat, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2400567827",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/military-mod-update-usmc-2400567827-1.0-2f456c245cb3.zip",
+   "sha256": "2f456c245cb3a2f0c414af14da64a86a5b56bb5819e3bed9c1b3ae1c77e622d6",
+   "size": 6376364,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2400567827/ArmorBehaviourTest.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2400567827/IgnoreArmorTest.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2400567827/Military.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2400567827/ShieldBehaviourTest.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2400567827/pol.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:42.334623796Z",
+   "first": "2026-10-04T23:33:42.334623796Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "modern-apartment-2907078759",
+   "name": "modern apartment",
+   "author": "unknown (Steam Workshop 2907078759)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2907078759 by unknown (Steam Workshop 2907078759), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2907078759",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/modern-apartment-2907078759-1.0-2706f565ad62.zip",
+   "sha256": "2706f565ad62410eea691cde07156835b94144647ee6eeabf67a6a6520001a20",
+   "size": 464856,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:08.510235533Z",
+   "first": "2026-10-04T23:34:08.510235533Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "more-explosives-2383112201",
+   "name": "More Explosives",
+   "author": "Crafter_215",
+   "kind": "mod",
+   "version": "1.6",
+   "description": "This mod adds new and exciting Explosives!\n\nArchived copy of Steam Workshop item 2383112201 by Crafter_215, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2383112201",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/more-explosives-2383112201-1.6-46de90e56ddd.zip",
+   "sha256": "46de90e56ddd50d596c3d5e3a49a75b6835dc43b92f4305e400141038b7d4f0d",
+   "size": 247029,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:39.272431945Z",
+   "first": "2026-10-04T23:33:39.272431945Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "mortal-kombat-pack-2386182481",
+   "name": "Mortal Kombat Pack",
+   "author": "Baraka",
+   "kind": "mod",
+   "version": "1.15",
+   "description": "Includes characters from mortal kombat/Special Thanks to Morzzic and TheRogueEight!\n\nArchived copy of Steam Workshop item 2386182481 by Baraka, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2386182481",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/mortal-kombat-pack-2386182481-1.15-82372db52efa.zip",
+   "sha256": "82372db52efa3c4f7de6a2c07cc1bfa93e86c3e10a3b515a67a54629c69baa54",
+   "size": 11362070,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:40.251648325Z",
+   "first": "2026-10-04T23:33:40.251648325Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "mulligan-2369099463",
+   "name": "Mulligan",
+   "author": "JohnnyTaco",
+   "kind": "mod",
+   "version": "2.06",
+   "description": "Utility mod for controlling, flipping, tweaking, arming, resetting items\n\nArchived copy of Steam Workshop item 2369099463 by JohnnyTaco, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2369099463",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/mulligan-2369099463-2.06-b1b8be0fec80.zip",
+   "sha256": "b1b8be0fec800efe66d511694d50f8b0e51a478b4ab94443475af5e137e0f221",
+   "size": 56679,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:36.737233696Z",
+   "first": "2026-10-04T23:33:36.737233696Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "new-hope-county-jail-mod-3490290981",
+   "name": "New Hope County Jail MOD",
+   "author": "NiCE",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "A really cool prison mod that will be updated! This is my first mod, so there may be some bugs.\n\nArchived copy of Steam Workshop item 3490290981 by NiCE, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3490290981",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/new-hope-county-jail-mod-3490290981-1.0-0755c68fe43a.zip",
+   "sha256": "0755c68fe43ad4e6c5cbafdb6f18d7e831efff06fc53eeb5d59f4af6ea82a967",
+   "size": 4711432,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3490290981/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 3490290981/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:39.538824653Z",
+   "first": "2026-10-04T23:34:39.538824653Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "nuclear-playground-2484034390",
+   "name": "Nuclear Playground",
+   "author": "Kubulll",
+   "kind": "mod",
+   "version": "1.2",
+   "description": "Adds semi realistic nuclear physics.\n\nArchived copy of Steam Workshop item 2484034390 by Kubulll, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2484034390",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/nuclear-playground-2484034390-1.2-8c802fcd94e8.zip",
+   "sha256": "8c802fcd94e841707f1bb59d82473a1a4da1746acbe0657a8ef00594a3f77909",
+   "size": 2961230,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:46.786867436Z",
+   "first": "2026-10-04T23:33:46.786867436Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "payday-2-people-playground-edition-2381717092",
+   "name": "PAYDAY 2: People Playground Edition",
+   "author": "G[DEATH]P",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Take on the police and wear your masks with pride with this new PAYDAY 2 based mod for People Playground!\n\nArchived copy of Steam Workshop item 2381717092 by G[DEATH]P, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2381717092",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/payday-2-people-playground-edition-2381717092-1.0-56e7de06d84e.zip",
+   "sha256": "56e7de06d84e4762a92d25b59ce0fef685fc7b86702028f9f8bf4e635c13298a",
+   "size": 8544603,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2381717092/pd2.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:39.048642846Z",
+   "first": "2026-10-04T23:33:39.048642846Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "per-pixel-destruction-2314372940",
+   "name": "Per Pixel Destruction",
+   "author": "zooi",
+   "kind": "mod",
+   "version": "alpha 7",
+   "description": "Adds several per-pixel destructible objects. This addon is in a very early phase and many things aren't yet supported.\nMajor issues are:\n - Cannot save/load\n - Attached wires will disappear\n - Does not react to explosions\n - Unnecessary texture creation causing low fps when there is a lot of destruction\n\nArchived copy of Steam Workshop item 2314372940 by zooi, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2314372940",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/per-pixel-destruction-2314372940-alpha-7-587b6c8868d6.zip",
+   "sha256": "587b6c8868d652fe8d613a1e10331e995ae616c474e019c5c7db8373e03f47bb",
+   "size": 284502,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:33.489010121Z",
+   "first": "2026-10-04T23:33:33.489010121Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "photo-camera-3433737965",
+   "name": "Photo Camera",
+   "author": "KseLeroN",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds a camera that captures snapshots upon activation. The captured photos are instantly printed and can be interacted with in the game\n\nArchived copy of Steam Workshop item 3433737965 by KseLeroN, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3433737965",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/photo-camera-3433737965-1.0-e8ef53af3fd1.zip",
+   "sha256": "e8ef53af3fd11d68247c3f544f3959fdffe6efaed4916b9995860263e4d26d6f",
+   "size": 520803,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:28.56205915Z",
+   "first": "2026-10-04T23:34:28.56205915Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "ppg-spy-mod-2242337197",
+   "name": "PPG Spy Mod",
+   "author": "Teletubbie With A Shotgun",
+   "kind": "mod",
+   "version": "1.0.5",
+   "description": "Adds spy stuff!\n\nArchived copy of Steam Workshop item 2242337197 by Teletubbie With A Shotgun, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2242337197",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/ppg-spy-mod-2242337197-1.0.5-570448ae78cc.zip",
+   "sha256": "570448ae78cc30cb72c28d7cfc87a0582739886e705f61ea3f6ef240dbacd933",
+   "size": 170549,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2242337197/item.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:31.353176916Z",
+   "first": "2026-10-04T23:33:31.353176916Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "puppetmaster-2668334393",
+   "name": "PuppetMaster",
+   "author": "JohnnyTaco",
+   "kind": "mod",
+   "version": "2.1.2",
+   "description": "PuppetMaster\n\nArchived copy of Steam Workshop item 2668334393 by JohnnyTaco, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2668334393",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/puppetmaster-2668334393-2.1.2-2e1e1fe5a645.zip",
+   "sha256": "2e1e1fe5a645609c606eaf6045d7e0d4aca258246f74d38b2c0ced6cb33bf55d",
+   "size": 439733,
+   "scan_max": "INFO",
+   "published": "2026-10-04T23:33:55.354136996Z",
+   "first": "2026-10-04T23:33:55.354136996Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "quality-of-life-items-2500516293",
+   "name": "Quality of Life Items",
+   "author": "Pumpkin",
+   "kind": "mod",
+   "version": "1.8",
+   "description": "Archived copy of Steam Workshop item 2500516293 by Pumpkin, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2500516293",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/quality-of-life-items-2500516293-1.8-e668051346ed.zip",
+   "sha256": "e668051346ed2a5704e99ebe8cd9340fff3dd7a295c866ebedbc6f92481855b0",
+   "size": 1819335,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:48.507698061Z",
+   "first": "2026-10-04T23:33:48.507698061Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "quality-of-life-items-deprecated-2236268298",
+   "name": "Quality of Life Items(Deprecated)",
+   "author": "Pumpkin",
+   "kind": "mod",
+   "version": "1.7",
+   "description": "This mod adds some stuff that I want in the game.\n\nArchived copy of Steam Workshop item 2236268298 by Pumpkin, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2236268298",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/quality-of-life-items-deprecated-2236268298-1.7-3f8888d70e6e.zip",
+   "sha256": "3f8888d70e6e1a7e9b1b3ed8065b65821b568b6f1517d85cbb2012e7ef25fff9",
+   "size": 886831,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2236268298/Script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:31.111423957Z",
+   "first": "2026-10-04T23:33:31.111423957Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "quick-right-click-options-2516131949",
+   "name": "Quick Right Click Options",
+   "author": "Pump3d",
+   "kind": "mod",
+   "version": "2.0.1",
+   "description": "This mod adds upon the base game by adding different vitality-related buttons within the right-click context menu on living objects (and now keybinds!), allowing you to quickly and dynamically effect them.\n\nArchived copy of Steam Workshop item 2516131949 by Pump3d, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2516131949",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/quick-right-click-options-2516131949-2.0.1-3f15cd9ad05a.zip",
+   "sha256": "3f15cd9ad05ad08a26a621849f10af576305a1bf67040f3ca6736508c1498518",
+   "size": 52710,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:49.816645975Z",
+   "first": "2026-10-04T23:33:49.816645975Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "ragdoll-reborn-3537175566",
+   "name": "Ragdoll Reborn",
+   "author": "Supra",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Enhances ragdoll physics with reactive limb movement, torso collapses, and stiffening headshots. More updates soon\n\nArchived copy of Steam Workshop item 3537175566 by Supra, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3537175566",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/ragdoll-reborn-3537175566-1.0-4827c2c5497c.zip",
+   "sha256": "4827c2c5497c29e84b8b95c190e289b994b9e2e14d58efe7217454b97cef0d5a",
+   "size": 765234,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:43.201634039Z",
+   "first": "2026-10-04T23:34:43.201634039Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "rbmk-fuel-cell-3469330346",
+   "name": "RBMK Fuel Cell",
+   "author": "unknown (Steam Workshop 3469330346)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3469330346 by unknown (Steam Workshop 3469330346), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3469330346",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/rbmk-fuel-cell-3469330346-1.0-25b987b9ab10.zip",
+   "sha256": "25b987b9ab107c178c5458f4a2c24ab7a5be694420dd0b153d6d3dc19e1f3360",
+   "size": 233812,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:33.819221828Z",
+   "first": "2026-10-04T23:34:33.819221828Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "reactive-humans-3018200944",
+   "name": "Reactive humans",
+   "author": "Orsoniks / Navii",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds humans with simple AI, and allows you to control creatures by clicking X on them.\n\nArchived copy of Steam Workshop item 3018200944 by Orsoniks / Navii, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3018200944",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/reactive-humans-3018200944-1.0-6a82ef51f93a.zip",
+   "sha256": "6a82ef51f93a54f530c82bd0b81cb69bfbccbfe33f1d259e2a42c456406d3c71",
+   "size": 1321211,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:12.587036655Z",
+   "first": "2026-10-04T23:34:12.587036655Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "renault-ft-17-by-disenk-3317187176",
+   "name": "Renault FT-17_by_disenk",
+   "author": "unknown (Steam Workshop 3317187176)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3317187176 by unknown (Steam Workshop 3317187176), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3317187176",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/renault-ft-17-by-disenk-3317187176-1.0-4c31ea28d6d5.zip",
+   "sha256": "4c31ea28d6d55a8617ecfeb24fb37a9493a9634bea2891b6c533a7838269530d",
+   "size": 338545,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:20.928634199Z",
+   "first": "2026-10-04T23:34:20.928634199Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "rolling-block-pistol-2465155613",
+   "name": "rolling block pistol",
+   "author": "unknown (Steam Workshop 2465155613)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2465155613 by unknown (Steam Workshop 2465155613), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2465155613",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/rolling-block-pistol-2465155613-1.0-003bef98fa24.zip",
+   "sha256": "003bef98fa246fcae86906c08571704f57c76d77c51dc8cde5a68863de87a5e7",
+   "size": 263341,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:45.155495168Z",
+   "first": "2026-10-04T23:33:45.155495168Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "rolling-block-shotgun-2985101478",
+   "name": "rolling block shotgun",
+   "author": "unknown (Steam Workshop 2985101478)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2985101478 by unknown (Steam Workshop 2985101478), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2985101478",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/rolling-block-shotgun-2985101478-1.0-8ec39ec5fe77.zip",
+   "sha256": "8ec39ec5fe77a4f31eb99279a9a6e03b338b6b9c1b311dc525393af6425aaa04",
+   "size": 321578,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:10.523552467Z",
+   "first": "2026-10-04T23:34:10.523552467Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "saitima-2556938979",
+   "name": "Saitima",
+   "author": "unknown (Steam Workshop 2556938979)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2556938979 by unknown (Steam Workshop 2556938979), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2556938979",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/saitima-2556938979-1.0-e37517d54c8b.zip",
+   "sha256": "e37517d54c8b39409b8f68be348cdd1ca3bf06c1a00e577480f4313a0d511c64",
+   "size": 231319,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:51.449753122Z",
+   "first": "2026-10-04T23:33:51.449753122Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "science-hazard-minus-v-3-1-3471741070",
+   "name": "Science Hazard Minus V:3.1",
+   "author": "Zkryhn",
+   "kind": "mod",
+   "version": "3.1",
+   "description": "Archived copy of Steam Workshop item 3471741070 by Zkryhn, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3471741070",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/science-hazard-minus-v-3-1-3471741070-3.1-65b299b7b1a4.zip",
+   "sha256": "65b299b7b1a409503d4b81357b6242e7b3092d82c166323e1815e415ca00c14e",
+   "size": 13609533,
+   "scan_max": "INFO",
+   "published": "2026-10-04T23:34:34.597681174Z",
+   "first": "2026-10-04T23:34:34.597681174Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "scp-610-mod-2626113140",
+   "name": "[ SCP-610 Mod ]",
+   "author": "[ Fasol_G#DangerZone ]",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "[ A bit of a non-standard mod for me, as the theme is too abstract. Well... I hope you enjoy it ]\n\nArchived copy of Steam Workshop item 2626113140 by [ Fasol_G#DangerZone ], from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2626113140",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/scp-610-mod-2626113140-1.0-6e53b2b7d058.zip",
+   "sha256": "6e53b2b7d058148b8ccd800daa0268fac7d86719d52bf70d3251c2c1ad87253b",
+   "size": 10584778,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2626113140/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:54.444664543Z",
+   "first": "2026-10-04T23:33:54.444664543Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "scp-armory-2789034314",
+   "name": "SCP: Armory",
+   "author": "loudyfam",
+   "kind": "mod",
+   "version": "1",
+   "description": "DESCRIPTION HERE\n\nArchived copy of Steam Workshop item 2789034314 by loudyfam, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2789034314",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/scp-armory-2789034314-1-a86eac564f8b.zip",
+   "sha256": "a86eac564f8b09ac3c7c69de9d11f26f737cd0cbcd63c3138e0e28e72183d529",
+   "size": 12161962,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2789034314/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2789034314/IgnoreArmor.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2789034314/all.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:58.697808581Z",
+   "first": "2026-10-04T23:33:58.697808581Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "scp-secret-laboratory-2259702339",
+   "name": "SCP: Secret Laboratory",
+   "author": "Teletubbie With A Shotgun",
+   "kind": "mod",
+   "version": "1.0.5",
+   "description": "SCP: Secret Laboratory\n\nArchived copy of Steam Workshop item 2259702339 by Teletubbie With A Shotgun, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2259702339",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/scp-secret-laboratory-2259702339-1.0.5-1ae3cb2a5bf8.zip",
+   "sha256": "1ae3cb2a5bf89e61ec535260fd72861080cfa173ea9474252b5e233d27d489e1",
+   "size": 3122528,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2259702339/btv medal.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2259702339/item.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:32.480993922Z",
+   "first": "2026-10-04T23:33:32.480993922Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "simple-syringes-mod-2367972029",
+   "name": "Simple Syringes Mod",
+   "author": "Pumpkin",
+   "kind": "mod",
+   "version": "2.2",
+   "description": "Adds 37 new Syringes\n\nThere might or might not be more syringes later\n\nArchived copy of Steam Workshop item 2367972029 by Pumpkin, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2367972029",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/simple-syringes-mod-2367972029-2.2-9868b8044f83.zip",
+   "sha256": "9868b8044f830b8baf3cb6225f6ff4feebe250cc6650bfbc46864db9d012a72d",
+   "size": 1612335,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:36.510855043Z",
+   "first": "2026-10-04T23:33:36.510855043Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "simpleportals-3018201443",
+   "name": "SimplePortals",
+   "author": "Orsoniks / Navii",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Adds a portal gun that can create portals.\n\nArchived copy of Steam Workshop item 3018201443 by Orsoniks / Navii, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3018201443",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/simpleportals-3018201443-1.0-f5af827860f8.zip",
+   "sha256": "f5af827860f838c6ec706476a1b5bc23a75a91fd2c13296441335e1d4ea22fd7",
+   "size": 969244,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:12.837500813Z",
+   "first": "2026-10-04T23:34:12.837500813Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "siren-head-mod-2351362869",
+   "name": "Siren Head Mod",
+   "author": "cttc321",
+   "kind": "mod",
+   "version": "0.1",
+   "description": "Archived copy of Steam Workshop item 2351362869 by cttc321, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2351362869",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/siren-head-mod-2351362869-0.1-9e3e2ff6907a.zip",
+   "sha256": "9e3e2ff6907a238176ed11da0a2e61ba7b854433ec35753c9e3e45a89ad1d4d6",
+   "size": 2498589,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2351362869/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:34.330711636Z",
+   "first": "2026-10-04T23:33:34.330711636Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "skyscraper-with-realistic-destruction-v6-2401212507",
+   "name": "Skyscraper With Realistic Destruction v6",
+   "author": "unknown (Steam Workshop 2401212507)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2401212507 by unknown (Steam Workshop 2401212507), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2401212507",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/skyscraper-with-realistic-destruction-v6-2401212507-1.0-1b7869afa49a.zip",
+   "sha256": "1b7869afa49a4470cfeb98b0b153e29a3729ab3a724353898bf6e297035c6d94",
+   "size": 380059,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:42.553169446Z",
+   "first": "2026-10-04T23:33:42.553169446Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "snek-medical-icu-intensive-care-unit-2836734599",
+   "name": "Snek Medical ICU (Intensive Care Unit)",
+   "author": "unknown (Steam Workshop 2836734599)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2836734599 by unknown (Steam Workshop 2836734599), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2836734599",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/snek-medical-icu-intensive-care-unit-2836734599-1.0-0cb4f709cecf.zip",
+   "sha256": "0cb4f709cecfecc1f0bd70ad7549f91ec8dfc0404309ca93a8c563c6911c52c9",
+   "size": 407143,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:02.054808508Z",
+   "first": "2026-10-04T23:34:02.054808508Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "snek-medical-nurse-2843770452",
+   "name": "Snek Medical™ Nurse",
+   "author": "Lol_Wut",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "I saw that there was a lack of nurses on the workshop, so I made one. \r\n\r\nSkin sprite Copyright 2022 Snek Medical™ Do not redistribute without permission...\n\nArchived copy of Steam Workshop item 2843770452 by Lol_Wut, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2843770452",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/snek-medical-nurse-2843770452-1.0-c84192ad8a59.zip",
+   "sha256": "c84192ad8a59b908b8c5335be3bb6ef9e9e581c010d3c1d37492743c79357ab6",
+   "size": 422232,
+   "scan_max": "INFO",
+   "published": "2026-10-04T23:34:02.497069812Z",
+   "first": "2026-10-04T23:34:02.497069812Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "snek-medical-trauma-center-v2-2571433008",
+   "name": "Snek Medical Trauma Center v2",
+   "author": "unknown (Steam Workshop 2571433008)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 2571433008 by unknown (Steam Workshop 2571433008), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2571433008",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/snek-medical-trauma-center-v2-2571433008-1.0-5e7e80a07383.zip",
+   "sha256": "5e7e80a07383fce5e3cd6138355fc978bfd96a410f81a892ccfb49176fdd2a65",
+   "size": 419410,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:51.783205708Z",
+   "first": "2026-10-04T23:33:51.783205708Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "sovereign-3483270884",
+   "name": "Sovereign",
+   "author": "MrLlama",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3483270884 by MrLlama, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3483270884",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/sovereign-3483270884-1.0-1f812dcc61d4.zip",
+   "sha256": "1f812dcc61d46ef2ec019236b877055f01936ab0672c28caa40f85b5af0cf71e",
+   "size": 1989974,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:37.656232828Z",
+   "first": "2026-10-04T23:34:37.656232828Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "spiderman-collection-2-2355829306",
+   "name": "Spiderman Collection 2",
+   "author": "Le Pangolin",
+   "kind": "mod",
+   "version": "2.0",
+   "description": "Contains all human dressed as multiple versions of Spiderman\n\nArchived copy of Steam Workshop item 2355829306 by Le Pangolin, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2355829306",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/spiderman-collection-2-2355829306-2.0-4d7411e7604a.zip",
+   "sha256": "4d7411e7604aa018417f73d0c9b29406586404902928a744d07ed1f4d2995117",
+   "size": 1220136,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2355829306/powers.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2355829306/spidermansuits.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:35.451579369Z",
+   "first": "2026-10-04T23:33:35.451579369Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "steel-bridge-realistic-3644554635",
+   "name": "Steel Bridge - Realistic",
+   "author": "unknown (Steam Workshop 3644554635)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3644554635 by unknown (Steam Workshop 3644554635), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3644554635",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/steel-bridge-realistic-3644554635-1.0-1d1be02e7fb3.zip",
+   "sha256": "1d1be02e7fb341481d074e0b69319cd34ab89844e60b911109f609acce80c7da",
+   "size": 909942,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:52.414606486Z",
+   "first": "2026-10-04T23:34:52.414606486Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "symbiote-playground-2803459361",
+   "name": "Symbiote Playground",
+   "author": "zuccian",
+   "kind": "mod",
+   "version": "1",
+   "description": "mod that adds symbiotes\n\nArchived copy of Steam Workshop item 2803459361 by zuccian, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2803459361",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/symbiote-playground-2803459361-1-77cd26360141.zip",
+   "sha256": "77cd26360141cbead8c5c9e540a1077f36ac5a0275bf8a83c68e3e6ad1ce9d6e",
+   "size": 4117810,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2803459361/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:00.125698386Z",
+   "first": "2026-10-04T23:34:00.125698386Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "synths-2840993425",
+   "name": "Synths",
+   "author": "j_lk23",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This adds synths to the game.\n\nArchived copy of Steam Workshop item 2840993425 by j_lk23, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2840993425",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/synths-2840993425-1.0-f35a868e82d5.zip",
+   "sha256": "f35a868e82d557180bbc54c497fe8c71889c7dd309b5d2c3b17d38f5b6400506",
+   "size": 17726,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:02.277542967Z",
+   "first": "2026-10-04T23:34:02.277542967Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "taser-2361892819",
+   "name": "Taser",
+   "author": "Morzzic",
+   "kind": "mod",
+   "version": "1.2",
+   "description": "This mod adds a TASER to PPG.\n\nArchived copy of Steam Workshop item 2361892819 by Morzzic, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2361892819",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/taser-2361892819-1.2-c4e2dccda753.zip",
+   "sha256": "c4e2dccda753ccee5d49efc63312648de3ed9d3452040e64e562d012b8538331",
+   "size": 909556,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2361892819/src/TaserWeaponBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2361892819/src/TaserWeaponBehaviour.cs: uses UnityEditor (Unity editor API (does nothing in the game))"
+   ],
+   "published": "2026-10-04T23:33:35.97090722Z",
+   "first": "2026-10-04T23:33:35.97090722Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "the-twin-tower-3643565881",
+   "name": "The Twin Tower",
+   "author": "unknown (Steam Workshop 3643565881)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3643565881 by unknown (Steam Workshop 3643565881), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3643565881",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/the-twin-tower-3643565881-1.0-66b95eef70bc.zip",
+   "sha256": "66b95eef70bc472acc360399412eb0e24a9610f7072451a7762485a08061fd9a",
+   "size": 335671,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:51.893150629Z",
+   "first": "2026-10-04T23:34:51.893150629Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "the-ultimate-melee-mod-2389733225",
+   "name": "The Ultimate Melee Mod",
+   "author": "mishanya",
+   "kind": "mod",
+   "version": "1.0 preview 4",
+   "description": "This mod adds a lot of new melee weapons.\n\nArchived copy of Steam Workshop item 2389733225 by mishanya, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2389733225",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/the-ultimate-melee-mod-2389733225-1.0-preview-4-a33cb612cdb3.zip",
+   "sha256": "a33cb612cdb3a98f7452fa4199a124c80159c219dda08c2ec135d2c798823287",
+   "size": 1518012,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2389733225/GlobalUsings.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:40.990887913Z",
+   "first": "2026-10-04T23:33:40.990887913Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "tomjur-s-apartments-3644551828",
+   "name": "Tomjur's Apartments",
+   "author": "unknown (Steam Workshop 3644551828)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3644551828 by unknown (Steam Workshop 3644551828), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3644551828",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/tomjur-s-apartments-3644551828-1.0-60742f18864c.zip",
+   "sha256": "60742f18864cd8440e28995ad8c639da261aed2f1a82713356f7ec3d45d6f6ce",
+   "size": 947336,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:52.14421575Z",
+   "first": "2026-10-04T23:34:52.14421575Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "ultimate-knockout-fix-3406237303",
+   "name": "Ultimate Knockout Fix",
+   "author": "MC studios",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Fix Knockout Bug Automatically\n\nArchived copy of Steam Workshop item 3406237303 by MC studios, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3406237303",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/ultimate-knockout-fix-3406237303-1.0-aea23aa68919.zip",
+   "sha256": "aea23aa68919fc970156b91b02e44721b373e16c4a24019f34c2b6622c380b4e",
+   "size": 144580,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 3406237303/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:26.027703207Z",
+   "first": "2026-10-04T23:34:26.027703207Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "ultimate-super-hero-mod-2-2357867750",
+   "name": "Ultimate Super Hero Mod 2",
+   "author": "Le Pangolin",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "Add bunch of super heros and vilains, comming from DC or Marvel.\n\nArchived copy of Steam Workshop item 2357867750 by Le Pangolin, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2357867750",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/ultimate-super-hero-mod-2-2357867750-1.0-8f3c94af014c.zip",
+   "sha256": "8f3c94af014c4cf5741b1140fbd36b5e7d237e208ecc056f2b2ae4258e7b0933",
+   "size": 1127892,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:35.71117809Z",
+   "first": "2026-10-04T23:33:35.71117809Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "vietnam-soldiers-mod-2221749809",
+   "name": "Vietnam Soldiers Mod",
+   "author": "Teletubbie With A Shotgun",
+   "kind": "mod",
+   "version": "1.0.5",
+   "description": "Relive the horrible ptsd induced nightmares with these vietnam npcs!.\n\nArchived copy of Steam Workshop item 2221749809 by Teletubbie With A Shotgun, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2221749809",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/vietnam-soldiers-mod-2221749809-1.0.5-bda78ab1b128.zip",
+   "sha256": "bda78ab1b128e0134ad1273d999617119ad5efe15461e1ad2553c60f620c7d4d",
+   "size": 5550310,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2221749809/item.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:30.538478653Z",
+   "first": "2026-10-04T23:33:30.538478653Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "volcaniccaverns-3473859318",
+   "name": "Volcaniccaverns",
+   "author": "Zkryhn",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "...\n\nArchived copy of Steam Workshop item 3473859318 by Zkryhn, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3473859318",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/volcaniccaverns-3473859318-1.0-16103a7ab4f6.zip",
+   "sha256": "16103a7ab4f6bbe9a1f0fa098946e8f8fc6cf2a3ff76851bf3945d60fc60fbd9",
+   "size": 874050,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:34.939413106Z",
+   "first": "2026-10-04T23:34:34.939413106Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "warmaps-skirmish-3563392673",
+   "name": "WarMaps Skirmish",
+   "author": "unknown (Steam Workshop 3563392673)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3563392673 by unknown (Steam Workshop 3563392673), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3563392673",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/warmaps-skirmish-3563392673-1.0-2c67d885276e.zip",
+   "sha256": "2c67d885276ece1e3d0e3c6b2ea38bd2bd126dfb663631f7e0c76f738560bca9",
+   "size": 251521,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:46.744740666Z",
+   "first": "2026-10-04T23:34:46.744740666Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "water-physics-2793815479",
+   "name": "Water Physics",
+   "author": "Morzzic",
+   "kind": "mod",
+   "version": "1.1",
+   "description": "Archived copy of Steam Workshop item 2793815479 by Morzzic, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2793815479",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/water-physics-2793815479-1.1-1d6cc45b50c9.zip",
+   "sha256": "1d6cc45b50c9d592521ed425cafe22b6eb4080e447c6ceefdd3fdbebabb3e030",
+   "size": 470080,
+   "scan_max": "none",
+   "published": "2026-10-04T23:33:59.202126136Z",
+   "first": "2026-10-04T23:33:59.202126136Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "weapon-auto-firing-toggle-3639667886",
+   "name": "Weapon Auto-Firing Toggle",
+   "author": "Crazy",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This mod adds a brand new ability to toggle automatic weapons, which keeps firing automatically until toggled off.\n\nArchived copy of Steam Workshop item 3639667886 by Crazy, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3639667886",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/weapon-auto-firing-toggle-3639667886-1.0-bf434150b5a2.zip",
+   "sha256": "bf434150b5a225c0a492292c2a2f63968e0ad3ea9921aae54a24782cfafd93c6",
+   "size": 230889,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:51.0987101Z",
+   "first": "2026-10-04T23:34:51.0987101Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "weapon-sfx-realism-mod-2994693365",
+   "name": "Weapon SFX Realism Mod",
+   "author": "FEX",
+   "kind": "mod",
+   "version": "1.4",
+   "description": "Adds a new tail, kick and a new transient onto every weapon's SFX.\n\nArchived copy of Steam Workshop item 2994693365 by FEX, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2994693365",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/weapon-sfx-realism-mod-2994693365-1.4-9b2f29e29c48.zip",
+   "sha256": "9b2f29e29c48a04048fb61b6606006d7d658d2c3a66e0bd654c763beb9fb431e",
+   "size": 2312303,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:11.991185219Z",
+   "first": "2026-10-04T23:34:11.991185219Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "wild-medieval-2708133294",
+   "name": "Wild Medieval",
+   "author": "megaturn",
+   "kind": "mod",
+   "version": "1.2",
+   "description": "More weapons, armor, shields, bows and more!\n\nArchived copy of Steam Workshop item 2708133294 by megaturn, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2708133294",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/wild-medieval-2708133294-1.2-2d71a836f784.zip",
+   "sha256": "2d71a836f78426348d49302e8c14bcb79d7e000c066f96690a60951b52332339",
+   "size": 307640,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2708133294/ArmorBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2708133294/AttachmentBehaviour.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2708133294/IgnoreArmor.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2708133294/Mod.cs: uses System.IO (file system access)",
+    "[MEDIUM namespace] 2708133294/ShieldBehaviour.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:55.882550766Z",
+   "first": "2026-10-04T23:33:55.882550766Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "youtubers-mod-2373066279",
+   "name": "Youtubers Mod",
+   "author": "Wuhite",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "A mod with youtubers\n\nArchived copy of Steam Workshop item 2373066279 by Wuhite, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2373066279",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/youtubers-mod-2373066279-1.0-fadcd7a0951f.zip",
+   "sha256": "fadcd7a0951f1186acfe1afe3570f22683ab06f6720c14ad945643cb3acac77f",
+   "size": 2570019,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2373066279/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:33:37.645482426Z",
+   "first": "2026-10-04T23:33:37.645482426Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
+   "rules": [
+    "namespace"
+   ]
+  },
+  {
+   "slug": "zombie-car-3645774632",
+   "name": "zombie car",
+   "author": "unknown (Steam Workshop 3645774632)",
+   "kind": "contraption",
+   "version": "1.0",
+   "description": "Archived copy of Steam Workshop item 3645774632 by unknown (Steam Workshop 3645774632), from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "3645774632",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/zombie-car-3645774632-1.0-ee0837da25a3.zip",
+   "sha256": "ee0837da25a332bae02e253fd843d685d6d4fa04698152e55e5629b63f4e073b",
+   "size": 898098,
+   "scan_max": "none",
+   "published": "2026-10-04T23:34:53.188895968Z",
+   "first": "2026-10-04T23:34:53.188895968Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true
+  },
+  {
+   "slug": "zombie-pack-2846165686",
+   "name": "Zombie Pack",
+   "author": "Misi",
+   "kind": "mod",
+   "version": "1.0",
+   "description": "This mod adds zombies\n\nArchived copy of Steam Workshop item 2846165686 by Misi, from before the worm, published by the Open Workshop's owner. Authors can ask for it to be taken down.",
+   "tags": [
+    "archive"
+   ],
+   "workshop_id": "2846165686",
+   "file": "https://github.com/Trlydev/SWG/releases/download/workshop-files/zombie-pack-2846165686-1.0-c45002b6de96.zip",
+   "sha256": "c45002b6de96214c9d9bb4cff32fd723c1243fa8d68a3ddbe72974de1a1afef5",
+   "size": 139197,
+   "scan_max": "MEDIUM",
+   "findings": [
+    "[MEDIUM namespace] 2846165686/script.cs: uses System.IO (file system access)"
+   ],
+   "published": "2026-10-04T23:34:02.725601285Z",
+   "first": "2026-10-04T23:34:02.725601285Z",
+   "commit": "",
+   "maintainers": [
+    "Trlydev"
+   ],
+   "owner": "Trlydev",
+   "approved": true,
    "rules": [
     "namespace"
    ]
