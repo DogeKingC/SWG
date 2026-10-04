@@ -101,6 +101,32 @@ func NXFiles(key string, modID int) ([]NXFile, error) {
 	return out.Files, nil
 }
 
+// NXFileByMD5 returns the IDs of the mods (of this game) whose files have
+// this MD5, as Nexus Mods records it. An empty list means Nexus has no such
+// file.
+func NXFileByMD5(key, md5hex string) ([]int, error) {
+	var out []struct {
+		Mod struct {
+			ModID  int    `json:"mod_id"`
+			Domain string `json:"domain_name"`
+		} `json:"mod"`
+	}
+	err := nxV1(key, fmt.Sprintf("/games/%s/mods/md5_search/%s.json", nxGame, md5hex), &out)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []int
+	for _, r := range out {
+		if r.Mod.Domain == "" || strings.EqualFold(r.Mod.Domain, nxGame) {
+			ids = append(ids, r.Mod.ModID)
+		}
+	}
+	return ids, nil
+}
+
 // NXMainFile returns a mod's newest main file (else newest non-archived).
 func NXMainFile(key string, modID int) (*NXFile, error) {
 	files, err := NXFiles(key, modID)

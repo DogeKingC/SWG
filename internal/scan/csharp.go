@@ -195,6 +195,9 @@ func analyzeCSharp(r *Report, rel, src string) {
 	if lx.unicodeEscapes > 0 {
 		r.add(High, "unicode-escapes", rel, 0, fmt.Sprintf("%d \\u escapes in identifiers (identifier obfuscation)", lx.unicodeEscapes))
 	}
+	if lx.formatChars > 0 {
+		r.add(High, "hidden-characters", rel, 0, fmt.Sprintf("%d invisible formatting characters inside names (the compiler ignores them; they only hide names from readers)", lx.formatChars))
+	}
 
 	// using directives, aliases, using static, namespace declarations
 	imports := map[string]bool{}
@@ -323,9 +326,27 @@ func analyzeCSharp(r *Report, rel, src string) {
 			case "GetType", "GetMethod", "GetField", "GetProperty", "GetMember", "InvokeMember", "CreateInstance", "GetTypeFromProgID", "GetTypeFromCLSID":
 				if i > 0 && toks[i-1].text == "." && i+2 < len(toks) && toks[i+1].text == "(" && (toks[i+2].kind == tString || toks[i+2].kind == tIdent && t.text != "GetType") {
 					if toks[i+2].kind == tString || t.text == "InvokeMember" || t.text == "CreateInstance" {
+						// HIGH: RE_PPG's compiler refuses these lookups unless the
+						// player bypasses its security checks, and a name can be
+						// built at runtime where no rule sees it.
 						reflectionByName = true
-						hit("reflection-by-name", Medium, t.line, "looks up types or members by name: "+t.text+"(...)")
+						hit("reflection-by-name", High, t.line, "looks up types or members by name: "+t.text+"(...)")
 					}
+				}
+				// Type.GetType(name) / assembly.GetType(name) with a name
+				// built at runtime: the strings rules cannot see which type,
+				// and from there any method can be invoked.
+				if t.text == "GetType" && i > 0 && toks[i-1].text == "." && i+2 < len(toks) && toks[i+1].text == "(" && toks[i+2].text != ")" &&
+					!(toks[i+2].kind == tString && i+3 < len(toks) && (toks[i+3].text == ")" || toks[i+3].text == ",")) {
+					reflectionByName = true
+					hit("reflection-computed-type", High, t.line, "looks up a type whose name is built at runtime, so the scanner cannot tell which: GetType(...)")
+				}
+			case "GetTypes", "GetExportedTypes", "GetAssemblies", "GetMethods", "GetFields", "GetProperties", "GetMembers", "GetConstructors":
+				// Listing types or members, then picking one by a computed
+				// name, reaches any API without naming it.
+				if i > 0 && toks[i-1].text == "." && i+1 < len(toks) && toks[i+1].text == "(" {
+					reflectionByName = true
+					hit("reflection-enumerate", High, t.line, "lists types or members through reflection ("+t.text+"), so the scanner cannot tell which one the mod uses")
 				}
 			case "char":
 				if i > 0 && toks[i-1].text == "(" && i+2 < len(toks) && toks[i+1].text == ")" && toks[i+2].kind == tNumber {

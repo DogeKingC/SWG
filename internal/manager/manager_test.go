@@ -255,3 +255,63 @@ func TestVerifyIgnoresGameRewritesAndNameEncoding(t *testing.T) {
 		t.Errorf("want mod.json changed + evil.cs new, got %+v", probs)
 	}
 }
+
+// A blocked Workshop item stays blocked when it comes from another site or
+// a local file: by alias, and by the Workshop ID in its mod.json.
+func TestBlocklistMatchesMirroredCopies(t *testing.T) {
+	bl := &Blocklist{Entries: []Entry{{WorkshopID: "3603531358", Reason: "worm upload"}}, sha: map[string]Entry{}}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "m"), 0o755)
+	os.WriteFile(filepath.Join(dir, "m", "mod.json"), []byte(`{"Name":"x","CreatorUGCIdentity":3603531358}`), 0o644)
+	for name, c := range map[string]*Candidate{
+		"True Workshop copy": {Key: "tw:12"},
+		"local file":         {Key: "local:abcdef"},
+		"alias":              {Key: "ow:x", Aliases: []string{"sky:3603531358"}},
+	} {
+		rep := &scan.Report{}
+		bl.Check(c, dir, rep)
+		if m := (&Manager{}); !rejected(m.Check(c, rep, nil)) {
+			t.Errorf("%s of a blocklisted Workshop item was not blocked: %+v", name, rep.Findings)
+		}
+	}
+	rep := &scan.Report{}
+	bl.Check(&Candidate{Key: "tw:13"}, t.TempDir(), rep)
+	if len(rep.Findings) != 0 {
+		t.Errorf("unrelated mod blocked: %+v", rep.Findings)
+	}
+}
+
+// A folder that appeared in Mods/ is adopted automatically while the window
+// is open. Adopting must not silence what Verify reports about it.
+func TestVerifyStillFlagsAdoptedDangerousMod(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	game := t.TempDir()
+	mods := filepath.Join(game, "Mods")
+	evil := filepath.Join(mods, "Cool Guns")
+	os.MkdirAll(evil, 0o755)
+	os.WriteFile(filepath.Join(evil, "mod.json"), []byte(`{"Name":"Cool Guns","Scripts":["script.cs"]}`), 0o644)
+	os.WriteFile(filepath.Join(evil, "script.cs"), []byte(`class M { void Main() { System.Diagnostics.Process.Start("calc"); } }`), 0o644)
+	st, _ := LoadState()
+	m := &Manager{ModsDir: mods, State: st}
+	bad := func() bool {
+		probs, err := m.Verify()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range probs {
+			if p.Bad && strings.HasPrefix(p.Folder, "Cool Guns") {
+				return true
+			}
+		}
+		return false
+	}
+	if !bad() {
+		t.Fatal("unmanaged dangerous mod not flagged")
+	}
+	if _, err := m.Adopt("local:m-cool-guns", "Cool Guns", "", evil, "", KindMod, "Cool Guns"); err != nil {
+		t.Fatal(err)
+	}
+	if !bad() {
+		t.Fatal("adopting the folder hid its CRITICAL findings from Verify")
+	}
+}

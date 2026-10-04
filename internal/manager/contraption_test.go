@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/DogeKingC/SWG/internal/archive"
 )
 
 func zipOf(t *testing.T, files map[string]string) string {
@@ -111,5 +113,22 @@ func TestInstallFolderContraptionsAndRefuseExisting(t *testing.T) {
 	}
 	if got := listDir(t, m.ContraptionsDir); len(got) != 2 {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestContraptionNamesWindowsCanStore(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"...", "NUL", "tank. "} {
+		os.MkdirAll(filepath.Join(dir, n+"x"), 0o755)
+		os.WriteFile(filepath.Join(dir, n+"x", n+".jaap"), []byte("x"), 0o644)
+	}
+	_, names, err := contraptionRoots(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range names {
+		if archive.WindowsUnsafe(n) || n == "" {
+			t.Errorf("contraption folder name %q", n)
+		}
 	}
 }

@@ -48,7 +48,7 @@ Never published (fix and edit the issue):
   than the published one.
 - More than 3 publications by one account in a day.
 
-Published only with the owner's approval (label `approved`):
+Published only with the owner's approval (comment `/approve <SHA-256>`):
 
 - The GitHub account is younger than 30 days (or its age can't be checked).
 - Any other HIGH or CRITICAL scanner finding (a bundled DLL, reflection,
@@ -67,12 +67,21 @@ a file that a newer rule flags is withdrawn automatically.
 
 ## For the owner
 
-Labels on a submission issue (only the repository owner's labels count):
+Commands and labels on a submission issue (only the repository owner's
+count):
 
-- `approved` publishes a submission that is waiting for approval.
-- `reviewed` marks the published version as reviewed (the app skips the
-  48-hour wait).
-- `withdrawn` takes it down; everyone who has it is warned.
+- Comment `/approve <SHA-256>` (the first 12 characters are enough) to
+  publish a submission that is waiting for approval. The bot's waiting
+  message lists the file's SHA-256. The approval names the file you checked:
+  if the author changed the file since, nothing is published.
+- Comment `/review <SHA-256>` to mark the version published from that issue
+  as reviewed (the app skips the 48-hour wait). The "Published" message
+  lists its SHA-256.
+- Label `withdrawn` takes it down; everyone who has it is warned.
+
+The `approved` and `reviewed` labels no longer do anything: a label can't
+say which file it vouches for, and the author can change the file between
+your review and the click.
 
 The workflow sets `published`, `needs-changes` and `needs-approval` itself.
 

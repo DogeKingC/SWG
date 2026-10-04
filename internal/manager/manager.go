@@ -225,6 +225,9 @@ func folderName(root, key string) string {
 	if len(name) > 60 {
 		name = name[:60]
 	}
+	if name = strings.TrimRight(name, ". "); name == "" {
+		name = "mod"
+	}
 	tag := strings.ReplaceAll(key, ":", "-")
 	if len(tag) > 24 {
 		tag = tag[:24]
@@ -643,6 +646,25 @@ func (m *Manager) Verify() ([]Problem, error) {
 				probs = append(probs, Problem{p, "NEW file appeared since install (possible injection)", true, inst.Key})
 			}
 		}
+		// An adopted folder never went through the install checks (it is
+		// adopted automatically as soon as it appears), so its hashes only
+		// show it hasn't changed since: keep reporting what the scanner
+		// finds in it, as for a folder that isn't tracked.
+		if inst.Adopted {
+			for _, f := range inst.Folders {
+				dir := filepath.Join(m.dirFor(inst), f)
+				if _, err := os.Stat(dir); err != nil {
+					continue
+				}
+				rep, err := scan.DirWith(dir, m.scanOpts())
+				if err != nil {
+					return nil, err
+				}
+				if rep.Max() >= scan.High {
+					probs = append(probs, Problem{f, fmt.Sprintf("found in the game folder, not installed through ppgmods' checks; scan max %s (%d findings)", rep.Max(), len(rep.Findings)), true, inst.Key})
+				}
+			}
+		}
 	}
 	ents, err := os.ReadDir(m.ModsDir)
 	if err != nil && !os.IsNotExist(err) {
@@ -952,8 +974,8 @@ func contraptionRoots(dir string) (roots, names []string, err error) {
 	stage := filepath.Join(dir, ".ppgmods-contraptions")
 	for i, j := range jaaps {
 		base := strings.TrimSuffix(filepath.Base(j), filepath.Ext(j))
-		name := strings.TrimSpace(reUnsafeName.ReplaceAllString(base, "_"))
-		if name == "" || name == "." || name == ".." {
+		name := strings.TrimRight(strings.TrimSpace(reUnsafeName.ReplaceAllString(base, "_")), ". ")
+		if name == "" || archive.WindowsUnsafe(name) {
 			name = fmt.Sprintf("contraption %d", i+1)
 		}
 		unit := filepath.Join(stage, fmt.Sprint(i), name)
