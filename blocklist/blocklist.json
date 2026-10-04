@@ -1,5 +1,6 @@
 {
-  "notes": "Deny-only list of known-bad mods. Entries here can only block installs, never allow them. Add the SHA-256 of a malicious archive or .cs file, a Steam Workshop ID, or a GameBanana mod/file ID, with a short reason, via pull request.",
+  "notes": "Deny-only list of known-bad mods. Entries here can only block installs, never allow them. Add the SHA-256 of a malicious archive or .cs file, a Steam Workshop ID, or a GameBanana mod/file ID, with a short reason, via pull request. Emergency pause: add {\"sources\": [\"ow\"], \"reason\": \"...\"} to \"pause\" to stop every install and update from those sources (gb, sky, tw, nx, ow, local, or * for all) until it is removed; apps pick it up on their next action.",
+  "pause": [],
   "entries": [
     {
       "sha256": "411e2b8c1f6498e72cf252756735a1b7d2455ddc2caa9c92fd7d951f82820186",

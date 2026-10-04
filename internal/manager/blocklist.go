@@ -24,17 +24,48 @@ type Entry struct {
 	Reason         string `json:"reason"`
 }
 
+// Pause stops every install and update from the named sources while a
+// worm may be spreading through them. Like the rest of the list it can
+// only refuse, so a tampered copy can stop installs but never allow one.
+type Pause struct {
+	// Sources are ref prefixes: "gb", "sky" (Steam Workshop copies), "tw",
+	// "nx", "ow", "local" (files on this PC), or "*" for all of them.
+	Sources []string `json:"sources"`
+	Reason  string   `json:"reason"`
+}
+
 type Blocklist struct {
 	Entries []Entry `json:"entries"`
+	Pauses  []Pause `json:"pause,omitempty"`
 	sha     map[string]Entry
 }
 
-func parseBlocklist(b []byte) ([]Entry, error) {
+func parseBlocklist(b []byte) (*Blocklist, error) {
 	var bl Blocklist
 	if err := json.Unmarshal(b, &bl); err != nil {
 		return nil, err
 	}
-	return bl.Entries, nil
+	return &bl, nil
+}
+
+// lastPauses is the pause notice last logged, so it is logged once, not
+// on every action.
+var lastPauses string
+
+// Paused returns why installs from a ref are paused, or "".
+func (bl *Blocklist) Paused(ref string) string {
+	if bl == nil {
+		return ""
+	}
+	src, _, _ := strings.Cut(ref, ":")
+	for _, p := range bl.Pauses {
+		for _, s := range p.Sources {
+			if s == "*" || strings.EqualFold(s, src) {
+				return p.Reason
+			}
+		}
+	}
+	return ""
 }
 
 // LoadBlocklist merges the embedded list, the latest copy from the
@@ -44,12 +75,13 @@ func parseBlocklist(b []byte) ([]Entry, error) {
 func LoadBlocklist(fetch bool, logf func(string, ...any)) *Blocklist {
 	bl := &Blocklist{sha: map[string]Entry{}}
 	add := func(src string, b []byte) {
-		es, err := parseBlocklist(b)
+		got, err := parseBlocklist(b)
 		if err != nil {
 			logf("warning: ignoring %s blocklist: %v", src, err)
 			return
 		}
-		bl.Entries = append(bl.Entries, es...)
+		bl.Entries = append(bl.Entries, got.Entries...)
+		bl.Pauses = append(bl.Pauses, got.Pauses...)
 	}
 	add("embedded", blocklist.Default)
 	dir, err := ConfigDir()
@@ -72,6 +104,16 @@ func LoadBlocklist(fetch bool, logf func(string, ...any)) *Blocklist {
 	for _, e := range bl.Entries {
 		if e.SHA256 != "" {
 			bl.sha[strings.ToLower(e.SHA256)] = e
+		}
+	}
+	var paused []string
+	for _, p := range bl.Pauses {
+		paused = append(paused, fmt.Sprintf("INSTALLS PAUSED from %s: %s", strings.Join(p.Sources, ", "), p.Reason))
+	}
+	if now := strings.Join(paused, "\n"); now != lastPauses {
+		lastPauses = now
+		for _, l := range paused {
+			logf("%s", l)
 		}
 	}
 	return bl
@@ -105,6 +147,12 @@ func (bl *Blocklist) Check(c *Candidate, dir string, rep *scan.Report) {
 	}
 	hit := func(file string, e Entry) {
 		rep.Findings = append([]scan.Finding{{Severity: scan.Critical, Rule: "blocklisted", File: file, Detail: "blocklisted: " + e.Reason}}, rep.Findings...)
+	}
+	for _, ref := range append([]string{c.Key}, c.Aliases...) {
+		if why := bl.Paused(ref); why != "" {
+			hit("", Entry{Reason: "installs from this source are paused by the ppgmods maintainers: " + why})
+			break
+		}
 	}
 	// A blocked Workshop item is the same mod when it comes from a mirror,
 	// another site or a file on disk: match every ref the candidate goes by

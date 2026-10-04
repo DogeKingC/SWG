@@ -315,3 +315,29 @@ func TestVerifyStillFlagsAdoptedDangerousMod(t *testing.T) {
 		t.Fatal("adopting the folder hid its CRITICAL findings from Verify")
 	}
 }
+
+// An emergency pause stops installs from the named sources, cannot be
+// overridden, and leaves other sources alone.
+func TestBlocklistPause(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	d, _ := ConfigDir()
+	os.WriteFile(filepath.Join(d, "blocklist.json"), []byte(`{"entries":[],"pause":[{"sources":["ow","gb"],"reason":"worm spreading"}]}`), 0o644)
+	bl := LoadBlocklist(false, func(string, ...any) {})
+	m := &Manager{Policy: Policy{AllowHigh: true, AllowCritical: true, AcceptRisk: true, AllowAfterCutoff: true}}
+	for _, c := range []*Candidate{{Key: "ow:x"}, {Key: "gb:12"}, {Key: "sky:123", Aliases: []string{"ow:x"}}} {
+		rep := &scan.Report{}
+		bl.Check(c, t.TempDir(), rep)
+		if err := m.Check(c, rep, nil); !rejected(err) || !strings.Contains(err.Error(), "worm spreading") {
+			t.Errorf("%s installed while paused: %v", c.Key, err)
+		}
+	}
+	rep := &scan.Report{}
+	bl.Check(&Candidate{Key: "tw:5"}, t.TempDir(), rep)
+	if len(rep.Findings) != 0 {
+		t.Errorf("a source that isn't paused was blocked: %+v", rep.Findings)
+	}
+	all := &Blocklist{Pauses: []Pause{{Sources: []string{"*"}, Reason: "x"}}}
+	if all.Paused("local:abc") == "" || all.Paused("nx:1") == "" {
+		t.Error(`"*" did not pause every source`)
+	}
+}
