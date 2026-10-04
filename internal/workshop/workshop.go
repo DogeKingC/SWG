@@ -37,7 +37,7 @@ import (
 const (
 	// Repo hosts the submissions, the files (release FilesTag) and the index
 	// (branch DataBranch).
-	Repo       = "DogeKingC/SWG"
+	Repo       = "Trlydev/SWG"
 	FilesTag   = "workshop-files"
 	DataBranch = "workshop-data"
 	// MaxSize is the largest archive accepted.

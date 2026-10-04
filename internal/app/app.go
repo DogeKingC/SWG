@@ -803,7 +803,10 @@ func thousands(n int) string {
 // ---- install ----
 
 var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
-var reOWURL = regexp.MustCompile(`github\.com/DogeKingC/SWG/(?:tree|blob)/main/workshop/submissions/([a-z0-9][a-z0-9-]{1,62}[a-z0-9])`)
+
+// reOWURL also reads links from before the repository moved (DogeKingC):
+// they only name the mod; nothing is downloaded from that address.
+var reOWURL = regexp.MustCompile(`github\.com/(?:Trlydev|DogeKingC)/SWG/(?:tree|blob)/main/workshop/submissions/([a-z0-9][a-z0-9-]{1,62}[a-z0-9])`)
 var reNXURL = regexp.MustCompile(`nexusmods\.com/peopleplayground/mods/(\d+)`)
 var reTWURL = regexp.MustCompile(`ppgworkshop\.onrender\.com/.*?(?:item-|id=)(\d+)`)
 var reWSURL = regexp.MustCompile(`steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)`)

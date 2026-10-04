@@ -24,7 +24,7 @@ import (
 
 // Repo and branch the archive is published on.
 const (
-	Repo       = "DogeKingC/SWG"
+	Repo       = "Trlydev/SWG"
 	DataBranch = "archive-data"
 )
 

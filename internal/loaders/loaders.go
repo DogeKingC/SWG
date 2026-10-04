@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	Repo       = "DogeKingC/SWG"
+	Repo       = "Trlydev/SWG"
 	DataBranch = "loaders-data"
 )
 

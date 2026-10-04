@@ -7,4 +7,4 @@ import _ "embed"
 //go:embed blocklist.json
 var Default []byte
 
-const RemoteURL = "https://raw.githubusercontent.com/DogeKingC/SWG/main/blocklist/blocklist.json"
+const RemoteURL = "https://raw.githubusercontent.com/Trlydev/SWG/main/blocklist/blocklist.json"

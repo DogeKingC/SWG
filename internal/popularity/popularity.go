@@ -27,7 +27,7 @@ import (
 const Retention = 31
 
 // IndexURL is where the Action publishes the ranking.
-const IndexURL = "https://raw.githubusercontent.com/DogeKingC/SWG/popularity-data/popularity.json"
+const IndexURL = "https://raw.githubusercontent.com/Trlydev/SWG/popularity-data/popularity.json"
 
 // Periods and their length in days.
 var Periods = map[string]int{"day": 1, "week": 7, "month": 30}
@@ -229,7 +229,7 @@ func Fetch() (*Index, error) {
 // URL is cached by GitHub's CDN for a few minutes after each daily run, and
 // a stale copy would then be kept for an hour; a commit URL never changes.
 func latestURL() string {
-	req, _ := http.NewRequest("GET", "https://api.github.com/repos/DogeKingC/SWG/commits/popularity-data", nil)
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/Trlydev/SWG/commits/popularity-data", nil)
 	req.Header.Set("Accept", "application/vnd.github.sha")
 	req.Header.Set("User-Agent", "ppgmods")
 	resp, err := client.Do(req)
@@ -242,7 +242,7 @@ func latestURL() string {
 	if resp.StatusCode != 200 || len(sha) != 40 || strings.Trim(sha, "0123456789abcdef") != "" {
 		return IndexURL
 	}
-	return "https://raw.githubusercontent.com/DogeKingC/SWG/" + sha + "/popularity.json"
+	return "https://raw.githubusercontent.com/Trlydev/SWG/" + sha + "/popularity.json"
 }
 
 func download() (*Index, error) {

@@ -264,7 +264,7 @@ func (s *iaStore) put(rec *preserve.Record, file string) (string, error) {
 	req.Header.Set("x-archive-meta-mediatype", "software")
 	req.Header.Set("x-archive-meta-collection", "opensource_media")
 	req.Header.Set("x-archive-meta-title", "People Playground Steam Workshop mods (pre-worm copies)")
-	req.Header.Set("x-archive-meta-description", "Copies of People Playground Steam Workshop mods from before the September 2026 worm, recorded by PPG Mod Manager's pre-worm archive (https://github.com/DogeKingC/SWG). Authors can opt out there.")
+	req.Header.Set("x-archive-meta-description", "Copies of People Playground Steam Workshop mods from before the September 2026 worm, recorded by PPG Mod Manager's pre-worm archive (https://github.com/Trlydev/SWG). Authors can opt out there.")
 	resp, err := (&http.Client{Timeout: 30 * time.Minute}).Do(req)
 	if err != nil {
 		return "", err

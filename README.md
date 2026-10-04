@@ -35,7 +35,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 1. Install a loader that runs C# mods again, such as
    [RE_PPG](https://github.com/AlibardaWasTaken/RE_PPG/releases).
 2. Download the latest release from
-   [Releases](https://github.com/DogeKingC/SWG/releases/latest):
+   [Releases](https://github.com/Trlydev/SWG/releases/latest):
    - **Windows:** `ppgmods-windows-amd64.exe`. Double-click it. SmartScreen
      may warn because the program isn't code-signed; choose *More info → Run
      anyway*.

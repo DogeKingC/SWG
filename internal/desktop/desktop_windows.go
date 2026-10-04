@@ -85,11 +85,11 @@ func Install(o Options, logf func(string, ...any)) (string, error) {
 	}
 	regSet("DisplayName", "REG_SZ", AppName)
 	regSet("DisplayVersion", "REG_SZ", strings.TrimPrefix(o.Version, "v"))
-	regSet("Publisher", "REG_SZ", "DogeKingC/SWG")
+	regSet("Publisher", "REG_SZ", "Trlydev/SWG")
 	regSet("DisplayIcon", "REG_SZ", exe+",0")
 	regSet("InstallLocation", "REG_SZ", installDir())
 	regSet("UninstallString", "REG_SZ", `"`+exe+`" uninstall-app`)
-	regSet("URLInfoAbout", "REG_SZ", "https://github.com/DogeKingC/SWG")
+	regSet("URLInfoAbout", "REG_SZ", "https://github.com/Trlydev/SWG")
 	regSet("NoModify", "REG_DWORD", "1")
 	regSet("NoRepair", "REG_DWORD", "1")
 	return exe, nil

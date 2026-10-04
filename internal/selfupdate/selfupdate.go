@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const Repo = "DogeKingC/SWG"
+const Repo = "Trlydev/SWG"
 
 // Current is the running version (set from main's -ldflags version).
 var Current = "dev"

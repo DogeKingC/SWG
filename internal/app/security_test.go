@@ -4,7 +4,7 @@ import "testing"
 
 func TestAllowedURL(t *testing.T) {
 	ok := []string{"https://gamebanana.com/mods/1", "https://modsbase.com/abc/x.zip.html", "https://www.top-mods.com/x",
-		"https://github.com/DogeKingC/SWG", "http://127.0.0.1:4455/#tok"}
+		"https://github.com/Trlydev/SWG", "http://127.0.0.1:4455/#tok"}
 	bad := []string{"file:///C:/Windows/System32/calc.exe", "http://gamebanana.com/", "https://gamebanana.com.evil.example/",
 		"https://evil.example/?https://gamebanana.com/", "steam://run/1", "https://user@gamebanana.com/", "javascript:alert(1)",
 		"https://gamebanana.com:8443/", `C:\Windows\notepad.exe`, "ms-settings:"}

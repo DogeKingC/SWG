@@ -82,7 +82,7 @@ Flags (any command):
 `
 
 func main() {
-	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/DogeKingC/SWG)", version)
+	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/Trlydev/SWG)", version)
 	selfupdate.Current = version
 	args := os.Args[1:]
 	if len(args) == 0 {

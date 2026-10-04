@@ -998,7 +998,7 @@ async function checkRelease(force) {
 }
 $("#updateBtn").onclick = () => run({ action: "self-update" }, "Updating ppgmods");
 $("#checkRelease").onclick = () => checkRelease(true);
-$("#repoLink").onclick = (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent("https://github.com/DogeKingC/SWG")); };
+$("#repoLink").onclick = (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent("https://github.com/Trlydev/SWG")); };
 $("#quitBtn").onclick = async () => {
   await api("/api/quit", { body: {} }).catch(() => {});
   document.body.replaceChildren(el("div", { class: "empty", style: "margin:auto" }, "ppgmods has stopped. You can close this window."));

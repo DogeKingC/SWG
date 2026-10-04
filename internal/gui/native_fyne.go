@@ -246,7 +246,7 @@ func (u *ui) build() {
 	}
 	u.navs[0].setActive(true)
 	repo := widget.NewHyperlink("GitHub repository", nil)
-	repo.OnTapped = func() { u.openURL("https://github.com/DogeKingC/SWG") }
+	repo.OnTapped = func() { u.openURL("https://github.com/Trlydev/SWG") }
 	repo.SizeName = sSmall
 	quit := widget.NewButton("Quit", func() { u.s.stop("") })
 	quit.Importance = widget.LowImportance

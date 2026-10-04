@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var UserAgent = "ppgmods/dev (+https://github.com/DogeKingC/SWG)"
+var UserAgent = "ppgmods/dev (+https://github.com/Trlydev/SWG)"
 
 // client keeps cookies between requests, as a browser does: modsbase.com's
 // "create download link" step can depend on cookies set by its file page.

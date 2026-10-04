@@ -53,13 +53,13 @@ func (f *fakeGitHub) publish(t *testing.T, priv string, entries ...workshop.Entr
 	b := ix.Marshal()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.files["/DogeKingC/SWG/"+strings.Repeat("a", 40)+"/index.json"] = b
+	f.files["/"+workshop.Repo+"/"+strings.Repeat("a", 40)+"/index.json"] = b
 	if priv != "" {
 		sig, err := workshop.Sign(b, priv)
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.files["/DogeKingC/SWG/"+strings.Repeat("a", 40)+"/index.sig"] = []byte(sig)
+		f.files["/"+workshop.Repo+"/"+strings.Repeat("a", 40)+"/index.sig"] = []byte(sig)
 	}
 	workshop.ForgetIndex()
 }
@@ -76,7 +76,7 @@ func TestOpenWorkshopInstallUpdateWithdraw(t *testing.T) {
 	t.Setenv("PPGMODS_HOME", t.TempDir())
 	f := &fakeGitHub{files: map[string][]byte{}}
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/repos/DogeKingC/SWG/commits/workshop-data" {
+		if r.URL.Path == "/repos/"+workshop.Repo+"/commits/workshop-data" {
 			w.Write([]byte(strings.Repeat("a", 40)))
 			return
 		}
@@ -119,7 +119,7 @@ func TestOpenWorkshopInstallUpdateWithdraw(t *testing.T) {
 	// A bad signature is refused.
 	f.publish(t, "", e1)
 	f.mu.Lock()
-	f.files["/DogeKingC/SWG/"+strings.Repeat("a", 40)+"/index.sig"] = []byte("AAAA")
+	f.files["/"+workshop.Repo+"/"+strings.Repeat("a", 40)+"/index.sig"] = []byte("AAAA")
 	f.mu.Unlock()
 	if _, err := workshop.FetchIndex(); err == nil {
 		t.Fatal("index with a bad signature accepted")
