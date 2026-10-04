@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -130,15 +131,17 @@ func issue(args []string) error {
 	byOwner := ev.sender != "" && strings.EqualFold(ev.sender, ev.repoOwner)
 	switch {
 	case ev.name == "issue_comment":
-		o = comment(ix, ev)
-	case ev.action == "labeled" && byOwner && ev.label == "reviewed":
-		o = markReviewed(ix, ev)
+		o = comment(ix, ev, *out)
+	case ev.action == "labeled" && byOwner && (ev.label == "reviewed" || ev.label == "approved"):
+		// A label names no file, and the author can change the file
+		// between the owner's look and the click: approvals are comments
+		// that name the file's SHA-256.
+		o = &outcome{Reply: "Labels don't approve a file. To approve exactly the file you checked, comment `/approve <first 12 characters of its SHA-256>` (the waiting message lists it); to vouch for a published version, comment `/review <SHA-256 prefix>`.",
+			Remove: []string{ev.label}}
 	case ev.action == "labeled" && byOwner && ev.label == "withdrawn":
 		o = withdraw(ix, ev, "withdrawn by the Open Workshop's maintainers")
-	case ev.action == "labeled" && byOwner && ev.label == "approved":
-		o = submit(ix, ev, *out, true)
 	case ev.action == "opened" || ev.action == "edited":
-		o = submit(ix, ev, *out, false)
+		o = submit(ix, ev, *out, "")
 	}
 	if o == nil {
 		return nil // nothing to do
@@ -174,13 +177,17 @@ func entryForIssue(ix *workshop.Index, ev event) *workshop.Entry {
 }
 
 // Submission rules. The Open Workshop has no reviewers, so it is strict by
-// default: anything not plainly safe waits for the owner's "approved" label.
+// default: anything not plainly safe waits for the owner's /approve comment.
 const (
 	minAccountAge = 30 * 24 * time.Hour
 	maxPerDay     = 3
 )
 
-func submit(ix *workshop.Index, ev event, out string, approved bool) *outcome {
+// submit checks and publishes the issue's file. approveSHA is the SHA-256
+// prefix the owner approved ("" for none): the file is published with the
+// owner's approval only if it is still that file.
+func submit(ix *workshop.Index, ev event, out string, approveSHA string) *outcome {
+	approved := approveSHA != ""
 	var r bytes.Buffer
 	reject := func(problems []string) *outcome {
 		fmt.Fprintf(&r, "**Not published.** Please fix this and edit the issue (it's checked again automatically):\n\n")
@@ -224,6 +231,9 @@ func submit(ix *workshop.Index, ev event, out string, approved bool) *outcome {
 	work, _ := os.MkdirTemp("", "ws-")
 	defer os.RemoveAll(work)
 	res := workshop.Check(client, s, work)
+	if approved && (res.SHA256 == "" || !strings.HasPrefix(res.SHA256, approveSHA)) {
+		return &outcome{Reply: fmt.Sprintf("**Not approved:** the approval names `%s`, but the issue's file is now `%s`. It changed after it was checked: look at it again, then comment `/approve` with the new SHA-256 prefix.", approveSHA, orNone(res.SHA256))}
+	}
 	if len(res.Problems) > 0 {
 		o := reject(res.Problems)
 		addFindings(o, res)
@@ -251,6 +261,7 @@ func submit(ix *workshop.Index, ev event, out string, approved bool) *outcome {
 			fmt.Fprintf(&r, "- %s\n", h)
 		}
 		fmt.Fprintf(&r, "\nIf something here is a mistake, edit the issue to fix it; otherwise the owner will look at it.\n")
+		fmt.Fprintf(&r, "\nFile SHA-256: `%s`. Owner: to publish exactly this file, comment `/approve %s`.\n", res.SHA256, res.SHA256[:12])
 		o := &outcome{Reply: r.String(), Labels: []string{"needs-approval"}, Remove: []string{"published", "needs-changes"}}
 		addFindings(o, res)
 		return o
@@ -288,6 +299,7 @@ func submit(ix *workshop.Index, ev event, out string, approved bool) *outcome {
 	for _, w := range res.Warnings {
 		fmt.Fprintf(&r, "- ⚠ %s\n", w)
 	}
+	fmt.Fprintf(&r, "\nFile SHA-256: `%s`.\n", res.SHA256)
 	fmt.Fprintf(&r, "\nTo update it, open a new submission with the same name and a higher version. To take it down, comment `/withdraw <reason>` here.\n")
 	return &outcome{Reply: r.String(), Labels: []string{"published"}, Remove: []string{"needs-changes", "needs-approval"}, Close: true}
 }
@@ -327,10 +339,13 @@ func accountAge(login string) (time.Duration, error) {
 // markReviewed vouches for the version published from this issue, and only
 // that one: a newer version (published from another issue) skips the
 // install cooldown only once it is reviewed itself.
-func markReviewed(ix *workshop.Index, ev event) *outcome {
+func markReviewed(ix *workshop.Index, ev event, sha string) *outcome {
 	e := entryForIssue(ix, ev)
 	if e == nil || e.Issue != ev.number {
 		return &outcome{Reply: "Nothing published from this issue to mark as reviewed (a newer version, if any, is reviewed on its own issue)."}
+	}
+	if sha == "" || !strings.HasPrefix(e.SHA256, sha) {
+		return &outcome{Reply: fmt.Sprintf("Not marked reviewed: the version published from this issue is `%s`, not `%s`. Comment `/review` with the SHA-256 prefix of the file you reviewed.", e.SHA256, orNone(sha))}
 	}
 	e.Reviewed = true
 	return &outcome{Reply: fmt.Sprintf("%s %s (file SHA-256 `%s`) is now marked **reviewed**.", e.Name, e.Version, e.SHA256)}
@@ -346,10 +361,27 @@ func withdraw(ix *workshop.Index, ev event, reason string) *outcome {
 }
 
 // comment handles "/withdraw <reason>" from the entry's owner (or the
-// repository owner).
-func comment(ix *workshop.Index, ev event) *outcome {
+// repository owner), and the repository owner's "/approve <sha>" and
+// "/review <sha>", which name the exact file they vouch for.
+func comment(ix *workshop.Index, ev event, out string) *outcome {
 	line := strings.TrimSpace(strings.SplitN(ev.commentBody, "\n", 2)[0])
-	if !strings.HasPrefix(line, "/withdraw") {
+	cmd, arg, _ := strings.Cut(line, " ")
+	arg = strings.TrimSpace(arg)
+	switch cmd {
+	case "/approve", "/review":
+		if ev.repoOwner == "" || !strings.EqualFold(ev.commentBy, ev.repoOwner) {
+			return nil // only the repository owner approves; others are ignored
+		}
+		sha := strings.ToLower(arg)
+		if !reSHAPrefix.MatchString(sha) {
+			return &outcome{Reply: "Give the file's SHA-256 (at least the first 12 characters): `" + cmd + " 0123456789ab`."}
+		}
+		if cmd == "/review" {
+			return markReviewed(ix, ev, sha)
+		}
+		return submit(ix, ev, out, sha)
+	case "/withdraw":
+	default:
 		return nil
 	}
 	e := entryForIssue(ix, ev)
@@ -359,7 +391,7 @@ func comment(ix *workshop.Index, ev event) *outcome {
 	if !strings.EqualFold(ev.commentBy, e.Owner) && !strings.EqualFold(ev.commentBy, ev.repoOwner) {
 		return &outcome{Reply: fmt.Sprintf("Only @%s can withdraw %s.", e.Owner, e.Name)}
 	}
-	reason := strings.TrimSpace(strings.TrimPrefix(line, "/withdraw"))
+	reason := arg
 	if reason == "" {
 		reason = "withdrawn by its author"
 	}
@@ -367,6 +399,15 @@ func comment(ix *workshop.Index, ev event) *outcome {
 		reason = reason[:200]
 	}
 	return withdraw(ix, ev, reason)
+}
+
+var reSHAPrefix = regexp.MustCompile(`^[0-9a-f]{12,64}$`)
+
+func orNone(s string) string {
+	if s == "" {
+		return "(none)"
+	}
+	return s
 }
 
 func refresh(args []string) error {

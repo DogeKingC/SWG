@@ -1,9 +1,22 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/DogeKingC/SWG/internal/workshop"
+)
+
+const (
+	nice = "1111111111111111111111111111111111111111111111111111111111111111"
+	evil = "2222222222222222222222222222222222222222222222222222222222222222"
 )
 
 func form(name string) string {
@@ -15,21 +28,25 @@ func form(name string) string {
 // names, or on a newer version published from a later issue.
 func TestReviewedLabelOnlyMarksThatIssuesVersion(t *testing.T) {
 	ix := &workshop.Index{Entries: []workshop.Entry{
-		{Slug: "nice-mod", Name: "Nice Mod", Owner: "mallory", Issue: 1},
-		{Slug: "evil-mod", Name: "Evil Mod", Owner: "mallory", Issue: 2},
+		{Slug: "nice-mod", Name: "Nice Mod", Owner: "mallory", Issue: 1, SHA256: nice},
+		{Slug: "evil-mod", Name: "Evil Mod", Owner: "mallory", Issue: 2, SHA256: evil},
 	}}
 	// Issue 1 was edited to name the other mod before the owner labeled it.
-	markReviewed(ix, event{number: 1, author: "mallory", body: form("Evil Mod")})
+	markReviewed(ix, event{number: 1, author: "mallory", body: form("Evil Mod")}, evil[:12])
 	if ix.Find("evil-mod").Reviewed {
 		t.Fatal("reviewing issue 1 marked the mod published from issue 2")
 	}
+	if ix.Find("nice-mod").Reviewed {
+		t.Fatal("a review naming another file marked issue 1's mod")
+	}
+	markReviewed(ix, event{number: 1, author: "mallory", body: form("Evil Mod")}, nice[:12])
 	if !ix.Find("nice-mod").Reviewed {
 		t.Fatal("reviewing issue 1 did not mark its own mod")
 	}
 
 	// A newer version of the same mod was published from issue 3.
-	ix = &workshop.Index{Entries: []workshop.Entry{{Slug: "nice-mod", Name: "Nice Mod", Owner: "mallory", Issue: 3}}}
-	markReviewed(ix, event{number: 1, author: "mallory", body: form("Nice Mod")})
+	ix = &workshop.Index{Entries: []workshop.Entry{{Slug: "nice-mod", Name: "Nice Mod", Owner: "mallory", Issue: 3, SHA256: evil}}}
+	markReviewed(ix, event{number: 1, author: "mallory", body: form("Nice Mod")}, evil[:12])
 	if ix.Find("nice-mod").Reviewed {
 		t.Fatal("reviewing the old issue 1 vouched for the version from issue 3")
 	}
@@ -46,5 +63,61 @@ func TestWithdrawNeverReachesAnotherOwnersMod(t *testing.T) {
 	withdraw(ix, event{number: 2, author: "alice", body: form("Victim Mod")}, "x")
 	if !ix.Find("victim-mod").Withdrawn {
 		t.Fatal("the owner could not withdraw their mod from an older issue")
+	}
+}
+
+// modZip is a minimal mod archive whose script says what.
+func modZip(t *testing.T, what string) []byte {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("M/mod.json")
+	w.Write([]byte(`{"Name":"Held Mod","Author":"mallory","Scripts":["s.cs"]}`))
+	w, _ = zw.Create("M/s.cs")
+	w.Write([]byte("class S { /* " + what + " */ }"))
+	zw.Close()
+	return buf.Bytes()
+}
+
+// The owner approves a file, not an issue: if the author swaps the file
+// after the owner looked, the approval does not publish the new one.
+func TestApproveIsBoundToTheCheckedFile(t *testing.T) {
+	serve := modZip(t, "checked")
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		w.Write(serve)
+	}))
+	defer srv.Close()
+	old := client
+	client = srv.Client()
+	defer func() { client = old }()
+
+	checked := sha256.Sum256(serve)
+	approve := hex.EncodeToString(checked[:])[:12]
+	body := "### Name\n\nHeld Mod\n\n### Author\n\nmallory\n\n### Type\n\nMod\n\n### Version\n\n1.0\n\n### File\n\n" + srv.URL + "/m.zip\n"
+	ev := event{name: "issue_comment", number: 4, author: "mallory", body: body, repoOwner: "owner"}
+
+	// Not the owner: ignored.
+	ix := &workshop.Index{}
+	ev.commentBy, ev.commentBody = "mallory", "/approve "+approve
+	if o := comment(ix, ev, t.TempDir()); o != nil || len(ix.Entries) != 0 {
+		t.Fatalf("approval by the author was accepted: %+v", o)
+	}
+
+	// The author swaps the file after the owner checked it.
+	serve = modZip(t, "swapped")
+	ev.commentBy = "owner"
+	out := t.TempDir()
+	o := comment(ix, ev, out)
+	if o == nil || !strings.Contains(o.Reply, "Not approved") || len(ix.Entries) != 0 {
+		t.Fatalf("approval published a file the owner never saw: %+v %+v", o, ix.Entries)
+	}
+	if ents, _ := os.ReadDir(out); len(ents) != 0 {
+		t.Fatal("swapped file was staged for upload")
+	}
+
+	// The file the owner checked: published.
+	serve = modZip(t, "checked")
+	if o := comment(ix, ev, out); len(ix.Entries) != 1 || !strings.HasPrefix(ix.Entries[0].SHA256, approve) {
+		t.Fatalf("approval of the checked file did not publish it: %+v", o)
 	}
 }

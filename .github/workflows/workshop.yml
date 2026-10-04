@@ -4,9 +4,9 @@ name: workshop
 # Workshop" form) is checked and, if it passes, published: the file becomes a
 # content-addressed asset of the "workshop-files" prerelease and index.json on
 # the workshop-data branch is updated. No maintainers needed: anything not
-# plainly safe waits for the repository owner's "approved" label; the owner
-# can also add "reviewed" or "withdrawn". Authors can comment
-# "/withdraw <reason>". The daily run re-scans every published file with the
+# plainly safe waits for the repository owner's "/approve <sha256>" comment;
+# the owner can also comment "/review <sha256>" or add the "withdrawn"
+# label. Authors can comment "/withdraw <reason>". The daily run re-scans every published file with the
 # current scanner and withdraws what it flags.
 #
 # Issue text is untrusted: it reaches the tool only through environment
@@ -50,9 +50,7 @@ jobs:
           mk workshop-submission 1d76db "Open Workshop submission (added by the form)"
           mk published 0e8a16 "Published on the Open Workshop"
           mk needs-changes d93f0b "The automatic check found a problem"
-          mk reviewed 5319e7 "Owner: vouch for this version"
           mk withdrawn b60205 "Owner: take it down"
-          mk approved fbca04 "Owner: publish despite the holds listed on the issue"
           mk needs-approval c5def5 "Passed the hard checks; waits for the owner's approval"
       - name: Fetch the index
         run: |
