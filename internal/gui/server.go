@@ -408,11 +408,15 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 }
 
 func lastBackup(dataDir string) string {
+	// Newest by time, not name: older backups were named workshop-backup-20260921.
 	ms, _ := filepath.Glob(filepath.Join(dataDir, "workshop-backup-*"))
-	if len(ms) == 0 {
-		return ""
+	best, bestT := "", time.Time{}
+	for _, p := range ms {
+		if st, err := os.Stat(p); err == nil && st.IsDir() && st.ModTime().After(bestT) {
+			best, bestT = p, st.ModTime()
+		}
 	}
-	return ms[len(ms)-1]
+	return best
 }
 
 func (s *server) handleLog(w http.ResponseWriter, r *http.Request) {

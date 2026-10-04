@@ -89,6 +89,22 @@ func FmtTime(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
+// YMD rewrites a date as the sites print it (top-mods' 19.09.2026, True
+// Workshop's 2026-09-27 15:31:50, RFC 3339) as 2026-09-19, the one format
+// ppgmods shows. Anything else is returned unchanged.
+func YMD(s string) string {
+	s = strings.TrimSpace(s)
+	if t := sources.ParseTMVersion(s); !t.IsZero() {
+		return FmtTime(t)
+	}
+	for _, layout := range []string{"2006-01-02 15:04:05", time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return FmtTime(t)
+		}
+	}
+	return s
+}
+
 func HumanSize(n int64) string {
 	switch {
 	case n >= 1<<20:
@@ -115,7 +131,7 @@ type SearchResult struct {
 	Reviewed    bool     `json:"reviewed,omitempty"`     // True Workshop: reviewed by the site's maintainers
 	Downloads   int      `json:"download_count,omitempty"`
 	Kind        string   `json:"kind,omitempty"`    // "contraption" when known
-	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 19.09.2026", ...
+	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 2026-09-19", ...
 	Trend       string   `json:"trend,omitempty"`   // popularity sort: "+1,204 views this week"
 	Version     string   `json:"version,omitempty"` // Workshop cards: highest known version of the copies
 
@@ -203,29 +219,26 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		if !parts["gb"] {
 			return
 		}
+		seedGBKinds()
 		var gb []sources.GBMod
 		var err error
-		cat := 0
-		if opt.Kind == manager.KindContraption {
-			cat = sources.GBContraptions
-		}
-		switch {
-		case opt.Sort == "relevance" && cat == 0:
-			gb, err = sources.GBSearch(q, page)
-		case opt.Sort == "relevance":
-			gb, err = sources.GBList(q, cat, "Generic_MostViewed", page, 20)
-		case opt.Sort == "popular":
-			gb, err = sources.GBList(q, cat, "Generic_MostDownloaded", page, 20)
-		default:
-			gb, err = sources.GBList(q, cat, "Generic_LatestModified", page, 20)
+		if opt.Kind == manager.KindMod && opt.Sort == "relevance" {
+			gb, err = sources.GBSearch(q, page) // GameBanana's own relevance; filtered below
+		} else {
+			// Mods and contraptions are mixed in GameBanana's categories
+			// (contraptions under Vehicles, Building...), so filter the
+			// whole catalogue (about 560 uploads) by what each archive
+			// holds; pages stay full.
+			gb, err = gbCatalogue(opt.Kind, q, opt.Sort, page, 20)
 		}
 		if err != nil {
 			addErr("GameBanana: " + err.Error())
 			return
 		}
+		kinds := sources.GBKinds(gb)
 		for _, m := range gb {
-			if (m.Category.Name == "Contraptions") != (opt.Kind == manager.KindContraption) {
-				continue
+			if gbKind(m, kinds) != opt.Kind {
+				continue // the other tab's, or not installable (skins, textures)
 			}
 			r.GameBanana = append(r.GameBanana, SearchResult{
 				Ref: fmt.Sprintf("gb:%d", m.ID), Source: "GameBanana", Name: m.Name, Author: m.Submitter.Name,
@@ -410,6 +423,87 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	return r
 }
 
+// gbKind is what a GameBanana upload is: from its archive's contents when
+// known, else from its category.
+func gbKind(m sources.GBMod, kinds map[int]string) string {
+	if k := kinds[m.ID]; k != "" {
+		return k
+	}
+	if m.Category.Name == "Contraptions" {
+		return manager.KindContraption
+	}
+	return manager.KindMod
+}
+
+// gbCatalogue lists GameBanana uploads of one kind, wherever they are filed:
+// newest change first, or most viewed first.
+func gbCatalogue(kind, q, sortBy string, page, per int) ([]sources.GBMod, error) {
+	all, err := sources.GBAll()
+	if err != nil {
+		return nil, err
+	}
+	kinds := sources.GBKinds(all)
+	words := strings.Fields(strings.ToLower(q))
+	var out []sources.GBMod
+	for _, m := range all {
+		if gbKind(m, kinds) != kind {
+			continue
+		}
+		name := strings.ToLower(m.Name + " " + m.Submitter.Name)
+		ok := true
+		for _, w := range words {
+			if !strings.Contains(name, w) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, m)
+		}
+	}
+	if sortBy != "updated" { // relevance and popularity: most viewed first
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Views > out[j].Views })
+	}
+	if (page-1)*per >= len(out) {
+		return nil, nil
+	}
+	out = out[(page-1)*per:]
+	if len(out) > per {
+		out = out[:per]
+	}
+	return out, nil
+}
+
+var (
+	gbSeedMu sync.Mutex
+	gbSeeded time.Time
+)
+
+// seedGBKinds takes the kinds the daily index classified for every
+// GameBanana upload, so this computer doesn't have to ask about all of them.
+func seedGBKinds() {
+	gbSeedMu.Lock()
+	defer gbSeedMu.Unlock()
+	if time.Since(gbSeeded) < time.Hour {
+		return
+	}
+	gbSeeded = time.Now()
+	ix, err := popularity.Fetch()
+	if err != nil {
+		return
+	}
+	kinds := map[int]string{}
+	for _, it := range ix.Items {
+		var id int
+		if it.Src == "gb" && it.KindChecked {
+			if _, err := fmt.Sscanf(it.Ref, "gb:%d", &id); err == nil {
+				kinds[id] = it.Kind
+			}
+		}
+	}
+	sources.SeedGBKinds(kinds)
+}
+
 // searchTrending ranks by what gained the most views or downloads in the
 // period, from the daily snapshots published by the popularity Action.
 func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) SearchResults {
@@ -427,7 +521,7 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 		r.Notes = append(r.Notes, fmt.Sprintf("Popularity tracking started %s, so \"%s\" covers the last %d day(s) for now.", ix.Since, label, days))
 	}
 	conv := func(it popularity.Item) SearchResult {
-		res := SearchResult{Ref: it.Ref, Name: it.Name, Author: it.Author, Category: it.Category, Date: it.Date, URL: it.URL,
+		res := SearchResult{Ref: it.Ref, Name: it.Name, Author: it.Author, Category: it.Category, Date: YMD(it.Date), URL: it.URL,
 			Image: it.Image, Reviewed: it.Reviewed, Kind: it.Kind}
 		if g := it.Gain(opt.Period); g > 0 {
 			res.Trend = fmt.Sprintf("+%s %s %s", thousands(g), ix.Metric[it.Src], label)
@@ -441,7 +535,8 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 			res.Source = "True Workshop"
 		default:
 			res.Source = "Steam Workshop"
-			res.Mirrors = []string{"top-mods " + it.Date}
+			res.Date = YMD(it.Date)
+			res.Mirrors = []string{"top-mods " + res.Date}
 		}
 		return res
 	}
@@ -1033,7 +1128,7 @@ func (a *App) Backup() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		dest = filepath.Join(dir, "workshop-backup-"+time.Now().Format("20060102"))
+		dest = filepath.Join(dir, "workshop-backup-"+time.Now().Format("2006-01-02"))
 	}
 	a.logf("backing up %s -> %s", strings.Join(src, ", "), dest)
 	items, err := manager.BackupWorkshop(src, dest, a.logf)

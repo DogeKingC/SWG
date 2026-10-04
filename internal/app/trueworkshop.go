@@ -54,7 +54,7 @@ func (a *App) fetchTW(id int, prev *manager.Installed) (*manager.Candidate, erro
 	}
 	return &manager.Candidate{
 		Key: fmt.Sprintf("tw:%d", id), Name: it.Title, Source: it.Page(), Path: path,
-		Version: it.Created, Revision: it.CreatedTime(), ArchiveSHA: sha, Reviewed: it.Reviewed(),
+		Version: FmtTime(it.CreatedTime()), Revision: it.CreatedTime(), ArchiveSHA: sha, Reviewed: it.Reviewed(),
 	}, nil
 }
 

@@ -56,7 +56,7 @@ func skyMirror(it sources.SkyItem) Mirror {
 func tmMirror(it *sources.TMItem) Mirror {
 	return Mirror{
 		ID: "topmods:" + it.ID, Source: "top-mods", Title: it.Title, Author: it.Author,
-		Version: it.Version, VersionTime: it.VersionTime, Size: it.Size, Page: it.URL, Image: it.Image,
+		Version: YMD(it.Version), VersionTime: it.VersionTime, Size: it.Size, Page: it.URL, Image: it.Image,
 		AfterCutoff: !it.VersionTime.IsZero() && !it.VersionTime.Before(manager.WormCutoff), tm: it,
 	}
 }

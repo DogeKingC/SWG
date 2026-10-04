@@ -41,20 +41,22 @@ type Snapshot struct {
 
 // Item is a ranked entry with what a search card needs.
 type Item struct {
-	Ref      string `json:"ref"` // gb:<id>, tw:<id>, sky:<workshop id>
-	Src      string `json:"src"` // gb, tw or tm
-	Name     string `json:"name"`
-	Author   string `json:"author,omitempty"`
-	Image    string `json:"image,omitempty"`
-	Kind     string `json:"kind"` // mod or contraption
-	Category string `json:"category,omitempty"`
-	Date     string `json:"date,omitempty"`
-	URL      string `json:"url,omitempty"`
-	Reviewed bool   `json:"reviewed,omitempty"`
-	N        int    `json:"n"`           // counter today (all time)
-	D        int    `json:"d,omitempty"` // gained in the last day
-	W        int    `json:"w,omitempty"` // ... week
-	M        int    `json:"m,omitempty"` // ... 30 days
+	Ref    string `json:"ref"` // gb:<id>, tw:<id>, sky:<workshop id>
+	Src    string `json:"src"` // gb, tw or tm
+	Name   string `json:"name"`
+	Author string `json:"author,omitempty"`
+	Image  string `json:"image,omitempty"`
+	Kind   string `json:"kind"` // mod, contraption or other (not installable)
+	// KindChecked: Kind comes from the archive's contents, not a category.
+	KindChecked bool   `json:"kind_checked,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Date        string `json:"date,omitempty"`
+	URL         string `json:"url,omitempty"`
+	Reviewed    bool   `json:"reviewed,omitempty"`
+	N           int    `json:"n"`           // counter today (all time)
+	D           int    `json:"d,omitempty"` // gained in the last day
+	W           int    `json:"w,omitempty"` // ... week
+	M           int    `json:"m,omitempty"` // ... 30 days
 }
 
 // Index is the published ranking.

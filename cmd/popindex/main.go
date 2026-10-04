@@ -103,27 +103,27 @@ func run() error {
 }
 
 func collectGB(add func(popularity.Item)) error {
-	n := 0
-	for page := 1; page <= 40; page++ {
-		mods, err := sources.GBList("", 0, "Generic_MostViewed", page, 50)
-		if err != nil {
-			return err
-		}
-		for _, m := range mods {
-			kind := "mod"
+	all, err := sources.GBAll()
+	if err != nil {
+		return err
+	}
+	if len(all) == 0 {
+		return fmt.Errorf("no mods listed")
+	}
+	// What each upload really is, from its archive's file list (categories
+	// don't say: contraptions are filed under Vehicles, Building...).
+	kinds := sources.GBKinds(all)
+	for _, m := range all {
+		kind, checked := kinds[m.ID], true
+		if kind == "" {
+			kind, checked = "mod", false
 			if m.Category.Name == "Contraptions" {
 				kind = "contraption"
 			}
-			add(popularity.Item{Ref: fmt.Sprintf("gb:%d", m.ID), Src: "gb", Name: m.Name, Author: m.Submitter.Name, Image: m.Thumb(),
-				Kind: kind, Category: m.Category.Name, Date: time.Unix(m.Modified, 0).UTC().Format("2006-01-02"), URL: m.URL, N: m.Views})
-			n++
 		}
-		if len(mods) < 50 {
-			break
-		}
-	}
-	if n == 0 {
-		return fmt.Errorf("no mods listed")
+		add(popularity.Item{Ref: fmt.Sprintf("gb:%d", m.ID), Src: "gb", Name: m.Name, Author: m.Submitter.Name, Image: m.Thumb(),
+			Kind: kind, KindChecked: checked, Category: m.Category.Name, Date: time.Unix(m.Modified, 0).UTC().Format("2006-01-02"),
+			URL: m.URL, N: m.Views})
 	}
 	return nil
 }
@@ -217,9 +217,17 @@ func collectTM(add func(popularity.Item)) error {
 			continue // not a Workshop mirror (or its page could not be read)
 		}
 		add(popularity.Item{Ref: "sky:" + in.WS, Src: "tm", Name: strings.TrimSpace(s.Title), Author: in.Author, Image: s.Image,
-			Kind: "mod", Date: in.Version, URL: s.URL, N: s.Views})
+			Kind: "mod", Date: ymd(in.Version), URL: s.URL, N: s.Views})
 	}
 	return nil
+}
+
+// ymd turns top-mods' 19.09.2026 into 2026-09-19.
+func ymd(v string) string {
+	if t := sources.ParseTMVersion(v); !t.IsZero() {
+		return t.Format("2006-01-02")
+	}
+	return v
 }
 
 func loadSnapshots(snapDir string, now time.Time) ([]popularity.Snapshot, error) {

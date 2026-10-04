@@ -31,3 +31,14 @@ func TestCacheDirRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestYMD(t *testing.T) {
+	for in, want := range map[string]string{
+		"19.09.2026": "2026-09-19", "2026-09-27 15:31:50": "2026-09-27", "2026-10-03T16:48:28Z": "2026-10-03",
+		"2026-10-03": "2026-10-03", "1.2.2026": "2026-02-01", "v3.1": "v3.1", "": "",
+	} {
+		if got := YMD(in); got != want {
+			t.Errorf("YMD(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

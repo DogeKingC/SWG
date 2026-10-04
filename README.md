@@ -151,9 +151,18 @@ and verify, rollback and remove work for contraptions the same way as for mods.
 
 ### Browsing: mods or contraptions, and sort order
 
-**Mods / Contraptions** switches what Browse lists. Contraptions come from
-GameBanana's Contraptions category and True Workshop; the Workshop mirrors
-only carry mods. **Sort by**:
+**Mods / Contraptions** switches what Browse lists. The Workshop mirrors
+only carry mods. On GameBanana the category doesn't tell: about a third of
+its People Playground contraptions are filed under Vehicles, Building or
+Military, and some uploads in Contraptions are mods. ppgmods reads the list
+of files inside each upload instead (GameBanana publishes it): `mod.json`
+means a mod, only `.jaap` files means a contraption, neither (skins without
+code, textures) is left out of both. The daily popularity job classifies
+all ~560 uploads, so the window rarely has to ask; anything newer is checked
+when it first appears (two requests per 50 uploads) and remembered.
+
+All dates are shown as year-month-day (2026-09-19), whatever format the site
+uses. **Sort by**:
 
 - **Relevance**: each site's own search order (True Workshop has none, so its
   results are by downloads).
