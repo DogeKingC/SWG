@@ -453,18 +453,110 @@ func (m *Manager) SetPinned(key string, pinned bool) error {
 }
 
 func (m *Manager) Remove(key string) error {
+	_, err := m.RemoveReport(key)
+	return err
+}
+
+// RemoveReport removes an installed item and returns the other folders
+// that still hold a copy of the same mod (same Workshop ID in mod.json, or
+// same name and author): ppgmods didn't install those, so it leaves them,
+// but the game still loads them.
+func (m *Manager) RemoveReport(key string) ([]string, error) {
 	inst := m.State.Mods[key]
 	if inst == nil {
-		return fmt.Errorf("%s is not installed", key)
+		return nil, fmt.Errorf("%s is not installed", key)
+	}
+	base := m.dirFor(inst)
+	var idents []modIdent
+	for _, f := range inst.Folders {
+		idents = append(idents, readIdent(filepath.Join(base, f)))
 	}
 	for _, f := range inst.Folders {
-		if err := removeFolder(m.dirFor(inst), f); err != nil {
-			return err
+		if err := removeFolder(base, f); err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(filepath.Join(base, f)); err == nil {
+			return nil, fmt.Errorf("%s could not be deleted (is the game running?)", filepath.Join(base, f))
 		}
 	}
 	delete(m.State.Mods, key)
-	m.logf("removed %s", key)
-	return m.State.Save()
+	m.logf("removed %s (deleted %s)", key, strings.Join(inst.Folders, ", "))
+	if err := m.State.Save(); err != nil {
+		return nil, err
+	}
+	var others []string
+	if ents, err := os.ReadDir(base); err == nil {
+		for _, e := range ents {
+			if !e.IsDir() {
+				continue
+			}
+			id := readIdent(filepath.Join(base, e.Name()))
+			for _, want := range idents {
+				if want.same(id) {
+					others = append(others, e.Name())
+					m.logf("  another copy of this mod is still in %s (not installed by ppgmods; delete it there if you don't want it)", filepath.Join(base, e.Name()))
+					break
+				}
+			}
+		}
+	}
+	return others, nil
+}
+
+type modIdent struct{ ugc, name, author string }
+
+func (a modIdent) same(b modIdent) bool {
+	if a.ugc != "" && a.ugc == b.ugc {
+		return true
+	}
+	return a.name != "" && strings.EqualFold(a.name, b.name) && strings.EqualFold(a.author, b.author)
+}
+
+// readIdent reads what identifies a mod folder: its mod.json, at the top or
+// one level down.
+func readIdent(dir string) modIdent {
+	p := filepath.Join(dir, "mod.json")
+	if _, err := os.Stat(p); err != nil {
+		p = ""
+		ents, _ := os.ReadDir(dir)
+		for _, e := range ents {
+			if q := filepath.Join(dir, e.Name(), "mod.json"); e.IsDir() {
+				if _, err := os.Stat(q); err == nil {
+					p = q
+					break
+				}
+			}
+		}
+		if p == "" {
+			return modIdent{}
+		}
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return modIdent{}
+	}
+	var mj struct {
+		Name, Author       string
+		CreatorUGCIdentity json.RawMessage
+	}
+	json.Unmarshal(trimBOM(b), &mj)
+	return modIdent{name: strings.TrimSpace(mj.Name), author: strings.TrimSpace(mj.Author), ugc: UGCString(mj.CreatorUGCIdentity)}
+}
+
+// UGCString reads a Workshop ID written as a string or a number ("0" and
+// null mean none). A number must not go through float64: 3801154351 would
+// become 3.801154351e+09.
+func UGCString(raw json.RawMessage) string {
+	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	if s == "" || s == "0" || s == "null" {
+		return ""
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return ""
+		}
+	}
+	return s
 }
 
 // Problem is a verify result for one Mods/ folder.
@@ -701,11 +793,11 @@ func workshopIDIn(dir string) string {
 	if err != nil {
 		return ""
 	}
-	var mj struct{ CreatorUGCIdentity any }
-	if json.Unmarshal(trimBOM(b), &mj) != nil || mj.CreatorUGCIdentity == nil {
+	var mj struct{ CreatorUGCIdentity json.RawMessage }
+	if json.Unmarshal(trimBOM(b), &mj) != nil {
 		return ""
 	}
-	u := strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
+	u := UGCString(mj.CreatorUGCIdentity)
 	if len(u) < 6 || len(u) > 12 || strings.Trim(u, "0123456789") != "" {
 		return ""
 	}

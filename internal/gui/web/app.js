@@ -281,6 +281,11 @@ function jobDone(j) {
         { label: c ? "Open Contraptions folder" : "Open Mods folder", run: () => api("/api/open?what=" + (c ? "contraptions" : "mods")) });
       return;
     }
+    if (j.name === "remove" && j.data && j.data.others) {
+      toast("Removed. Another copy is still in your Mods folder (" + j.data.others + "), not installed by ppgmods.", 10000,
+        { label: "Open Mods folder", run: () => api("/api/open?what=mods") });
+      return;
+    }
     toast(j.name + " finished");
     return;
   }

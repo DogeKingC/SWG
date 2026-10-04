@@ -162,11 +162,21 @@ func Run(opt app.Options, g Options) error {
 	}
 	// Track mods already in the game folders (installed by hand or from the
 	// sites) so they show as installed.
+	// It runs as a queued task like any other, so it can never interleave
+	// with an install or a removal: each loads state.json, changes it and
+	// saves it, and two at once would undo each other (a removed mod came
+	// back). The slow part, True Workshop's catalogue (its free server can
+	// take a minute to wake up), is fetched first, outside the queue.
 	go func() {
-		a := s.newApp(nil)
-		if m, err := a.Manager(true); err == nil {
-			if found, err := a.FindExisting(m); err == nil && len(found) > 0 {
-				s.logf("now tracking %d mod(s)/contraption(s) that were already installed", len(found))
+		sources.TWAll()
+		for i := 0; i < 120; i++ {
+			if _, err := s.start(actionReq{Action: "find-installed"}); err == nil {
+				return
+			}
+			select { // a task is running; try again shortly
+			case <-time.After(5 * time.Second):
+			case <-s.quit:
+				return
 			}
 		}
 	}()
@@ -655,6 +665,9 @@ func (s *server) do(j *job, req actionReq) error {
 	case "find-installed":
 		found, err := a.FindExisting(m)
 		j.Data = map[string]string{"found": strconv.Itoa(len(found))}
+		if len(found) > 0 {
+			s.logf("now tracking %d mod(s)/contraption(s) that were already installed", len(found))
+		}
 		return err
 	case "verify":
 		probs, err := m.Verify()
@@ -668,7 +681,11 @@ func (s *server) do(j *job, req actionReq) error {
 	case "rollback":
 		return m.Rollback(req.Key)
 	case "remove":
-		return m.Remove(req.Key)
+		others, err := m.RemoveReport(req.Key)
+		if len(others) > 0 {
+			j.Data = map[string]string{"others": strings.Join(others, ", ")}
+		}
+		return err
 	case "pin":
 		return m.SetPinned(req.Key, req.Pinned)
 	}

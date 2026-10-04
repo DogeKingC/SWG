@@ -118,18 +118,15 @@ func (a *App) FindExisting(m *manager.Manager) ([]Found, error) {
 }
 
 type modJSONInfo struct {
-	ThumbnailPath      string `json:"ThumbnailPath"`
-	Name               string `json:"Name"`
-	Author             string `json:"Author"`
-	ModVersion         string `json:"ModVersion"`
-	CreatorUGCIdentity any    `json:"CreatorUGCIdentity"`
+	ThumbnailPath      string          `json:"ThumbnailPath"`
+	Name               string          `json:"Name"`
+	Author             string          `json:"Author"`
+	ModVersion         string          `json:"ModVersion"`
+	CreatorUGCIdentity json.RawMessage `json:"CreatorUGCIdentity"`
 }
 
 func (mj modJSONInfo) UGC() string {
-	if mj.CreatorUGCIdentity == nil {
-		return ""
-	}
-	u := strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
+	u := manager.UGCString(mj.CreatorUGCIdentity)
 	if !reWorkshopDir.MatchString(u) {
 		return ""
 	}

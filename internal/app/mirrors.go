@@ -745,20 +745,15 @@ func inspect(m *manager.Manager, c *manager.Candidate) inspected {
 	defer os.RemoveAll(dir)
 	if roots, _ := modRoots(dir); len(roots) > 0 {
 		var mj struct {
-			ModVersion         string `json:"ModVersion"`
-			Author             string `json:"Author"`
-			CreatorUGCIdentity any    `json:"CreatorUGCIdentity"`
+			ModVersion         string          `json:"ModVersion"`
+			Author             string          `json:"Author"`
+			CreatorUGCIdentity json.RawMessage `json:"CreatorUGCIdentity"`
 		}
 		if b, err := os.ReadFile(filepath.Join(roots[0], "mod.json")); err == nil {
 			in.modJSON = json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj) == nil
 		}
 		in.version, in.author = strings.TrimSpace(mj.ModVersion), strings.TrimSpace(mj.Author)
-		if mj.CreatorUGCIdentity != nil {
-			in.ugc = strings.TrimSpace(fmt.Sprint(mj.CreatorUGCIdentity))
-			if in.ugc == "0" || in.ugc == "<nil>" {
-				in.ugc = ""
-			}
-		}
+		in.ugc = manager.UGCString(mj.CreatorUGCIdentity)
 		learnAuthor(in.ugc, mj.Author)
 	} else if names, _ := contraptions(dir); len(names) > 0 {
 		in.contraption = true
