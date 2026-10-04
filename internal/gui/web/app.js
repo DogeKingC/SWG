@@ -345,6 +345,9 @@ function jobDone(j) {
   if (j.browser && j.retry) {
     body.splice(0, body.length,
       el("p", {}, "This copy has to be downloaded in your browser: " + j.browser.reason + "."),
+      (j.browser.mirror || "").startsWith("01studio:")
+        ? el("p", { class: "small" }, "No 01studio.dev account (or it says supporters only)? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead.")
+        : null,
       el("p", {}, "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
     dialog("Download in your browser", body, { label: "Open download page", run: () => run(j.retry, "Waiting for the browser download") });
     $("#dlgExtra").className = "btn btn-primary";
@@ -813,6 +816,7 @@ function showCheck(m, p) {
     box.push(el("p", { class: "small" }, "On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."));
   } else if (p.verdict === "browser") {
     box.push(el("p", { class: "small" }, "Reason: " + (p.browser?.reason || "unknown") + ". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."));
+    if ((p.browser?.mirror || "").startsWith("01studio:")) box.push(el("p", { class: "small" }, "No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."));
   }
   if (p.reasons && p.reasons.length && p.verdict !== "browser") {
     box.push(el("ul", { class: "small" }, p.reasons.map((r) => el("li", {}, r.replace(/ \(override: [^)]*\)/, "")))));
