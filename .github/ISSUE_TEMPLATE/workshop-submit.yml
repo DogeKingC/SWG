@@ -1,0 +1,79 @@
+name: Publish on the Open Workshop
+description: Share a People Playground mod or contraption. It's checked automatically and published within minutes.
+title: "[Open Workshop] "
+labels: ["workshop-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill this in and submit. The file is downloaded, checked (it must unpack safely, be what you say it is, and pass the safety scanner) and, if it passes, published right away. PPG Mod Manager shows it as *checked automatically*.
+
+        To **update** your mod later, submit again with the same name and a higher version; only your GitHub account can update it.
+  - type: input
+    id: name
+    attributes:
+      label: Name
+      description: The mod's name, as people will see it.
+    validations:
+      required: true
+  - type: input
+    id: author
+    attributes:
+      label: Author
+      description: Who made it (as in its mod.json).
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type
+      options:
+        - Mod
+        - Contraption
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Like 1.0 or 2.3.1. Updates need a higher version.
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: File
+      description: Drag your .zip into this box (GitHub uploads it), or paste a direct download link.
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+  - type: input
+    id: tags
+    attributes:
+      label: Tags
+      description: Optional, separated by commas (weapons, vehicles, humans, ...).
+  - type: textarea
+    id: picture
+    attributes:
+      label: Picture
+      description: Optional. Drag a screenshot here.
+  - type: input
+    id: workshop
+    attributes:
+      label: Steam Workshop ID
+      description: Optional. If this replaces your deleted Steam Workshop item, its number (people who have the old copy are offered your update).
+  - type: input
+    id: license
+    attributes:
+      label: License
+      description: Optional, e.g. "free to share, don't reupload".
+  - type: checkboxes
+    id: permission
+    attributes:
+      label: Permission
+      options:
+        - label: I made this, or the author gave me permission to share it.
+          required: true

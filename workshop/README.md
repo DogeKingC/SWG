@@ -2,69 +2,86 @@
 
 A replacement for the People Playground Steam Workshop that keeps what made it
 useful (one place, one-click installs, updates) without what let the worm
-spread: code pushed to every subscriber with nobody looking at it first.
+spread: code pushed to every subscriber with nothing checking it first.
 
-Every mod here was **checked automatically and reviewed by a maintainer**
-before anyone could install it, and its file is stored permanently under a
-name that includes its checksum, so a published file can never be swapped.
+Nobody has to review a submission by hand: a submission is checked
+automatically and published within minutes if it passes. The checks are
+strict, and anything they can't clear on their own waits for the
+repository owner's approval instead of being published. Every published file
+is stored permanently under a name that includes its checksum, and the index
+records that checksum, so a published file can never be swapped.
 
 ## Install
 
-In PPG Mod Manager, set **Site** to *Open Workshop* (or *All sites*). Updates
-arrive through **Check for updates**. If the Open Workshop has to take a mod
-down, everyone who has it is warned.
+In PPG Mod Manager, set **Site** to *Open Workshop*. Updates arrive through
+**Check for updates**; the app fetches the index when it needs it, so new
+mods appear without updating the app. Uploads nobody reviewed wait 48 hours
+before the app installs them. If a mod is withdrawn, everyone who has it is
+warned.
 
 ## Publish your mod
 
 The easy way: in PPG Mod Manager, go to **Installed**, find your mod and click
-**Share**. It packs the mod, drafts the submission and opens GitHub.
+**Share**. It packs the mod into a zip and opens the submission form with the
+details filled in; drag the zip into the **File** box and submit.
 
-By hand:
+By hand: open a new issue with the **Publish on the Open Workshop** form and
+attach the zip of your mod folder (the one with `mod.json`) or contraption
+folder (with the `.jaap`), or paste a direct download link.
 
-1. Zip your mod folder (the one with `mod.json`), or your contraption folder
-   (with the `.jaap`).
-2. Put the zip somewhere with a **direct** download link, for example a
-   release in your own GitHub repository.
-3. Add `workshop/submissions/<name>/submission.json` in a pull request, where
-   `<name>` is lowercase letters, digits and dashes:
-
-```json
-{
-  "name": "Quick Draw Mod",
-  "author": "51804",
-  "kind": "mod",
-  "version": "4.0",
-  "description": "Draw weapons faster.",
-  "tags": ["weapons", "utility"],
-  "download": "https://github.com/you/quick-draw/releases/download/v4.0/QuickDraw.zip",
-  "sha256": "the file's SHA-256 (sha256sum / Get-FileHash)",
-  "workshop_id": "3801154351",
-  "maintainers": ["your-github-username"]
-}
-```
-
-`workshop_id` is optional: set it if this replaces your deleted Steam Workshop
-item, and people who still have the old copy are offered your update.
-
-The pull request is checked automatically (the file matches the checksum,
-unpacks safely, is the kind it says, and the scanner finds nothing
-dangerous). Then a maintainer reviews it. To update, change `version`,
-`download` and `sha256` in a new pull request; only the listed
-`maintainers` can change an entry. To take a mod down, set
-`"withdrawn": true` and a `"withdrawn_reason"`.
+To update, submit again with the same name and a higher version. To take a
+mod down, comment `/withdraw <reason>` on its issue.
 
 Only submit mods you made, or that you have the author's permission to share.
 
-## For maintainers
+## The checks
 
-- Review the checks' summary on the pull request. Warnings (author name
-  differs from `mod.json`, a Workshop ID claim, HIGH findings) need a human
-  look. Read the code of anything the scanner flags.
-- A file with a CRITICAL finding (for example a bundled DLL) can only be
-  published if its SHA-256 is added to `approved-critical.txt` with a reason,
-  in a separate pull request. Worm-like findings can never be published.
-- Protect `main` (require a review, and require code-owner review for
-  `workshop/` and `.github/`).
-- Signing: run `go run ./cmd/workshop keygen`, put the public key in
-  `internal/workshop/key.go` and the private key in the repository secret
-  `WORKSHOP_SIGNING_KEY`. From then on the app refuses an unsigned index.
+Never published (fix and edit the issue):
+
+- The file isn't a zip/7z/rar, is over 50 MB, or doesn't unpack safely.
+- It isn't the kind the form says (a mod needs `mod.json`, a contraption a `.jaap`).
+- The scanner finds something the worm did (Workshop upload API, Steam
+  friends/chat, auth tickets, self-replication, rewriting game files, hidden
+  base64 code, symlinks).
+- `mod.json` claims a different Steam Workshop item than the form.
+- The name belongs to another GitHub account, or the version isn't higher
+  than the published one.
+- More than 3 publications by one account in a day.
+
+Published only with the owner's approval (label `approved`):
+
+- The GitHub account is younger than 30 days (or its age can't be checked).
+- Any other HIGH or CRITICAL scanner finding (a bundled DLL, reflection,
+  network access, …).
+- Files that aren't mod content (allowed: `.cs`, `.json`, images, sounds,
+  `.txt`/`.md`, `.jaap`, `.outline`, fonts, license/readme files).
+- A Steam Workshop ID: it replaces that item for everyone who still has it,
+  so the owner confirms the submitter is its author.
+- The author name differs from `mod.json`.
+- An update that does something the previous version didn't (a scanner rule
+  that wasn't found before).
+- Republishing a withdrawn mod.
+
+Every night the published files are scanned again with the current scanner;
+a file that a newer rule flags is withdrawn automatically.
+
+## For the owner
+
+Labels on a submission issue (only the repository owner's labels count):
+
+- `approved` publishes a submission that is waiting for approval.
+- `reviewed` marks the published version as reviewed (the app skips the
+  48-hour wait).
+- `withdrawn` takes it down; everyone who has it is warned.
+
+The workflow sets `published`, `needs-changes` and `needs-approval` itself.
+
+Signing (recommended): run `go run ./cmd/workshop keygen`, put the public key
+in `internal/workshop/key.go` and the private key in the repository secret
+`WORKSHOP_SIGNING_KEY`. From then on the app refuses an unsigned or altered
+index.
+
+How it works: [workshop.yml](../.github/workflows/workshop.yml) runs
+`cmd/workshop` on each submission. Issue text is only passed as data (never
+run). Files go into the `workshop-files` release; `index.json` (and
+`index.sig`) live on the `workshop-data` branch.

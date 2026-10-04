@@ -1,13 +1,12 @@
-// workshop runs the Open Workshop's CI jobs.
+// workshop runs the Open Workshop's GitHub Actions jobs.
 //
-//	workshop check -head <git ref> -base <git ref> -author <github login>
-//	    checks the submissions a pull request changes (run from a checkout
-//	    of the base branch: the pull request's files are read with git, its
-//	    code is never run)
-//	workshop publish -data <dir> -out <dir> -commit <sha>
-//	    after a merge: re-checks changed submissions, puts new files in -out
-//	    (uploaded as release assets by the workflow) and writes index.json
-//	    (and index.sig with WORKSHOP_SIGNING_KEY) in -data
+//	workshop issue -data <dir> -out <dir>
+//	    handles a submission issue event (see .github/workflows/workshop.yml):
+//	    checks and publishes a submission, applies the owner's labels, or an
+//	    author's /withdraw comment. Event details come from the environment;
+//	    everything in them is treated as data.
+//	workshop refresh -data <dir>
+//	    refreshes download counts (daily)
 //	workshop keygen
 //	    prints a new signing key pair
 package main
@@ -19,39 +18,35 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/DogeKingC/SWG/internal/version"
 	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
-const subDir = "workshop/submissions"
-
-var reSubPath = regexp.MustCompile(`^workshop/submissions/([a-z0-9][a-z0-9-]{1,62}[a-z0-9])/submission\.json$`)
-
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: workshop check|publish|keygen")
+		fmt.Fprintln(os.Stderr, "usage: workshop issue|refresh|keygen")
 		os.Exit(2)
 	}
 	var err error
 	switch os.Args[1] {
-	case "check":
-		err = check(os.Args[2:])
-	case "publish":
-		err = publish(os.Args[2:])
+	case "issue":
+		err = issue(os.Args[2:])
+	case "refresh":
+		err = refresh(os.Args[2:])
 	case "keygen":
 		pub, priv, kerr := workshop.NewKey()
 		if kerr != nil {
 			err = kerr
 			break
 		}
-		fmt.Println("Public key (put in internal/workshop/key.go):", pub)
+		fmt.Println("Public key (goes in internal/workshop/key.go):", pub)
 		fmt.Println("Private key (add as the repository secret WORKSHOP_SIGNING_KEY, keep nowhere else):", priv)
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
@@ -64,258 +59,48 @@ func main() {
 
 var client = &http.Client{Timeout: 10 * time.Minute}
 
-func git(args ...string) (string, error) {
-	out, err := exec.Command("git", args...).Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, ee.Stderr)
-		}
-		return "", err
-	}
-	return string(out), nil
+// event is what the workflow passes in the environment.
+type event struct {
+	name, action             string
+	number                   int
+	author, body             string
+	label, sender, repoOwner string
+	commentBody, commentBy   string
 }
 
-// showSubmission reads a submission at a git ref (nil if it doesn't exist).
-func showSubmission(ref, path string) (*workshop.Submission, error) {
-	out, err := exec.Command("git", "show", ref+":"+path).Output()
-	if err != nil {
-		return nil, nil // not there
-	}
-	dec := json.NewDecoder(bytes.NewReader(out))
-	dec.DisallowUnknownFields()
-	var s workshop.Submission
-	if err := dec.Decode(&s); err != nil {
-		return nil, fmt.Errorf("%s: %v", path, err)
-	}
-	return &s, nil
-}
-
-// summary collects the report (also written to the GitHub job summary).
-type summary struct{ bytes.Buffer }
-
-func (s *summary) flush() {
-	os.Stdout.Write(s.Bytes())
-	if p := os.Getenv("GITHUB_STEP_SUMMARY"); p != "" {
-		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
-			f.Write(s.Bytes())
-			f.Close()
-		}
+func readEvent() event {
+	n, _ := strconv.Atoi(os.Getenv("ISSUE_NUMBER"))
+	return event{
+		name: os.Getenv("EVENT_NAME"), action: os.Getenv("ACTION"), number: n,
+		author: os.Getenv("ISSUE_AUTHOR"), body: os.Getenv("ISSUE_BODY"),
+		label: os.Getenv("LABEL"), sender: os.Getenv("SENDER"), repoOwner: os.Getenv("REPO_OWNER"),
+		commentBody: os.Getenv("COMMENT_BODY"), commentBy: os.Getenv("COMMENT_AUTHOR"),
 	}
 }
 
-func check(args []string) error {
-	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	head := fs.String("head", "", "git ref of the pull request")
-	base := fs.String("base", "", "git ref of the base branch")
-	author := fs.String("author", "", "GitHub login of the pull request's author")
-	fs.Parse(args)
-	if *head == "" || *base == "" || *author == "" {
-		return fmt.Errorf("check needs -head, -base and -author")
-	}
-	mb, err := git("merge-base", *base, *head)
-	if err != nil {
-		return err
-	}
-	mb = strings.TrimSpace(mb)
-	changed, err := git("diff", "--name-only", "-z", mb, *head)
-	if err != nil {
-		return err
-	}
-	var s summary
-	defer s.flush()
-	fmt.Fprintf(&s, "## Open Workshop check\n\n")
-	failed := false
-	var paths []string
-	for _, p := range strings.Split(changed, "\x00") {
-		if p == "" {
-			continue
-		}
-		if !reSubPath.MatchString(p) {
-			fmt.Fprintf(&s, "- ✕ `%s`: a submission may only change `workshop/submissions/<name>/submission.json`\n", p)
-			failed = true
-			continue
-		}
-		paths = append(paths, p)
-	}
-	if len(paths) == 0 && !failed {
-		fmt.Fprintf(&s, "No submissions changed.\n")
-		return nil
-	}
-	for _, p := range paths {
-		slug := reSubPath.FindStringSubmatch(p)[1]
-		fmt.Fprintf(&s, "\n### `%s`\n\n", slug)
-		sub, err := showSubmission(*head, p)
-		if err != nil {
-			fmt.Fprintf(&s, "- ✕ %v\n", err)
-			failed = true
-			continue
-		}
-		old, _ := showSubmission(*base, p)
-		if sub == nil {
-			fmt.Fprintf(&s, "- Removes the entry. Set `\"withdrawn\": true` with a reason instead, so people who have it are warned.\n")
-			if old != nil && !old.IsMaintainer(*author) {
-				fmt.Fprintf(&s, "- ✕ only %s may change this entry\n", strings.Join(old.Maintainers, ", "))
-				failed = true
-			}
-			continue
-		}
-		problems := workshop.UpdateProblems(old, sub, *author)
-		work, _ := os.MkdirTemp("", "ws-check-")
-		res := workshop.Check(client, sub, work)
-		os.RemoveAll(work)
-		problems = append(problems, res.Problems...)
-		problems = approvedCritical(problems, sub.SHA256)
-		fmt.Fprintf(&s, "%s by %s, %s %s", sub.Name, sub.Author, sub.Kind, sub.Version)
-		if res.SHA256 != "" {
-			fmt.Fprintf(&s, " · %d KB · sha256 `%s…`", res.Size/1024, res.SHA256[:12])
-			if res.ScanMax != "" {
-				fmt.Fprintf(&s, " · scan: **%s**", res.ScanMax)
-			}
-		}
-		fmt.Fprintln(&s)
-		fmt.Fprintln(&s)
-		for _, p := range problems {
-			fmt.Fprintf(&s, "- ✕ %s\n", p)
-		}
-		for _, w := range res.Warnings {
-			fmt.Fprintf(&s, "- ⚠ %s\n", w)
-		}
-		if len(res.Findings) > 0 {
-			fmt.Fprintf(&s, "\n<details><summary>Scanner findings (%d)</summary>\n\n", len(res.Findings))
-			for _, f := range res.Findings {
-				fmt.Fprintf(&s, "- `%s`\n", strings.ReplaceAll(f, "`", "'"))
-			}
-			fmt.Fprintf(&s, "\n</details>\n")
-		}
-		if len(problems) > 0 {
-			failed = true
-		} else {
-			fmt.Fprintf(&s, "- ✓ passes the automatic checks; a maintainer reviews it before merging\n")
-		}
-	}
-	if failed {
-		return fmt.Errorf("the submission has problems (see the summary)")
-	}
-	return nil
+// outcome is what the workflow does on the issue afterwards.
+type outcome struct {
+	Reply  string   `json:"reply"`
+	Labels []string `json:"labels,omitempty"`
+	Remove []string `json:"remove,omitempty"`
+	Close  bool     `json:"close,omitempty"`
 }
 
-// approvedCritical lets a CRITICAL finding through when the Workshop's
-// maintainers approved that exact file in workshop/approved-critical.txt
-// (one SHA-256 per line, with a comment saying why). Worm findings never.
-func approvedCritical(problems []string, sha string) []string {
-	b, err := os.ReadFile("workshop/approved-critical.txt")
-	if err != nil || sha == "" {
-		return problems
-	}
-	ok := false
-	for _, line := range strings.Split(string(b), "\n") {
-		if f := strings.Fields(line); len(f) > 0 && f[0] == sha {
-			ok = true
-		}
-	}
-	if !ok {
-		return problems
-	}
-	var out []string
-	for _, p := range problems {
-		if !strings.HasPrefix(p, "CRITICAL finding") {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func publish(args []string) error {
-	fs := flag.NewFlagSet("publish", flag.ExitOnError)
-	data := fs.String("data", "workshop-data", "checkout of the data branch")
-	out := fs.String("out", "workshop-out", "where to put new files for upload")
-	commit := fs.String("commit", "", "the commit being published")
-	fs.Parse(args)
-	os.MkdirAll(*out, 0o755)
-	os.MkdirAll(*data, 0o755)
-
+func loadIndex(data string) (*workshop.Index, error) {
 	ix := &workshop.Index{}
-	if b, err := os.ReadFile(filepath.Join(*data, "index.json")); err == nil {
+	if b, err := os.ReadFile(filepath.Join(data, "index.json")); err == nil {
 		if err := json.Unmarshal(b, ix); err != nil {
-			return fmt.Errorf("index.json: %v", err)
+			return nil, fmt.Errorf("index.json: %v", err)
 		}
 	}
-	ents, err := os.ReadDir(subDir)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	now := time.Now().UTC()
-	seen := map[string]bool{}
-	var log summary
-	defer log.flush()
-	fmt.Fprintf(&log, "## Open Workshop publish\n\n")
-	for _, e := range ents {
-		slug := e.Name()
-		if !e.IsDir() || !workshop.ValidSlug(slug) {
-			continue
-		}
-		sub, err := workshop.LoadSubmission(filepath.Join(subDir, slug, "submission.json"))
-		if err != nil {
-			fmt.Fprintf(&log, "- `%s`: skipped: %v\n", slug, err)
-			continue
-		}
-		seen[slug] = true
-		old := ix.Find(slug)
-		if sub.Withdrawn {
-			if old != nil {
-				old.Withdrawn, old.WithdrawnReason = true, sub.WithdrawnReason
-				fmt.Fprintf(&log, "- `%s`: withdrawn (%s)\n", slug, sub.WithdrawnReason)
-			}
-			continue
-		}
-		meta := func(en *workshop.Entry) {
-			en.Name, en.Author, en.Kind, en.Description, en.Tags = sub.Name, sub.Author, sub.Kind, sub.Description, sub.Tags
-			en.Image, en.WorkshopID, en.License, en.Maintainers = sub.Image, sub.WorkshopID, sub.License, sub.Maintainers
-			en.Withdrawn, en.WithdrawnReason = false, ""
-		}
-		if old != nil && old.SHA256 == sub.SHA256 {
-			meta(old) // same file: details only
-			continue
-		}
-		work, _ := os.MkdirTemp("", "ws-pub-")
-		res := workshop.Check(client, sub, work)
-		problems := approvedCritical(res.Problems, sub.SHA256)
-		if len(problems) > 0 {
-			os.RemoveAll(work)
-			fmt.Fprintf(&log, "- `%s` %s: NOT published: %s\n", slug, sub.Version, strings.Join(problems, "; "))
-			continue
-		}
-		name := workshop.AssetName(slug, sub.Version, res.SHA256, res.Ext)
-		if err := copyFile(res.Path, filepath.Join(*out, name)); err != nil {
-			os.RemoveAll(work)
-			return err
-		}
-		os.RemoveAll(work)
-		en := workshop.Entry{Slug: slug, Version: sub.Version, File: workshop.AssetURL(name), SHA256: res.SHA256, Size: res.Size,
-			ScanMax: res.ScanMax, Findings: res.Findings, Published: now, First: now, Commit: *commit}
-		if old != nil {
-			en.First, en.Downloads = old.First, old.Downloads
-		}
-		meta(&en)
-		if old != nil {
-			*old = en
-		} else {
-			ix.Entries = append(ix.Entries, en)
-		}
-		fmt.Fprintf(&log, "- `%s` %s published (%s)\n", slug, sub.Version, name)
-	}
-	// Entries whose submission was deleted are withdrawn, not dropped:
-	// people who installed them should hear about it.
-	for i := range ix.Entries {
-		if en := &ix.Entries[i]; !seen[en.Slug] && !en.Withdrawn {
-			en.Withdrawn, en.WithdrawnReason = true, "removed from the Open Workshop"
-		}
-	}
-	downloadCounts(ix)
-	ix.Generated = now
+	return ix, nil
+}
+
+func saveIndex(data string, ix *workshop.Index) error {
+	ix.Generated = time.Now().UTC()
 	ix.Sort()
 	b := ix.Marshal()
-	if err := os.WriteFile(filepath.Join(*data, "index.json"), b, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(data, "index.json"), b, 0o644); err != nil {
 		return err
 	}
 	if key := os.Getenv("WORKSHOP_SIGNING_KEY"); key != "" {
@@ -323,20 +108,302 @@ func publish(args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(*data, "index.sig"), []byte(sig+"\n"), 0o644); err != nil {
-			return err
-		}
-		fmt.Fprintf(&log, "\nIndex signed.\n")
-	} else {
-		os.Remove(filepath.Join(*data, "index.sig"))
-		fmt.Fprintf(&log, "\nIndex not signed (no WORKSHOP_SIGNING_KEY secret).\n")
+		return os.WriteFile(filepath.Join(data, "index.sig"), []byte(sig+"\n"), 0o644)
 	}
-	fmt.Fprintf(&log, "\n%d entries.\n", len(ix.Entries))
+	os.Remove(filepath.Join(data, "index.sig"))
 	return nil
 }
 
-// downloadCounts adds up each entry's release-asset downloads (all
-// versions), when a token is available.
+func issue(args []string) error {
+	fs := flag.NewFlagSet("issue", flag.ExitOnError)
+	data := fs.String("data", "data", "checkout of the workshop-data branch")
+	out := fs.String("out", "out", "new files to upload")
+	fs.Parse(args)
+	os.MkdirAll(*data, 0o755)
+	os.MkdirAll(*out, 0o755)
+	ev := readEvent()
+	ix, err := loadIndex(*data)
+	if err != nil {
+		return err
+	}
+	var o *outcome
+	byOwner := ev.sender != "" && strings.EqualFold(ev.sender, ev.repoOwner)
+	switch {
+	case ev.name == "issue_comment":
+		o = comment(ix, ev)
+	case ev.action == "labeled" && byOwner && ev.label == "reviewed":
+		o = markReviewed(ix, ev)
+	case ev.action == "labeled" && byOwner && ev.label == "withdrawn":
+		o = withdraw(ix, ev, "withdrawn by the Open Workshop's maintainers")
+	case ev.action == "labeled" && byOwner && ev.label == "approved":
+		o = submit(ix, ev, *out, true)
+	case ev.action == "opened" || ev.action == "edited":
+		o = submit(ix, ev, *out, false)
+	}
+	if o == nil {
+		return nil // nothing to do
+	}
+	if err := saveIndex(*data, ix); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(o, "", "  ")
+	return os.WriteFile("outcome.json", b, 0o644) // read by the workflow
+}
+
+func entryForIssue(ix *workshop.Index, ev event) *workshop.Entry {
+	if s, err := workshop.SubmissionFromIssue(ev.body, ev.author); err == nil {
+		if e := ix.Find(workshop.Slugify(s.Name)); e != nil {
+			return e
+		}
+	}
+	for i := range ix.Entries {
+		if ix.Entries[i].Issue == ev.number {
+			return &ix.Entries[i]
+		}
+	}
+	return nil
+}
+
+// Submission rules. The Open Workshop has no reviewers, so it is strict by
+// default: anything not plainly safe waits for the owner's "approved" label.
+const (
+	minAccountAge = 30 * 24 * time.Hour
+	maxPerDay     = 3
+)
+
+func submit(ix *workshop.Index, ev event, out string, approved bool) *outcome {
+	var r bytes.Buffer
+	reject := func(problems []string) *outcome {
+		fmt.Fprintf(&r, "**Not published.** Please fix this and edit the issue (it's checked again automatically):\n\n")
+		for _, p := range problems {
+			fmt.Fprintf(&r, "- %s\n", p)
+		}
+		return &outcome{Reply: r.String(), Labels: []string{"needs-changes"}, Remove: []string{"published", "needs-approval"}}
+	}
+	s, err := workshop.SubmissionFromIssue(ev.body, ev.author)
+	if err != nil {
+		return reject([]string{err.Error()})
+	}
+	slug := workshop.Slugify(s.Name)
+	if !workshop.ValidSlug(slug) {
+		return reject([]string{"Name: use at least a few letters or digits"})
+	}
+	old := ix.Find(slug)
+	if old != nil && !strings.EqualFold(old.Owner, ev.author) {
+		return reject([]string{fmt.Sprintf("Name: %q is already published by @%s. Only they can update it; choose another name if this is a different mod.", s.Name, old.Owner)})
+	}
+	if old != nil && !old.Withdrawn && old.Issue != ev.number && version.Compare(s.Version, old.Version) <= 0 {
+		return reject([]string{fmt.Sprintf("Version: %s is already published; an update needs a higher version", old.Version)})
+	}
+	var holds []string
+	if !approved {
+		if age, err := accountAge(ev.author); err != nil {
+			holds = append(holds, "Account: couldn't check the account's age ("+err.Error()+"), so the owner approves it")
+		} else if age < minAccountAge {
+			holds = append(holds, fmt.Sprintf("Account: GitHub accounts younger than %d days need the owner's approval", int(minAccountAge.Hours()/24)))
+		}
+		n := 0
+		for _, e := range ix.Entries {
+			if strings.EqualFold(e.Owner, ev.author) && time.Since(e.Published) < 24*time.Hour && e.Issue != ev.number {
+				n++
+			}
+		}
+		if n >= maxPerDay {
+			return reject([]string{fmt.Sprintf("Too many: at most %d publications per day per account; try again tomorrow", maxPerDay)})
+		}
+	}
+	work, _ := os.MkdirTemp("", "ws-")
+	defer os.RemoveAll(work)
+	res := workshop.Check(client, s, work)
+	if len(res.Problems) > 0 {
+		o := reject(res.Problems)
+		addFindings(o, res)
+		return o
+	}
+	holds = append(holds, res.Holds...)
+	if old != nil && old.Withdrawn {
+		holds = append(holds, "Withdrawn: this mod was taken down ("+old.WithdrawnReason+"), so publishing it again needs the owner's approval")
+	}
+	if old != nil && !old.Withdrawn {
+		// An update must not start doing new kinds of things unnoticed.
+		had := map[string]bool{}
+		for _, rule := range old.Rules {
+			had[rule] = true
+		}
+		for _, rule := range res.Rules {
+			if !had[rule] {
+				holds = append(holds, "Update: the new version does something the previous one didn't (scanner rule "+rule+")")
+			}
+		}
+	}
+	if len(holds) > 0 && !approved {
+		fmt.Fprintf(&r, "**Waiting for approval.** The file passed the hard checks, but the Open Workshop only publishes this with the owner's approval:\n\n")
+		for _, h := range holds {
+			fmt.Fprintf(&r, "- %s\n", h)
+		}
+		fmt.Fprintf(&r, "\nIf something here is a mistake, edit the issue to fix it; otherwise the owner will look at it.\n")
+		o := &outcome{Reply: r.String(), Labels: []string{"needs-approval"}, Remove: []string{"published", "needs-changes"}}
+		addFindings(o, res)
+		return o
+	}
+	if !approved {
+		s.WorkshopID = "" // a Workshop ID claim is held above; never kept unapproved
+	}
+	if old != nil && old.SHA256 == res.SHA256 {
+		old.Name, old.Author, old.Description, old.Tags, old.Image, old.License = s.Name, s.Author, s.Description, s.Tags, s.Image, s.License
+		old.Version, old.Issue, old.WorkshopID = s.Version, ev.number, s.WorkshopID
+		old.Approved = old.Approved || approved && len(holds) > 0
+		old.Withdrawn, old.WithdrawnReason = false, ""
+		return &outcome{Reply: "Details updated (same file).", Labels: []string{"published"}, Remove: []string{"needs-changes", "needs-approval"}, Close: true}
+	}
+	name := workshop.AssetName(slug, s.Version, res.SHA256, res.Ext)
+	if err := copyFile(res.Path, filepath.Join(out, name)); err != nil {
+		return reject([]string{"internal error: " + err.Error()})
+	}
+	now := time.Now().UTC()
+	e := workshop.Entry{Slug: slug, Name: s.Name, Author: s.Author, Kind: s.Kind, Version: s.Version, Description: s.Description,
+		Tags: s.Tags, Image: s.Image, WorkshopID: s.WorkshopID, License: s.License, File: workshop.AssetURL(name),
+		SHA256: res.SHA256, Size: res.Size, ScanMax: res.ScanMax, Findings: res.Findings, Rules: res.Rules, Published: now, First: now,
+		Maintainers: []string{ev.author}, Owner: ev.author, Issue: ev.number, Approved: approved && len(holds) > 0}
+	if old != nil {
+		e.First, e.Downloads = old.First, old.Downloads
+		*old = e
+	} else {
+		ix.Entries = append(ix.Entries, e)
+	}
+	fmt.Fprintf(&r, "**Published** %s %s by %s (`%s`)", s.Name, s.Version, s.Author, slug)
+	if e.Approved {
+		fmt.Fprintf(&r, " with the owner's approval")
+	}
+	fmt.Fprintf(&r, ". It's in PPG Mod Manager now, marked *checked automatically*; the app waits 48 hours before installing new uploads that nobody reviewed.\n\n")
+	for _, w := range res.Warnings {
+		fmt.Fprintf(&r, "- ⚠ %s\n", w)
+	}
+	fmt.Fprintf(&r, "\nTo update it, open a new submission with the same name and a higher version. To take it down, comment `/withdraw <reason>` here.\n")
+	return &outcome{Reply: r.String(), Labels: []string{"published"}, Remove: []string{"needs-changes", "needs-approval"}, Close: true}
+}
+
+func addFindings(o *outcome, res *workshop.Result) {
+	if len(res.Findings) == 0 {
+		return
+	}
+	o.Reply += "\n<details><summary>Scanner findings</summary>\n\n"
+	for _, f := range res.Findings {
+		o.Reply += "- `" + strings.ReplaceAll(f, "`", "'") + "`\n"
+	}
+	o.Reply += "\n</details>\n"
+}
+
+// accountAge asks GitHub how old an account is.
+func accountAge(login string) (time.Duration, error) {
+	req, _ := http.NewRequest("GET", "https://api.github.com/users/"+url.PathEscape(login), nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	var u struct {
+		Created time.Time `json:"created_at"`
+	}
+	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&u) != nil || u.Created.IsZero() {
+		return 0, fmt.Errorf("GitHub user %s: HTTP %d", login, resp.StatusCode)
+	}
+	return time.Since(u.Created), nil
+}
+
+func markReviewed(ix *workshop.Index, ev event) *outcome {
+	e := entryForIssue(ix, ev)
+	if e == nil {
+		return &outcome{Reply: "Nothing published from this issue to mark as reviewed."}
+	}
+	e.Reviewed = true
+	return &outcome{Reply: fmt.Sprintf("%s %s is now marked **reviewed**.", e.Name, e.Version)}
+}
+
+func withdraw(ix *workshop.Index, ev event, reason string) *outcome {
+	e := entryForIssue(ix, ev)
+	if e == nil {
+		return &outcome{Reply: "Nothing published from this issue to withdraw."}
+	}
+	e.Withdrawn, e.WithdrawnReason = true, reason
+	return &outcome{Reply: fmt.Sprintf("%s is **withdrawn**: %s. Everyone who has it is warned.", e.Name, reason), Labels: []string{"withdrawn"}}
+}
+
+// comment handles "/withdraw <reason>" from the entry's owner (or the
+// repository owner).
+func comment(ix *workshop.Index, ev event) *outcome {
+	line := strings.TrimSpace(strings.SplitN(ev.commentBody, "\n", 2)[0])
+	if !strings.HasPrefix(line, "/withdraw") {
+		return nil
+	}
+	e := entryForIssue(ix, ev)
+	if e == nil {
+		return &outcome{Reply: "Nothing published from this issue to withdraw."}
+	}
+	if !strings.EqualFold(ev.commentBy, e.Owner) && !strings.EqualFold(ev.commentBy, ev.repoOwner) {
+		return &outcome{Reply: fmt.Sprintf("Only @%s can withdraw %s.", e.Owner, e.Name)}
+	}
+	reason := strings.TrimSpace(strings.TrimPrefix(line, "/withdraw"))
+	if reason == "" {
+		reason = "withdrawn by its author"
+	}
+	if len(reason) > 200 {
+		reason = reason[:200]
+	}
+	return withdraw(ix, ev, reason)
+}
+
+func refresh(args []string) error {
+	fs := flag.NewFlagSet("refresh", flag.ExitOnError)
+	data := fs.String("data", "data", "checkout of the workshop-data branch")
+	fs.Parse(args)
+	ix, err := loadIndex(*data)
+	if err != nil {
+		return err
+	}
+	downloadCounts(ix)
+	rescan(ix)
+	return saveIndex(*data, ix)
+}
+
+// rescan checks every published file again with today's scanner: a file
+// that is flagged now (and wasn't approved) is withdrawn.
+func rescan(ix *workshop.Index) {
+	for i := range ix.Entries {
+		e := &ix.Entries[i]
+		if e.Withdrawn {
+			continue
+		}
+		work, _ := os.MkdirTemp("", "ws-rescan-")
+		sub := &workshop.Submission{Name: e.Name, Author: e.Author, Kind: e.Kind, Version: e.Version, Download: e.File,
+			SHA256: e.SHA256, Maintainers: []string{e.Owner}}
+		res := workshop.Check(client, sub, work)
+		os.RemoveAll(work)
+		var why []string
+		for _, p := range res.Problems {
+			if strings.HasPrefix(p, "does what the worm did") || strings.HasPrefix(p, "sha256") {
+				why = append(why, p)
+			}
+		}
+		if !e.Approved {
+			for _, h := range res.Holds {
+				if strings.HasPrefix(h, "Safety scan") || strings.HasPrefix(h, "File type") {
+					why = append(why, h)
+				}
+			}
+		}
+		if len(why) > 0 {
+			e.Withdrawn, e.WithdrawnReason = true, "flagged by an updated safety check: "+why[0]
+			fmt.Printf("withdrew %s: %s\n", e.Slug, why[0])
+		}
+	}
+}
+
+// downloadCounts adds up each entry's release-asset downloads.
 func downloadCounts(ix *workshop.Index) {
 	tok := os.Getenv("GITHUB_TOKEN")
 	if tok == "" {
@@ -362,23 +429,14 @@ func downloadCounts(ix *workshop.Index) {
 	if json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&rel) != nil {
 		return
 	}
-	count := map[string]int{}
-	for _, a := range rel.Assets {
-		for i := range ix.Entries {
+	for i := range ix.Entries {
+		n := 0
+		for _, a := range rel.Assets {
 			if strings.HasPrefix(a.Name, ix.Entries[i].Slug+"-") {
-				count[ix.Entries[i].Slug] += a.Downloads
+				n += a.Downloads
 			}
 		}
-	}
-	slugs := make([]string, 0, len(count))
-	for s := range count {
-		slugs = append(slugs, s)
-	}
-	sort.Strings(slugs)
-	for _, s := range slugs {
-		if en := ix.Find(s); en != nil {
-			en.Downloads = count[s]
-		}
+		ix.Entries[i].Downloads = n
 	}
 }
 
@@ -388,13 +446,13 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(dst)
+	o, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+	if _, err := io.Copy(o, in); err != nil {
+		o.Close()
 		return err
 	}
-	return out.Close()
+	return o.Close()
 }

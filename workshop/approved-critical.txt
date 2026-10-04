@@ -1,3 +1,0 @@
-# SHA-256 of files the Open Workshop's maintainers approved despite a
-# CRITICAL scanner finding, one per line, followed by the reason.
-# Worm-like findings can never be approved.

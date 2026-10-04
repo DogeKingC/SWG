@@ -53,24 +53,6 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-func TestUpdateRules(t *testing.T) {
-	old := &Submission{Version: "1.0", SHA256: strings.Repeat("a", 64), Maintainers: []string{"alice"}}
-	same := &Submission{Version: "1.0", SHA256: strings.Repeat("b", 64), Maintainers: []string{"alice"}}
-	newer := &Submission{Version: "1.1", SHA256: strings.Repeat("b", 64), Maintainers: []string{"alice"}}
-	if p := UpdateProblems(old, newer, "mallory"); len(p) == 0 {
-		t.Error("a stranger changed someone's entry")
-	}
-	if p := UpdateProblems(old, same, "alice"); len(p) == 0 {
-		t.Error("new file without a higher version")
-	}
-	if p := UpdateProblems(old, newer, "Alice"); len(p) != 0 {
-		t.Errorf("maintainer update refused: %v", p)
-	}
-	if p := UpdateProblems(nil, newer, "bob"); len(p) == 0 {
-		t.Error("new entry that doesn't list its submitter")
-	}
-}
-
 func TestValidate(t *testing.T) {
 	s := &Submission{Name: "X", Author: "Y", Kind: "skin", Version: "1", Download: "http://x/y.zip", SHA256: "abc", Maintainers: []string{"bad name!"}}
 	if p := s.Validate(); len(p) < 4 {

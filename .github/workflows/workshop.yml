@@ -1,0 +1,121 @@
+name: workshop
+
+# The Open Workshop. A submission issue (made with the "Publish on the Open
+# Workshop" form) is checked and, if it passes, published: the file becomes a
+# content-addressed asset of the "workshop-files" prerelease and index.json on
+# the workshop-data branch is updated. No maintainers needed: anything not
+# plainly safe waits for the repository owner's "approved" label; the owner
+# can also add "reviewed" or "withdrawn". Authors can comment
+# "/withdraw <reason>". The daily run re-scans every published file with the
+# current scanner and withdraws what it flags.
+#
+# Issue text is untrusted: it reaches the tool only through environment
+# variables and is parsed as data; nothing from it is run. The daily run
+# refreshes download counts.
+on:
+  issues:
+    types: [opened, edited, labeled]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: workshop
+  cancel-in-progress: false
+
+jobs:
+  workshop:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'workshop-submission')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Make sure the labels exist
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mk() { gh label create "$1" --repo "$GITHUB_REPOSITORY" --color "$2" --description "$3" >/dev/null 2>&1 || true; }
+          mk workshop-submission 1d76db "Open Workshop submission (added by the form)"
+          mk published 0e8a16 "Published on the Open Workshop"
+          mk needs-changes d93f0b "The automatic check found a problem"
+          mk reviewed 5319e7 "Owner: vouch for this version"
+          mk withdrawn b60205 "Owner: take it down"
+          mk approved fbca04 "Owner: publish despite the holds listed on the issue"
+          mk needs-approval c5def5 "Passed the hard checks; waits for the owner's approval"
+      - name: Fetch the index
+        run: |
+          if git ls-remote --exit-code --heads origin workshop-data >/dev/null; then
+            git fetch origin workshop-data
+            git worktree add data FETCH_HEAD
+          else
+            mkdir data
+          fi
+      - name: Handle the submission
+        if: github.event_name == 'issues' || github.event_name == 'issue_comment'
+        run: go run ./cmd/workshop issue -data data -out out
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          LABEL: ${{ github.event.label.name }}
+          SENDER: ${{ github.event.sender.login }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Refresh download counts
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: go run ./cmd/workshop refresh -data data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+      - name: Upload the new file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(out/*)
+          [ ${#files[@]} -eq 0 ] && exit 0
+          if ! gh release view workshop-files --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create workshop-files --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+              --title "Open Workshop files" --notes "Files of the Open Workshop. Install them with PPG Mod Manager."
+          fi
+          gh release upload workshop-files --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+      - name: Publish the index
+        run: |
+          cd data
+          [ -e .git ] || git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f index.json ] || exit 0
+          git add index.json
+          if [ -f index.sig ]; then git add index.sig; else git rm -q --cached --ignore-unmatch index.sig; fi
+          if git diff --cached --quiet; then echo "index unchanged"; exit 0; fi
+          git commit -q -m "Open Workshop index $(date -u +%F)"
+          git push "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:workshop-data
+      - name: Answer on the issue
+        if: hashFiles('outcome.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          jq -r .reply outcome.json > reply.md
+          gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file reply.md
+          for l in $(jq -r '.labels[]?' outcome.json); do gh label create "$l" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || true; gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "$l"; done
+          for l in $(jq -r '.remove[]?' outcome.json); do gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --remove-label "$l" >/dev/null 2>&1 || true; done
+          if [ "$(jq -r .close outcome.json)" = "true" ]; then gh issue close "$NUMBER" --repo "$GITHUB_REPOSITORY"; fi

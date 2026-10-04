@@ -1006,7 +1006,7 @@ func (s *server) do(j *job, req actionReq) error {
 		if err != nil {
 			return err
 		}
-		j.Data = map[string]string{"zip": sh.Zip, "sha256": sh.SHA256, "slug": sh.Slug, "submission": sh.Submission, "new_file_url": sh.NewFileURL}
+		j.Data = map[string]string{"zip": sh.Zip, "sha256": sh.SHA256, "slug": sh.Slug, "issue_url": sh.IssueURL}
 		s.logf("packed %s for the Open Workshop: %s", req.Key, sh.Zip)
 		return nil
 	case "repair":

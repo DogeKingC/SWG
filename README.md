@@ -252,15 +252,19 @@ the mod has been previewed.
 
 ## Open Workshop
 
-A reviewed replacement for the Steam Workshop: mods are submitted as pull
-requests, checked automatically (checksum, safe archive, kind, scanner),
-reviewed by a maintainer, and stored permanently under content-addressed
-names. In the app it is the first entry under **Site**; its mods install
-without the cooldown (they were reviewed), update through **Check for
-updates**, and are offered as an update to anyone who still has the old
-Steam Workshop copy of the same mod. If a mod is withdrawn, everyone who has
-it sees a warning. **Share** (in Installed) packs a mod and opens its drafted
-submission. How to submit, and how maintainers review: [workshop/README.md](workshop/README.md).
+A replacement for the Steam Workshop with nobody needed to review by hand:
+mods are submitted through an issue form, checked automatically and strictly
+(safe archive, kind, file types, scanner, account age, name ownership,
+version), and published within minutes when they pass; anything the checks
+can't clear waits for the owner's approval. Files are stored permanently
+under content-addressed names, and the index can be signed. In the app it is
+the first entry under **Site**; new mods appear without updating the app,
+updates arrive through **Check for updates**, and a mod is offered as an
+update to anyone who still has the old Steam Workshop copy. Unreviewed
+uploads wait 48 hours like GameBanana's. Published files are re-scanned
+nightly; withdrawn mods warn everyone who has them. **Share** (in Installed)
+packs a mod and opens the filled-in form. Details:
+[workshop/README.md](workshop/README.md).
 
 ## Pre-worm archive
 

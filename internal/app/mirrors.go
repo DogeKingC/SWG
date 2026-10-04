@@ -707,8 +707,9 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			c.SteamOrig, c.Revision = false, mr.VersionTime
 		}
 		if mr.ow != nil {
-			// Reviewed by the Open Workshop's maintainers: no cooldown.
-			c.SteamOrig, c.Reviewed, c.Revision = false, true, mr.ow.Published
+			// Checked automatically: the cooldown applies unless the owner
+			// reviewed this version.
+			c.SteamOrig, c.Reviewed, c.Revision = false, mr.ow.Reviewed, mr.ow.Published
 		}
 		in := inspect(m, c)
 		version, ugc, clean, max := in.version, in.ugc, in.clean, in.max

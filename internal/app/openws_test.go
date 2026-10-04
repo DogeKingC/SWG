@@ -69,7 +69,7 @@ func entryFor(slug, ver string, body []byte) workshop.Entry {
 	h := hex.EncodeToString(sum[:])
 	name := workshop.AssetName(slug, ver, h, ".zip")
 	return workshop.Entry{Slug: slug, Name: "OW Test", Author: "Me", Kind: "mod", Version: ver, File: workshop.AssetURL(name),
-		SHA256: h, Size: int64(len(body)), ScanMax: "none", Published: time.Now(), Maintainers: []string{"me"}}
+		SHA256: h, Size: int64(len(body)), ScanMax: "none", Published: time.Now().Add(-72 * time.Hour), Maintainers: []string{"me"}, Owner: "me"}
 }
 
 func TestOpenWorkshopInstallUpdateWithdraw(t *testing.T) {
@@ -125,9 +125,10 @@ func TestOpenWorkshopInstallUpdateWithdraw(t *testing.T) {
 		t.Fatal("index with a bad signature accepted")
 	}
 
-	// An update: reviewed, so it applies right away (no cooldown).
+	// An update the owner reviewed applies right away, even just published.
 	v2 := modZip("1.1")
 	e2 := entryFor("ow-test", "1.1", v2)
+	e2.Reviewed, e2.Published = true, time.Now()
 	u2, _ := url.Parse(e2.File)
 	f.files[u2.Path] = v2
 	f.publish(t, priv, e2)

@@ -542,7 +542,8 @@ function sourceBadges(m) {
   if (m.ref.startsWith("gb:")) return [el("span", { class: "badge badge-gb" }, "GameBanana")];
   if (m.ref.startsWith("nx:")) return [el("span", { class: "badge badge-nx" }, "Nexus Mods")];
   if (m.ref.startsWith("ow:")) return [el("span", { class: "badge badge-ow" }, "Open Workshop"),
-    el("span", { class: "badge badge-ok", title: "Checked and reviewed by the Open Workshop's maintainers before it was published" }, "✓ reviewed")];
+    m.reviewed ? el("span", { class: "badge badge-ok", title: "Checked automatically, and vouched for by the Open Workshop's owner" }, "✓ reviewed")
+      : el("span", { class: "badge", title: "Passed the Open Workshop's automatic checks; nobody reviewed it by hand" }, "checked automatically")];
   if (m.ref.startsWith("tw:")) return [
     el("span", { class: "badge badge-tw" }, "True Workshop"),
     m.reviewed ? el("span", { class: "badge badge-ok", title: "Reviewed by True Workshop's maintainers" }, "✓ reviewed")
@@ -1026,18 +1027,18 @@ async function restartApp(which, msg) {
 // ---------- Open Workshop ----------
 // showShare walks an author through publishing on the Open Workshop: the zip
 // is ready; they upload it, then propose the prefilled submission on GitHub,
-// where it is checked automatically and reviewed by a maintainer.
+// where it is checked automatically and published if it passes.
 function showShare(d) {
   dialog("Share on the Open Workshop", [
-    el("p", {}, "ppgmods packed it and drafted its submission. Three steps:"),
+    el("p", {}, "ppgmods packed it and filled in the submission form for you:"),
     el("ol", {},
-      el("li", {}, "Upload ", el("code", {}, d.zip.split(/[\\/]/).pop()), " somewhere with a direct download link, for example a release on your GitHub. ",
+      el("li", {}, "Click ", el("b", {}, "Open the form"), " (you need a GitHub account)."),
+      el("li", {}, "Drag ", el("code", {}, d.zip.split(/[\\/]/).pop()), " into its File box. ",
         el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=share") }, "Show the zip")),
-      el("li", {}, "Click Propose: GitHub opens the drafted submission. Replace the download link and YOUR-GITHUB-USERNAME, then choose ", el("b", {}, "Propose new file"), "."),
-      el("li", {}, "The Open Workshop checks the file automatically; a maintainer reviews it and merges. Then everyone with ppgmods can install it."),
+      el("li", {}, "Submit. It's checked automatically and, if it passes, published within minutes; the issue tells you."),
     ),
-    el("p", { class: "small" }, "Only share mods you made or have the author's permission to share. SHA-256: ", el("code", {}, d.sha256)),
-  ], { label: "Propose on GitHub", run: () => api("/api/open?what=url&url=" + encodeURIComponent(d.new_file_url)) });
+    el("p", { class: "small" }, "Only share mods you made or have the author's permission to share."),
+  ], { label: "Open the form", run: () => api("/api/open?what=url&url=" + encodeURIComponent(d.issue_url)) });
   $("#dlgExtra").className = "btn btn-primary";
 }
 

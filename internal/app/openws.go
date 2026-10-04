@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,14 +20,15 @@ import (
 	"github.com/DogeKingC/SWG/internal/workshop"
 )
 
-// The Open Workshop (see package workshop): mods reviewed by maintainers
-// before they are published, stored as permanent, checksummed files.
+// The Open Workshop (see package workshop): mods checked automatically
+// before they are published (optionally also vouched for by the owner,
+// "reviewed"), stored as permanent, checksummed files.
 
 // OWResult is a search card for an Open Workshop entry.
 func OWResult(e workshop.Entry) SearchResult {
 	return SearchResult{Ref: "ow:" + e.Slug, Source: "Open Workshop", Name: e.Name, Author: e.Author,
 		Date: FmtTime(e.Published), URL: workshop.Page(e.Slug), Image: e.Image, Kind: e.Kind, Version: e.Version,
-		Reviewed: true, Downloads: e.Downloads, Size: HumanSize(e.Size), Category: strings.Join(e.Tags, ", ")}
+		Reviewed: e.Reviewed, Downloads: e.Downloads, Size: HumanSize(e.Size), Category: strings.Join(e.Tags, ", ")}
 }
 
 func searchOW(r *SearchResults, q string, page int, opt SearchOpts) {
@@ -121,7 +121,9 @@ func (a *App) owCandidate(e *workshop.Entry, path string) (*manager.Candidate, e
 		return nil, err
 	}
 	c.Key, c.Name, c.Version = "ow:"+e.Slug, e.Name, e.Version
-	c.SteamOrig, c.Reviewed, c.Revision = false, true, e.Published // reviewed: no cooldown
+	// Checked automatically: the cooldown applies like on GameBanana, unless
+	// the owner reviewed this version.
+	c.SteamOrig, c.Reviewed, c.Revision = false, e.Reviewed, e.Published
 	c.Mirror, c.Source = "openworkshop:"+e.Slug, workshop.Page(e.Slug)
 	if e.WorkshopID != "" {
 		c.Aliases = append(c.Aliases, "sky:"+e.WorkshopID)
@@ -142,7 +144,7 @@ func (a *App) fetchOW(slug string, prev *manager.Installed) (*manager.Candidate,
 	if a.Opt.UpdateOnly && prev != nil && prev.ArchiveSHA == e.SHA256 {
 		return nil, nil
 	}
-	a.logf("ow:%s %s%s - downloading %s from the Open Workshop (reviewed)", e.Slug, e.Name, By(e.Author), e.Version)
+	a.logf("ow:%s %s%s - downloading %s from the Open Workshop (%s)", e.Slug, e.Name, By(e.Author), e.Version, map[bool]string{true: "reviewed", false: "checked automatically"}[e.Reviewed])
 	path, err := downloadOW(e)
 	if err != nil {
 		return nil, err
@@ -195,22 +197,20 @@ func (a *App) owUpdate(inst *manager.Installed) (*manager.Candidate, error) {
 // owMirror is the Open Workshop's copy of a Workshop item.
 func owMirror(e workshop.Entry) Mirror {
 	return Mirror{ID: "openworkshop:" + e.Slug, Source: "Open Workshop", Title: e.Name, Author: e.Author,
-		Version: "v" + e.Version + " (reviewed)", VersionTime: e.Published, Size: HumanSize(e.Size),
-		Page: workshop.Page(e.Slug), Image: e.Image, Reviewed: true, ModVersion: e.Version, ow: &e}
+		Version: "v" + e.Version, VersionTime: e.Published, Size: HumanSize(e.Size),
+		Page: workshop.Page(e.Slug), Image: e.Image, Reviewed: e.Reviewed, ModVersion: e.Version, ow: &e}
 }
 
 // Share is what "Share on the Open Workshop" prepares for an installed mod.
 type Share struct {
-	Zip        string `json:"zip"`
-	SHA256     string `json:"sha256"`
-	Slug       string `json:"slug"`
-	Submission string `json:"submission"` // submission.json to propose
-	NewFileURL string `json:"new_file_url"`
+	Zip      string `json:"zip"`
+	SHA256   string `json:"sha256"`
+	Slug     string `json:"slug"`
+	IssueURL string `json:"issue_url"` // the submission form, filled in
 }
 
-// PrepareShare zips an installed item's folders and drafts its
-// submission.json. The author uploads the zip (a link anyone can download)
-// and proposes the file on GitHub, where it is checked and reviewed.
+// PrepareShare zips an installed item's folders and fills in the Open
+// Workshop's submission form; the author drags the zip into it and submits.
 func (a *App) PrepareShare(m *manager.Manager, key, outDir string) (*Share, error) {
 	inst := m.State.Mods[key]
 	if inst == nil {
@@ -246,30 +246,23 @@ func (a *App) PrepareShare(m *manager.Manager, key, outDir string) (*Share, erro
 	io.Copy(h, f)
 	f.Close()
 	sum := hex.EncodeToString(h.Sum(nil))
-	kind := inst.Kind
-	if kind == "" {
-		kind = manager.KindMod
+	kind := "Mod"
+	if inst.Kind == manager.KindContraption {
+		kind = "Contraption"
 	}
 	ws := ""
 	if strings.HasPrefix(key, "sky:") {
 		ws = strings.TrimPrefix(key, "sky:")
 	}
-	sub := workshop.Submission{Name: inst.Name, Author: inst.Author, Kind: kind, Version: ver,
-		Download: "https://PASTE-THE-LINK-TO-THE-ZIP-HERE", SHA256: sum, WorkshopID: ws,
-		Maintainers: []string{"YOUR-GITHUB-USERNAME"}}
-	b, _ := jsonIndent(sub)
-	return &Share{Zip: zipPath, SHA256: sum, Slug: slug, Submission: string(b),
-		NewFileURL: "https://github.com/" + workshop.Repo + "/new/main?filename=" +
-			urlQuery("workshop/submissions/"+slug+"/submission.json") + "&value=" + urlQuery(string(b))}, nil
+	q := url.Values{"template": {"workshop-submit.yml"}, "title": {"[Open Workshop] " + inst.Name},
+		"name": {inst.Name}, "author": {inst.Author}, "kind": {kind}, "version": {ver}, "workshop": {ws}}
+	return &Share{Zip: zipPath, SHA256: sum, Slug: slug,
+		IssueURL: "https://github.com/" + workshop.Repo + "/issues/new?" + q.Encode()}, nil
 }
 
 var errNoFolders = errors.New("nothing to share: its folders are missing")
 
 var reSlugChars = regexp.MustCompile(`[^a-z0-9.]+`)
-
-func jsonIndent(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
-
-func urlQuery(s string) string { return url.QueryEscape(s) }
 
 // zipFolders writes the folders (inside base) into a new zip.
 func zipFolders(dest, base string, folders []string) error {

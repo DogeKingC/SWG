@@ -41,7 +41,7 @@ const (
 	FilesTag   = "workshop-files"
 	DataBranch = "workshop-data"
 	// MaxSize is the largest archive accepted.
-	MaxSize = 200 << 20
+	MaxSize = 50 << 20
 )
 
 // Submission is workshop/submissions/<slug>/submission.json.
@@ -107,8 +107,8 @@ func (s *Submission) Validate() []string {
 		if u, err := url.Parse(s.Download); err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 			bad("download: an https link to the archive")
 		}
-		if !reSHA.MatchString(s.SHA256) {
-			bad("sha256: the file's SHA-256, 64 lowercase hex digits")
+		if s.SHA256 != "" && !reSHA.MatchString(s.SHA256) {
+			bad("sha256: the file's SHA-256, 64 lowercase hex digits (or leave it out)")
 		}
 	}
 	if s.Image != "" {
@@ -160,8 +160,10 @@ func LoadSubmission(path string) (*Submission, error) {
 
 // Result is what checking a submission's file found.
 type Result struct {
-	Problems []string `json:"problems,omitempty"` // block publishing
-	Warnings []string `json:"warnings,omitempty"` // for the reviewer
+	Problems []string `json:"problems,omitempty"` // never published
+	Holds    []string `json:"holds,omitempty"`    // published only with the owner's approval
+	Warnings []string `json:"warnings,omitempty"` // shown, not blocking
+	Rules    []string `json:"rules,omitempty"`    // scanner rules found (MEDIUM and up)
 	SHA256   string   `json:"sha256"`
 	Size     int64    `json:"size"`
 	Ext      string   `json:"ext"`
@@ -205,7 +207,7 @@ func Fetch(client *http.Client, s *Submission, dir string) (string, string, int6
 		return "", "", 0, fmt.Errorf("the file is larger than %d MB", MaxSize>>20)
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
-	if sum != s.SHA256 {
+	if s.SHA256 != "" && sum != s.SHA256 {
 		return p, sum, n, fmt.Errorf("sha256 mismatch: the submission says %s, the file is %s", s.SHA256, sum)
 	}
 	return p, sum, n, nil
@@ -268,7 +270,7 @@ func Check(client *http.Client, s *Submission, work string) *Result {
 		}
 		if len(modJSONs) == 1 {
 			if !strings.EqualFold(strings.TrimSpace(mj.Author), strings.TrimSpace(s.Author)) {
-				r.Warnings = append(r.Warnings, fmt.Sprintf("author: mod.json says %q, the submission says %q; check the submitter is the author or has their permission", mj.Author, s.Author))
+				r.Holds = append(r.Holds, fmt.Sprintf("Author: the mod's mod.json says %q, the form says %q (only the author, or someone with their permission, may publish it)", mj.Author, s.Author))
 			}
 			if mj.ModVersion != "" && version.Compare(mj.ModVersion, s.Version) != 0 {
 				r.Warnings = append(r.Warnings, fmt.Sprintf("version: mod.json says %q, the submission says %q", mj.ModVersion, s.Version))
@@ -280,8 +282,19 @@ func Check(client *http.Client, s *Submission, work string) *Result {
 		}
 	}
 	if s.WorkshopID != "" {
-		r.Warnings = append(r.Warnings, "replaces Steam Workshop item "+s.WorkshopID+": check the submitter is its author or has their permission")
+		r.Holds = append(r.Holds, "Steam Workshop ID: claiming to replace Workshop item "+s.WorkshopID+" sends this to everyone who has the old copy, so the owner confirms it's really the author")
 	}
+	// Only the kinds of files mods are made of.
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, p)
+		if !allowedFile(d.Name()) {
+			r.Holds = append(r.Holds, "File type: "+filepath.ToSlash(rel)+" isn't C# source, JSON, an image, a sound, a font, text or a contraption file")
+		}
+		return nil
+	})
 	rep, err := scan.Dir(dir)
 	if err != nil {
 		r.Problems = append(r.Problems, "scan: "+err.Error())
@@ -291,22 +304,38 @@ func Check(client *http.Client, s *Submission, work string) *Result {
 	if rep.Max() >= 0 {
 		r.ScanMax = rep.Max().String()
 	}
+	seen := map[string]bool{}
 	for _, f := range rep.Findings {
-		rel, _ := filepath.Rel(dir, filepath.Join(dir, f.File))
-		line := fmt.Sprintf("[%s %s] %s: %s", f.Severity, f.Rule, filepath.ToSlash(rel), f.Detail)
+		line := fmt.Sprintf("[%s %s] %s: %s", f.Severity, f.Rule, filepath.ToSlash(f.File), f.Detail)
 		if f.Severity >= scan.Medium {
 			r.Findings = append(r.Findings, line)
+			if !seen[f.Rule] {
+				seen[f.Rule] = true
+				r.Rules = append(r.Rules, f.Rule)
+			}
 		}
 		switch {
 		case f.Severity >= scan.Critical && wormRules[f.Rule]:
-			r.Problems = append(r.Problems, "does what the worm did: "+line)
-		case f.Severity >= scan.Critical:
-			r.Problems = append(r.Problems, "CRITICAL finding (needs a maintainer's explicit sign-off, see the guide): "+line)
+			r.Problems = append(r.Problems, "does what the worm did, never published: "+line)
 		case f.Severity >= scan.High:
-			r.Warnings = append(r.Warnings, "HIGH finding, read the code: "+line)
+			r.Holds = append(r.Holds, "Safety scan: "+line)
 		}
 	}
+	sort.Strings(r.Rules)
 	return r
+}
+
+var allowedExt = map[string]bool{".cs": true, ".json": true, ".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".bmp": true, ".tga": true, ".wav": true, ".ogg": true, ".mp3": true, ".txt": true, ".md": true, ".jaap": true,
+	".outline": true, ".ttf": true, ".otf": true}
+
+// allowedFile reports whether a file is a kind mods are made of.
+func allowedFile(name string) bool {
+	switch strings.ToLower(name) {
+	case "license", "readme", "changelog", "credits":
+		return true
+	}
+	return allowedExt[strings.ToLower(filepath.Ext(name))]
 }
 
 func archiveExt(path string) string {
@@ -348,6 +377,11 @@ type Entry struct {
 	Commit          string    `json:"commit"`    // the reviewed commit that published it
 	Maintainers     []string  `json:"maintainers"`
 	Downloads       int       `json:"downloads,omitempty"`
+	Owner           string    `json:"owner"`              // GitHub account that publishes it
+	Issue           int       `json:"issue,omitempty"`    // the submission issue of this version
+	Reviewed        bool      `json:"reviewed,omitempty"` // a maintainer vouched for this version
+	Approved        bool      `json:"approved,omitempty"` // published with the owner's approval of its holds
+	Rules           []string  `json:"rules,omitempty"`    // scanner rules found (an update adding new ones needs approval)
 	Withdrawn       bool      `json:"withdrawn,omitempty"`
 	WithdrawnReason string    `json:"withdrawn_reason,omitempty"`
 }
@@ -417,23 +451,4 @@ func NewKey() (pub, priv string, err error) {
 		return "", "", err
 	}
 	return base64.StdEncoding.EncodeToString(p), base64.StdEncoding.EncodeToString(k), nil
-}
-
-// UpdateProblems checks an update against the published entry: only its
-// maintainers may change it, and a new file needs a higher version.
-func UpdateProblems(old *Submission, s *Submission, prAuthor string) []string {
-	var p []string
-	if old == nil {
-		if !s.IsMaintainer(prAuthor) {
-			p = append(p, fmt.Sprintf("maintainers: list your GitHub account (%s) to submit this", prAuthor))
-		}
-		return p
-	}
-	if !old.IsMaintainer(prAuthor) {
-		p = append(p, fmt.Sprintf("only %s may change this entry", strings.Join(old.Maintainers, ", ")))
-	}
-	if !s.Withdrawn && s.SHA256 != old.SHA256 && version.Compare(s.Version, old.Version) <= 0 {
-		p = append(p, fmt.Sprintf("version: a new file needs a higher version than %s", old.Version))
-	}
-	return p
 }
