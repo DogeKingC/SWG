@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DogeKingC/SWG/internal/loaders"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/preserve"
@@ -518,6 +519,9 @@ func useIndexCache() {
 	}
 	if preserve.CacheDir == "" {
 		preserve.CacheDir = sources.IndexCacheDir
+	}
+	if loaders.CacheDir == "" {
+		loaders.CacheDir = sources.IndexCacheDir
 	}
 	if workshop.CacheDir == "" {
 		workshop.CacheDir = sources.IndexCacheDir

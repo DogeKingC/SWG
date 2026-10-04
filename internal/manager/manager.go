@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/archive"
 	"github.com/DogeKingC/SWG/internal/game"
+	"github.com/DogeKingC/SWG/internal/loaders"
 	"github.com/DogeKingC/SWG/internal/scan"
 )
 
@@ -46,6 +48,7 @@ type Manager struct {
 	State           *State
 	Policy          Policy
 	Blocklist       *Blocklist
+	Releases        func() *loaders.Index // official RE_PPG/BepInEx files (nil: offline)
 	Log             func(format string, a ...any)
 }
 
@@ -696,6 +699,7 @@ func (m *Manager) verifyGameCode() []Problem {
 			checkFile(filepath.Join(game, f), f, bepFix)
 		}
 	}
+	probs = append(probs, m.verifyLoaderFiles(game)...)
 	flagged := map[string]bool{}
 	for _, p := range probs {
 		flagged[p.Folder] = true
@@ -713,6 +717,78 @@ func (m *Manager) verifyGameCode() []Problem {
 			probs = append(probs, Problem{"BepInEx/" + kind.dir + "/" + rel,
 				"BepInEx " + strings.TrimSuffix(kind.dir, "s") + " that is not part of RE_PPG: it runs before every mod with full access to your PC. Keep it only if you installed it on purpose.", false, ""})
 		}
+	}
+	return probs
+}
+
+// verifyLoaderFiles compares RE_PPG's and BepInEx's files with their
+// official releases: a file that matches none was replaced or added by
+// something else, unless it is newer than the list.
+func (m *Manager) verifyLoaderFiles(gameDir string) []Problem {
+	if m.Releases == nil {
+		return nil
+	}
+	var files []string // relative to the game folder
+	add := func(rel string) {
+		if fi, err := os.Stat(filepath.Join(gameDir, rel)); err == nil && !fi.IsDir() {
+			files = append(files, filepath.ToSlash(rel))
+		}
+	}
+	walk := func(dir string, all bool) {
+		filepath.WalkDir(filepath.Join(gameDir, dir), func(p string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(p))
+			rel, _ := filepath.Rel(gameDir, p)
+			if (ext == ".dll" || ext == ".exe") && (all || strings.Contains(strings.ToUpper(rel), "RE_PPG")) {
+				files = append(files, filepath.ToSlash(rel))
+			}
+			return nil
+		})
+	}
+	walk("RE_PPG", true)
+	walk(filepath.Join("BepInEx", "core"), true)
+	walk(filepath.Join("BepInEx", "plugins"), false)
+	walk(filepath.Join("BepInEx", "patchers"), false)
+	for _, f := range []string{"winhttp.dll", "doorstop.dll", "libdoorstop.so", "libdoorstop.dylib"} {
+		add(f)
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	ix := m.Releases()
+	if ix == nil || len(ix.Files) == 0 {
+		return []Problem{{"RE_PPG / BepInEx", "could not get the list of official releases to compare their files with (offline?)", false, ""}}
+	}
+	var probs []Problem
+	versions := map[string]bool{}
+	matched := 0
+	for _, rel := range files {
+		p := filepath.Join(gameDir, filepath.FromSlash(rel))
+		h, err := fileSHA(p)
+		if err != nil {
+			continue
+		}
+		if off := ix.Lookup(h); len(off) > 0 {
+			matched++
+			versions[off[0].Project+" "+off[0].Version] = true
+			continue
+		}
+		fi, _ := os.Stat(p)
+		if fi != nil && ix.Updated.After(fi.ModTime().Add(12*time.Hour)) {
+			probs = append(probs, Problem{rel, "matches no official RE_PPG or BepInEx release: something replaced or added it. Reinstall RE_PPG from its official release (it reinstalls BepInEx) and check your PC for malware.", true, ""})
+		} else {
+			probs = append(probs, Problem{rel, "newer than our list of official RE_PPG and BepInEx releases (updated " + ix.Updated.Format("2006-01-02 15:04") + " UTC); if RE_PPG just updated itself, run Verify again later.", false, ""})
+		}
+	}
+	if matched > 0 {
+		var vs []string
+		for v := range versions {
+			vs = append(vs, v)
+		}
+		sort.Strings(vs)
+		probs = append(probs, Problem{"RE_PPG / BepInEx", fmt.Sprintf("%d files match official releases (%s)", matched, strings.Join(vs, ", ")), false, ""})
 	}
 	return probs
 }

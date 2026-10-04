@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/game"
+	"github.com/DogeKingC/SWG/internal/loaders"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/sources"
@@ -78,6 +79,13 @@ func (a *App) Manager(needGame bool) (*manager.Manager, error) {
 		m.ModsDir = game.ModsDir(dir)
 		m.ContraptionsDir = game.ContraptionsDir(dir)
 		m.Blocklist = manager.LoadBlocklist(!a.Opt.Offline, a.logf)
+		if !a.Opt.Offline {
+			m.Releases = func() *loaders.Index {
+				useIndexCache()
+				ix, _ := loaders.Fetch()
+				return ix
+			}
+		}
 	}
 	return m, nil
 }

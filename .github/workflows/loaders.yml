@@ -1,0 +1,52 @@
+name: loaders
+
+# Official RE_PPG and BepInEx 5 release files: the SHA-256 of every file in
+# their release archives (loaders.json on the loaders-data branch, one
+# commit, so it doesn't grow). ppgmods compares the loader files in the game
+# folder against it. Archives are only read, never run.
+on:
+  schedule:
+    - cron: "43 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: loaders
+  cancel-in-progress: false
+
+jobs:
+  loaders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Fetch the list so far
+        run: |
+          if git ls-remote --exit-code --heads origin loaders-data >/dev/null; then
+            git fetch --depth 1 origin loaders-data
+            git worktree add data FETCH_HEAD
+          else
+            mkdir data
+          fi
+      - name: Index new releases
+        run: go run ./cmd/loaders -data data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Publish
+        run: |
+          out=$(mktemp -d)
+          cp data/loaders.json "$out"/
+          cd "$out"
+          git init -q -b loaders-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Official loader releases $(date -u +%F)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" loaders-data:loaders-data

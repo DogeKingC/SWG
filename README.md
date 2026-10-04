@@ -249,7 +249,11 @@ were changed or added to, and checks the game's own code folders
 DLLs the FPS++ worms left there, with what to do about each. It also checks
 BepInEx (`plugins`, `patchers`, `core`, its loader DLL) and the RE_PPG folder,
 and lists BepInEx plugins that are not part of RE_PPG, since they run before
-every mod.
+every mod. It also compares RE_PPG's and BepInEx's files with their official
+releases ([loaders.yml](.github/workflows/loaders.yml) records the SHA-256 of
+every file in their release archives every 6 hours; the archives are only
+read, never run): a file that matches no release was replaced or added by
+something else.
 
 People Playground 1.27 removed the game's C# mod compiler after the worms;
 C# script mods need [RE_PPG](https://github.com/AlibardaWasTaken/RE_PPG), a

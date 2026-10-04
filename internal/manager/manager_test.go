@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DogeKingC/SWG/internal/loaders"
 	"github.com/DogeKingC/SWG/internal/scan"
 )
 
@@ -158,4 +159,55 @@ func TestVerifyGameManagedNoFalsePositives(t *testing.T) {
 	if len(worm) != 1 || !strings.HasSuffix(worm[0], "Xq7Kw.dll") {
 		t.Errorf("want only Xq7Kw.dll, got %v", worm)
 	}
+}
+
+func TestVerifyLoaderFilesAgainstReleases(t *testing.T) {
+	g := t.TempDir()
+	mods := filepath.Join(g, "Mods")
+	os.MkdirAll(mods, 0o755)
+	os.MkdirAll(filepath.Join(g, "BepInEx", "core"), 0o755)
+	os.MkdirAll(filepath.Join(g, "RE_PPG"), 0o755)
+	write := func(rel, body string, age time.Duration) {
+		p := filepath.Join(g, rel)
+		os.WriteFile(p, []byte(body), 0o644)
+		os.Chtimes(p, time.Now().Add(-age), time.Now().Add(-age))
+	}
+	write("BepInEx/core/BepInEx.dll", "official core", 72*time.Hour)
+	write("RE_PPG/RE_PPG.Compiler.exe", "official compiler", 72*time.Hour)
+	write("RE_PPG/Replaced.dll", "not from any release", 72*time.Hour)
+	write("RE_PPG/JustUpdated.dll", "brand new", time.Minute)
+	ix := &loaders.Index{Updated: time.Now().Add(-time.Hour)}
+	for _, s := range []string{"official core", "official compiler"} {
+		h, _ := fileSHAOf([]byte(s))
+		ix.Add(h, loaders.File{Project: "RE_PPG", Version: "v0.2.16"})
+	}
+	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{}}, Releases: func() *loaders.Index { return ix }}
+	probs, err := m.Verify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Problem{}
+	for _, p := range probs {
+		got[p.Folder] = p
+	}
+	if p := got["RE_PPG/Replaced.dll"]; !p.Bad {
+		t.Errorf("Replaced.dll should be bad: %+v", p)
+	}
+	if p, ok := got["RE_PPG/JustUpdated.dll"]; !ok || p.Bad {
+		t.Errorf("JustUpdated.dll should be a note: %+v", p)
+	}
+	if p := got["RE_PPG / BepInEx"]; !strings.Contains(p.Issue, "2 files match official releases") {
+		t.Errorf("summary: %+v", p)
+	}
+}
+
+func fileSHAOf(b []byte) (string, error) {
+	f, err := os.CreateTemp("", "sha")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(f.Name())
+	f.Write(b)
+	f.Close()
+	return fileSHA(f.Name())
 }
