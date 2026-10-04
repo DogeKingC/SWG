@@ -1055,7 +1055,7 @@ function renderNexus(n) {
   const keyLink = el("a", { href: "#", onclick: (e) => { e.preventDefault(); api("/api/open?what=url&url=" + encodeURIComponent("https://www.nexusmods.com/users/myaccount?tab=api+access")); } }, "your Nexus account's API page");
   if (!n.linked) {
     const input = el("input", { type: "password", placeholder: "Personal API key", autocomplete: "off", spellcheck: "false" });
-    const handler = el("input", { type: "checkbox", checked: true });
+    const handler = el("input", { type: "checkbox", checked: false });
     box.replaceChildren(
       el("p", { class: "small" }, "Link your account to install from Nexus Mods without saving files by hand. Copy your personal API key from ", keyLink,
         " (at the bottom, \"Personal API Key\"). It stays on this PC and is only sent to Nexus Mods."),
@@ -1069,7 +1069,7 @@ function renderNexus(n) {
         } catch (e) { toast(e.message, 7000); }
       } }, "Link account")),
       el("label", { class: "check" }, handler, " Handle \"Mod Manager Download\" links",
-        el("span", { class: "hint" }, "Free accounts: that button on a mod's Files tab sends the file to ppgmods. While this is on, Vortex or Mod Organizer don't get Nexus links (for other games either); turning it off gives them back.")),
+        el("span", { class: "hint" }, "Only for nxm:// links (People Playground files on Nexus only have Manual download, which works without this). While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either.")),
     );
     return;
   }
@@ -1080,7 +1080,7 @@ function renderNexus(n) {
     el("p", {}, "Linked as ", el("b", {}, n.user), n.premium ? el("span", { class: "badge badge-ok" }, "premium") : el("span", { class: "badge" }, "free")),
     el("p", { class: "small" }, n.premium
       ? "Install downloads from Nexus Mods directly."
-      : "Free accounts download through the site: Install opens the mod's Files tab, where \"Mod Manager Download\" sends the file to ppgmods."),
+      : "Free accounts download through the site: Install opens the mod's Files tab; click Manual download and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."),
     el("label", { class: "check" }, handler, " Handle \"Mod Manager Download\" links",
       el("span", { class: "hint" }, "While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either; turning it off gives them back.")),
     el("div", {}, el("button", { class: "btn btn-ghost btn-sm", onclick: () => dialog("Unlink Nexus Mods?", [el("p", {}, "ppgmods forgets your API key and gives Nexus links back to the previous handler.")],

@@ -863,13 +863,12 @@ type NeedsBrowser struct {
 func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
 	// Nexus names its downloads <name>-<mod id>-<version>-<time>.zip:
 	// only such a file is taken, not any archive that lands in Downloads.
-	nb := &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
-		Reason: "Nexus Mods gives its files to signed-in users: download it on the mod's Files tab"}
-	if acct := LoadNexus(); acct != nil && acct.Handler {
-		nb.NXM = true
-		nb.Reason = "click \"Mod Manager Download\" on the mod's Files tab and ppgmods installs it"
-	}
-	return nb
+	// People Playground files on Nexus have no "Mod manager download"
+	// button, only "Manual download", so the file always comes through the
+	// Downloads folder (checked by name, and with Nexus' MD5 lookup when an
+	// account is linked), even when ppgmods handles nxm:// links.
+	return &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
+		Reason: "Nexus Mods gives its files to signed-in users: click Manual download on the mod's Files tab"}
 }
 
 func (e *NeedsBrowser) Error() string {

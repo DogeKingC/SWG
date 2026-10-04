@@ -1173,7 +1173,7 @@ func (v *settingsView) renderNexus(n nexusView) {
 		key := widget.NewPasswordEntry()
 		key.SetPlaceHolder("Personal API key")
 		handler := widget.NewCheck("Handle \"Mod Manager Download\" links", nil)
-		handler.SetChecked(true)
+		handler.SetChecked(false)
 		link := widget.NewButton("Link account", func() {
 			k := strings.TrimSpace(key.Text)
 			key.SetText("")
@@ -1185,13 +1185,13 @@ func (v *settingsView) renderNexus(n nexusView) {
 			keyPage,
 			muted("It stays on this PC and is only sent to Nexus Mods."),
 			container.NewBorder(nil, nil, nil, link, key),
-			container.New(&vlist{gap: 0}, handler, hint("Free accounts: that button on a mod's Files tab sends the file to ppgmods. While this is on, Vortex or Mod Organizer don't get Nexus links (for other games either); turning it off gives them back.")),
+			container.New(&vlist{gap: 0}, handler, hint("Only for nxm:// links (People Playground files on Nexus only have Manual download, which works without this). While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either.")),
 		}
 		v.nexus.Refresh()
 		return
 	}
 	acct, kind := "free", pNeutral
-	how := "Free accounts download through the site: Install opens the mod's Files tab, where \"Mod Manager Download\" sends the file to ppgmods."
+	how := "Free accounts download through the site: Install opens the mod's Files tab; click Manual download and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."
 	if n.Premium {
 		acct, kind, how = "premium", pOK, "Install downloads from Nexus Mods directly."
 	}

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,5 +148,25 @@ func TestNexusBrowserDownloadIsChecked(t *testing.T) {
 	os.WriteFile(fake, real, 0o644)
 	if err := checkNexusDownload(nb, fake); err != nil {
 		t.Fatalf("the mod's real file was refused: %v", err)
+	}
+}
+
+// People Playground files on Nexus only have Manual download: even with the
+// nxm:// handler on, Install waits for the file in Downloads instead of a
+// "Mod manager download" link that never comes.
+func TestNexusInstallUsesManualDownload(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	fakeNexus(t)
+	a, err := LinkNexus("testkey")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Handler = true
+	if err := a.Save(); err != nil {
+		t.Fatal(err)
+	}
+	nb := nexusBrowser(sources.NXMod{ID: 77, Name: "Nexus Test"}, "nx:77")
+	if nb.NXM || nb.Match != "-77-" || !strings.Contains(nb.Reason, "Manual download") {
+		t.Fatalf("Nexus install does not wait for the manual download: %+v", nb)
 	}
 }
