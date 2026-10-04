@@ -436,6 +436,10 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	if opt.Sort == "updated" {
 		sort.SliceStable(r.Workshop, func(i, j int) bool { return r.Workshop[i].newest.After(r.Workshop[j].newest) })
 	}
+	if opt.Sort == "relevance" {
+		r.Workshop = rerank(r.Workshop, q, func(SearchResult) int { return 0 })
+		r.TrueWS = rerank(r.TrueWS, q, func(x SearchResult) int { return x.Downloads })
+	}
 	return r
 }
 
@@ -466,13 +470,15 @@ func search01(r *SearchResults, q string, page int, opt SearchOpts) {
 	}
 	var list []sources.S01Mod
 	for _, m := range all {
-		if m.WorkshopID() != "" && sources.S01Matches(m, q) {
+		if m.WorkshopID() != "" {
 			list = append(list, m)
 		}
 	}
+	list = byRelevance(list, q, func(m sources.S01Mod) string { return m.Title }, func(sources.S01Mod) string { return "01 STUDIO" },
+		func(m sources.S01Mod) int { return m.Views })
 	if opt.Sort == "updated" {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].CreatedTime().After(list[j].CreatedTime()) })
-	} else {
+	} else if opt.Sort == "popular" || strings.TrimSpace(q) == "" {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].Views > list[j].Views })
 	}
 	const per = 24
@@ -511,33 +517,112 @@ func searchNexus(r *SearchResults, q string, page int, opt SearchOpts) {
 	// Nexus files everything under one category: tell mods from
 	// contraptions by what each upload holds.
 	infos := sources.NXInfos(all)
-	words := strings.Fields(strings.ToLower(q))
 	var list []sources.NXMod
 	for _, m := range all {
-		if NXKind(m, infos) != opt.Kind {
-			continue
-		}
-		t := strings.ToLower(m.Name + " " + m.Author)
-		ok := true
-		for _, w := range words {
-			if !strings.Contains(t, w) {
-				ok = false
-				break
-			}
-		}
-		if ok {
+		if NXKind(m, infos) == opt.Kind {
 			list = append(list, m)
 		}
 	}
+	list = byRelevance(list, q, func(m sources.NXMod) string { return m.Name }, func(m sources.NXMod) string { return m.Author },
+		func(m sources.NXMod) int { return m.Downloads })
 	if opt.Sort == "updated" {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedTime().After(list[j].UpdatedTime()) })
-	} else {
+	} else if opt.Sort == "popular" || strings.TrimSpace(q) == "" {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].Downloads > list[j].Downloads })
 	}
 	const per = 24
 	for i := (page - 1) * per; i < len(list) && i < page*per; i++ {
 		r.Nexus = append(r.Nexus, NXResult(list[i], NXKind(list[i], infos)))
 	}
+}
+
+// relevance scores how well a name (and author) matches a search: the whole
+// name, the name's start, every word as a word of the name, every word
+// inside the name, or only through the author. 0 means no match.
+func relevance(q, name, author string) int {
+	words := strings.Fields(strings.ToLower(q))
+	if len(words) == 0 {
+		return 1
+	}
+	n, a := normTitle(name), normTitle(author)
+	nq := normTitle(q)
+	nameWords := map[string]bool{}
+	for _, w := range sources.SlugWords(name) {
+		nameWords[w] = true
+	}
+	whole, inName, inAuthor := 0, 0, 0
+	for _, w := range sources.SlugWords(q) {
+		switch {
+		case nameWords[w]:
+			whole++
+			inName++
+		case strings.Contains(n, w):
+			inName++
+		case strings.Contains(a, w):
+			inAuthor++
+		default:
+			return 0 // every word must match somewhere
+		}
+	}
+	total := whole + (inName - whole) + inAuthor
+	switch {
+	case total == 0:
+		return 0
+	case n == nq:
+		return 1000
+	case strings.HasPrefix(strings.Join(sources.SlugWords(name), " ")+" ", strings.Join(sources.SlugWords(q), " ")+" "):
+		return 800 // starts with the search, word for word
+	case whole == total:
+		return 600 - len(n) // fewer extra words first
+	case inName == total:
+		return 400 - len(n)
+	}
+	return 100 + 10*inName
+}
+
+// byRelevance orders items for a search: best match first, then by
+// popularity (pop) for equal matches. Items that don't match are dropped.
+func byRelevance[T any](items []T, q string, name, author func(T) string, pop func(T) int) []T {
+	type scored struct {
+		it    T
+		score int
+	}
+	var s []scored
+	for _, it := range items {
+		if sc := relevance(q, name(it), author(it)); sc > 0 {
+			s = append(s, scored{it, sc})
+		}
+	}
+	sort.SliceStable(s, func(i, j int) bool {
+		if s[i].score != s[j].score {
+			return s[i].score > s[j].score
+		}
+		return pop(s[i].it) > pop(s[j].it)
+	})
+	out := make([]T, len(s))
+	for i := range s {
+		out[i] = s[i].it
+	}
+	return out
+}
+
+// rerank puts a site's own search results in relevance order, keeping the
+// ones the name alone doesn't explain (the site matched tags or text) last.
+func rerank(list []SearchResult, q string, pop func(SearchResult) int) []SearchResult {
+	if strings.TrimSpace(q) == "" {
+		return list
+	}
+	ranked := byRelevance(list, q, func(r SearchResult) string { return r.Name }, func(r SearchResult) string { return r.Author }, pop)
+	seen := map[string]bool{}
+	for _, r := range ranked {
+		seen[r.Ref] = true
+	}
+	for _, r := range list {
+		if !seen[r.Ref] {
+			ranked = append(ranked, r)
+		}
+	}
+	return ranked
 }
 
 // gbKind is what a GameBanana upload is: from its archive's contents when
@@ -560,25 +645,18 @@ func gbCatalogue(kind, q, sortBy string, page, per int) ([]sources.GBMod, error)
 		return nil, err
 	}
 	kinds := sources.GBKinds(all)
-	words := strings.Fields(strings.ToLower(q))
 	var out []sources.GBMod
 	for _, m := range all {
-		if gbKind(m, kinds) != kind {
-			continue
-		}
-		name := strings.ToLower(m.Name + " " + m.Submitter.Name)
-		ok := true
-		for _, w := range words {
-			if !strings.Contains(name, w) {
-				ok = false
-				break
-			}
-		}
-		if ok {
+		if gbKind(m, kinds) == kind {
 			out = append(out, m)
 		}
 	}
-	if sortBy != "updated" { // relevance and popularity: most viewed first
+	out = byRelevance(out, q, func(m sources.GBMod) string { return m.Name }, func(m sources.GBMod) string { return m.Submitter.Name },
+		func(m sources.GBMod) int { return m.Views })
+	switch {
+	case sortBy == "updated":
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Modified > out[j].Modified })
+	case sortBy == "popular" || strings.TrimSpace(q) == "":
 		sort.SliceStable(out, func(i, j int) bool { return out[i].Views > out[j].Views })
 	}
 	if (page-1)*per >= len(out) {

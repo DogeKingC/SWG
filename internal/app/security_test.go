@@ -42,3 +42,23 @@ func TestYMD(t *testing.T) {
 		}
 	}
 }
+
+func TestRelevance(t *testing.T) {
+	names := []string{"Titan Camera 5.0", "Android Titan", "Titan", "Bad-Droid Titan Pack", "Titanic", "Tank"}
+	got := byRelevance(names, "titan", func(s string) string { return s }, func(string) string { return "" }, func(string) int { return 0 })
+	want := []string{"Titan", "Titan Camera 5.0", "Android Titan", "Bad-Droid Titan Pack", "Titanic"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+	if relevance("quick draw", "Quick Draw Mod", "") <= relevance("quick draw", "Draw Quickly", "") {
+		t.Error("phrase start should beat scattered words")
+	}
+	if relevance("jujutsu 01", "Jujutsu Playground", "01 STUDIO") == 0 {
+		t.Error("author words should count")
+	}
+}
