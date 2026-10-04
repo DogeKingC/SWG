@@ -8,7 +8,8 @@ import (
 )
 
 // Each source below compiles with Roslyn and starts a process (checked with
-// the .NET 8 compiler). The scanner must read it the way the compiler does.
+// the .NET 8 compiler; RE_PPG compiles mods with Roslyn and reads sources
+// with File.ReadAllText). The scanner must read it the way the compiler does.
 func TestCompilerReadsLikeTheCompiler(t *testing.T) {
 	call := func(name string) string {
 		return `  System.Diagnostics.` + name + `.Start("/bin/echo", "x").WaitForExit();` + "\n"
@@ -69,7 +70,8 @@ func TestReflectionWithComputedTypeName(t *testing.T) {
 	}
 }
 
-// The game compiles every file mod.json lists, whatever its extension.
+// A file mod.json lists is scanned as code, whatever its extension (RE_PPG
+// only compiles .cs files; other loaders may not check).
 func TestListedNonCSScriptsAreScanned(t *testing.T) {
 	payload := `class P { void M() { System.Diagnostics.Process.Start("calc"); } }`
 	for name, manifest := range map[string]string{

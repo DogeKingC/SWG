@@ -211,8 +211,8 @@ func isNativeBinary(b []byte) bool {
 }
 
 // checkManifest checks a mod.json's script list and returns the listed
-// scripts that are not .cs files: the game compiles whatever the list
-// names, so those are code too.
+// scripts that are not .cs files. RE_PPG refuses to compile those, but
+// another loader may not, so they are scanned as code anyway.
 func checkManifest(r *Report, dir, rel string, b []byte) []string {
 	scripts, err := manifestScripts([]byte(decodeText(b)))
 	if err != nil {
