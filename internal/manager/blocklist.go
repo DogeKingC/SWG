@@ -106,10 +106,31 @@ func (bl *Blocklist) Check(c *Candidate, dir string, rep *scan.Report) {
 	hit := func(file string, e Entry) {
 		rep.Findings = append([]scan.Finding{{Severity: scan.Critical, Rule: "blocklisted", File: file, Detail: "blocklisted: " + e.Reason}}, rep.Findings...)
 	}
+	// A blocked Workshop item is the same mod when it comes from a mirror,
+	// another site or a file on disk: match every ref the candidate goes by
+	// and the Workshop ID its mod.json carries, not only the key it was
+	// fetched under.
+	refs := map[string]bool{c.Key: true}
+	for _, a := range c.Aliases {
+		refs[a] = true
+	}
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.EqualFold(d.Name(), "mod.json") {
+			if b, err := os.ReadFile(p); err == nil {
+				var mj struct{ CreatorUGCIdentity json.RawMessage }
+				if json.Unmarshal(trimBOM(b), &mj) == nil {
+					if u := UGCString(mj.CreatorUGCIdentity); u != "" {
+						refs["sky:"+u] = true
+					}
+				}
+			}
+		}
+		return nil
+	})
 	for _, e := range bl.Entries {
 		switch {
-		case e.WorkshopID != "" && c.Key == "sky:"+e.WorkshopID,
-			e.GameBananaMod != 0 && c.Key == fmt.Sprintf("gb:%d", e.GameBananaMod),
+		case e.WorkshopID != "" && refs["sky:"+e.WorkshopID],
+			e.GameBananaMod != 0 && refs[fmt.Sprintf("gb:%d", e.GameBananaMod)],
 			e.GameBananaFile != 0 && c.FileID == e.GameBananaFile && strings.HasPrefix(c.Key, "gb:"):
 			hit("", e)
 		}
