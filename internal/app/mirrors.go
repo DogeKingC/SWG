@@ -43,6 +43,7 @@ type Mirror struct {
 	tm  *sources.TMItem
 	tw  *sources.TWItem
 	s01 *sources.S01Mod
+	nx  *sources.NXMod
 }
 
 var reSkyArchive = regexp.MustCompile(`/archives/(\d+)`)
@@ -79,6 +80,18 @@ func s01Mirror(it sources.S01Mod) Mirror {
 	}
 }
 
+// nxMirror is an upload on Nexus Mods, downloaded in the browser when picked.
+func nxMirror(it sources.NXMod) Mirror {
+	v := "on Nexus Mods"
+	if it.Version != "" {
+		v = "v" + it.Version + " on Nexus Mods"
+	}
+	return Mirror{
+		ID: fmt.Sprintf("nexus:%d", it.ID), Source: "Nexus Mods", Title: it.Name, Author: it.Author,
+		Version: v, VersionTime: it.UpdatedTime(), Page: it.FilesPage(), Image: it.Thumbnail, Browser: true, nx: &it,
+	}
+}
+
 func twMirror(it sources.TWItem) Mirror {
 	return Mirror{
 		ID: fmt.Sprintf("trueworkshop:%d", it.ID), Source: "True Workshop", Title: it.Title, Author: it.Author,
@@ -112,8 +125,15 @@ func sameMod(titleA, authorA, titleB, authorB string) bool {
 		}
 		return normTitle(t)
 	}
-	return strip(titleA) == strip(titleB)
+	if strip(titleA) == strip(titleB) {
+		return true
+	}
+	// Tags in brackets: "Jujutsu Playground [RELEASE]", "Ship (Reupload)".
+	ta, tb := reTitleTags.ReplaceAllString(titleA, " "), reTitleTags.ReplaceAllString(titleB, " ")
+	return (ta != titleA || tb != titleB) && normTitle(ta) != "" && strip(ta) == strip(tb)
 }
+
+var reTitleTags = regexp.MustCompile(`\[[^\]]*\]|\([^)]*\)`)
 
 // CompareVersions compares mod.json ModVersion strings numerically
 // ("4.0" > "3.2", "1.75.2" > "1.70.8"). Unknown versions sort lowest.
@@ -281,6 +301,31 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 			for _, it := range all {
 				if it.Type == "mod" && sameMod(it.Title, it.Author, titleHint, author) && !ugcMismatch(fmt.Sprintf("trueworkshop:%d", it.ID), ws) {
 					list = append(list, twMirror(it))
+				}
+			}
+		}
+		// Nexus Mods: same name, uploaded by the same person or studio.
+		authors := []string{author}
+		for _, mr := range list {
+			if mr.s01 != nil {
+				authors = append(authors, "01 STUDIO")
+			}
+		}
+		if all, err := sources.NXAll(); err == nil {
+			infos := sources.NXInfos(all)
+			for _, it := range all {
+				if infos[it.ID].WorkshopID == ws {
+					list = append(list, nxMirror(it)) // its folder carries this Workshop ID
+					continue
+				}
+				if w := infos[it.ID].WorkshopID; w != "" || infos[it.ID].Kind == sources.KindContraption {
+					continue // another Workshop item, or not a mod
+				}
+				for _, au := range authors {
+					if au != "" && (sameMod(it.Name, it.Author, titleHint, au) || sameMod(it.Name, it.Uploader, titleHint, au)) {
+						list = append(list, nxMirror(it))
+						break
+					}
 				}
 			}
 		}
@@ -583,9 +628,13 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		if len(copies) == 4 {
 			break
 		}
-		if mr.s01 != nil {
+		if mr.s01 != nil || mr.nx != nil {
 			nb := &NeedsBrowser{URL: mr.Page, WorkshopID: ws, AnyFile: true, Mirror: mr.ID,
 				Reason: "01 STUDIO gives its files to signed-in users: download it on its page"}
+			if mr.nx != nil {
+				nb = nexusBrowser(*mr.nx, "")
+				nb.WorkshopID = ws
+			}
 			if a.Opt.Mirror == mr.ID {
 				return nil, nb // picked: download it in the browser
 			}

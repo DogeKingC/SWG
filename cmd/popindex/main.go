@@ -74,6 +74,11 @@ func run() error {
 	} else {
 		snap.Sources = append(snap.Sources, "tw")
 	}
+	if err := collectNX(add); err != nil {
+		fmt.Fprintln(os.Stderr, "Nexus Mods:", err)
+	} else {
+		snap.Sources = append(snap.Sources, "nx")
+	}
 	if err := collect01(add); err != nil {
 		fmt.Fprintln(os.Stderr, "01 STUDIO:", err)
 	} else {
@@ -145,6 +150,23 @@ func collectTW(add func(popularity.Item)) error {
 		}
 		add(popularity.Item{Ref: fmt.Sprintf("tw:%d", it.ID), Src: "tw", Name: it.Title, Author: it.Author, Image: it.Thumb(),
 			Kind: kind, Date: it.CreatedTime().Format("2006-01-02"), URL: it.Page(), Reviewed: it.Reviewed(), N: it.Downloads})
+	}
+	return nil
+}
+
+func collectNX(add func(popularity.Item)) error {
+	all, err := sources.NXAll()
+	if err != nil {
+		return err
+	}
+	infos := sources.NXInfos(all)
+	for _, m := range all {
+		kind, checked := infos[m.ID].Kind, true
+		if kind == "" {
+			kind, checked = "mod", false
+		}
+		add(popularity.Item{Ref: fmt.Sprintf("nx:%d", m.ID), Src: "nx", Name: m.Name, Author: m.Author, Image: m.Thumbnail,
+			Kind: kind, KindChecked: checked, Date: m.UpdatedTime().Format("2006-01-02"), URL: m.Page(), N: m.Downloads})
 	}
 	return nil
 }

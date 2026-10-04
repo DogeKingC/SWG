@@ -324,3 +324,5 @@ dialog.details:not([open]) { display: none; }
 #searchNotes { background: var(--surface-2); color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 .badge-01 { background: #1b02ff1a; color: #3b2bff; }
 @media (prefers-color-scheme: dark) { .badge-01 { background: #2a2470; color: #b9b2ff; } }
+.badge-nx { background: #d9870020; color: #a85d00; }
+@media (prefers-color-scheme: dark) { .badge-nx { background: #4a3210; color: #f0b25a; } }

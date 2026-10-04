@@ -27,6 +27,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
 | [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
 | [top-mods](https://top-mods.com/mods/people-playground) | Second Workshop mirror, ~11,000 PPG entries. It often has a **newer revision** than Skymods, mods Skymods never copied, and its own copies of the preview images | Automatic | Files are on modsfire.com, with a modsbase.com alternate link. Both are downloaded the way their own buttons do it. |
+| [Nexus Mods](https://www.nexusmods.com/peopleplayground) | People Playground section, ~120 mods and contraptions with versions, download counts and endorsements | In your browser | Listed through Nexus's public API. Nexus files every People Playground upload under one category, so ppgmods reads Nexus's content preview of each file to tell mods from contraptions, and to find the Workshop ID when the folder is named after it. Files are given to signed-in users (the download API needs a personal key), so Install opens the mod's Files tab in your browser and ppgmods picks the archive up from Downloads, scans it and installs it. Nexus uploads of Workshop mods also appear in that mod's mirror list. |
 | [01 STUDIO](https://01studio.dev/mods) | The studio's own site, ~120 People Playground mods (Jujutsu Playground, Bleach Playground…), updated there | In your browser | The catalogue is public and every entry names its Steam Workshop ID, so 01 STUDIO mods appear as Workshop cards and install automatically from the mirrors. The site gives its own files only to signed-in users (some versions only to supporters), and ppgmods doesn't sign in for you: pick the **01 STUDIO** copy in a mod's mirror list, download it on the page in your browser, and ppgmods picks the new archive up from Downloads, scans it and installs it. |
 
 ## Install
@@ -152,8 +153,9 @@ and verify, rollback and remove work for contraptions the same way as for mods.
 
 ### Browsing: mods or contraptions, and sort order
 
-**Mods / Contraptions** switches what Browse lists. The Workshop mirrors
-only carry mods. On GameBanana the category doesn't tell: about a third of
+**Mods / Contraptions** switches what Browse lists, and **Site** narrows it to
+one site (all of them by default, merged into one list where the same mod is
+on several). The Workshop mirrors and 01 STUDIO only carry mods. On GameBanana the category doesn't tell: about a third of
 its People Playground contraptions are filed under Vehicles, Building or
 Military, and some uploads in Contraptions are mods. ppgmods reads the list
 of files inside each upload instead (GameBanana publishes it): `mod.json`

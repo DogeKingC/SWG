@@ -397,11 +397,7 @@ let page = 1;
 let lastQuery = "";
 const selected = new Map();
 
-$$(".seg-btn[data-src]").forEach((b) => (b.onclick = () => {
-  src = b.dataset.src;
-  $$(".seg-btn[data-src]").forEach((x) => x.classList.toggle("active", x === b));
-  search(lastQuery, 1);
-}));
+$("#srcSel").onchange = () => { src = $("#srcSel").value; search(lastQuery, 1); };
 
 // Type, sort order and popularity period; remembered in this browser.
 const browse = { kind: "mod", sort: "relevance", period: "week" };
@@ -412,11 +408,10 @@ function syncBrowse() {
   $("#periodSel").value = browse.period;
   $("#periodSel").hidden = browse.sort !== "popular";
   // The Workshop mirrors and 01 STUDIO only carry mods.
-  for (const b of $$(".seg-btn[data-src=sky], .seg-btn[data-src=s01]")) b.hidden = browse.kind === "contraption";
-  if (browse.kind === "contraption" && (src === "sky" || src === "s01")) {
-    src = "all";
-    $$(".seg-btn[data-src]").forEach((x) => x.classList.toggle("active", x.dataset.src === "all"));
-  }
+  const forContraptions = ["all", "gb", "nx", "tw"];
+  for (const o of $$("#srcSel option")) o.hidden = browse.kind === "contraption" && !forContraptions.includes(o.value);
+  if (browse.kind === "contraption" && !forContraptions.includes(src)) src = "all";
+  $("#srcSel").value = src;
   $("#q").placeholder = browse.kind === "contraption" ? "Search contraptions, e.g. tank, house, bridge" : "Search mods, e.g. melee, tank, zombie";
   try { localStorage.setItem("browse", JSON.stringify(browse)); } catch { /* not saved */ }
 }
@@ -446,9 +441,11 @@ async function search(q, p) {
   const seq = ++searchSeq;
   const grid = $("#results");
   const errs = $("#searchErrors");
-  const parts = src === "all" ? ["tw", "gb", "ws", "s01"] : [src === "sky" ? "ws" : src];
+  const parts = src === "all"
+    ? (browse.kind === "contraption" ? ["tw", "gb", "nx"] : ["tw", "gb", "ws", "s01", "nx"])
+    : [src === "sky" ? "ws" : src];
   const pending = new Set(parts);
-  const lists = { gb: [], tw: [], ws: [], s01: [] };
+  const lists = { gb: [], tw: [], ws: [], s01: [], nx: [] };
   const merged = new Set();
   const errors = [];
   const notes = new Set();
@@ -469,10 +466,18 @@ async function search(q, p) {
       if (!w.author) w.author = x.author;
       return false;
     });
-    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, lists.ws, s01);
+    // A Nexus Mods upload of a mod already shown (same name) joins its card.
+    const byTitle = new Map([...lists.ws, ...s01].map((x) => [normTitle(x.name), x]));
+    const nx = lists.nx.filter((x) => {
+      const w = byTitle.get(normTitle(x.name));
+      if (!w) return true;
+      if (!(w.mirrors || []).some((l) => l.startsWith("Nexus"))) w.mirrors = [...(w.mirrors || []), "Nexus Mods" + (x.version ? " v" + x.version : "")];
+      return false;
+    });
+    const shown = interleave(lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, nx, lists.ws, s01);
     [...grid.querySelectorAll(".mod")].slice(start).forEach((c) => c.remove());
     status.before(...shown.map(card));
-    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO" }[x]));
+    const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO", nx: "Nexus Mods" }[x]));
     status.textContent = waiting.length ? "Still searching: " + waiting.join(", ") + "…" : (!shown.length && p === 1 ? "No mods found." : "");
     status.hidden = !status.textContent;
     errs.hidden = !errors.length;
@@ -492,6 +497,7 @@ async function search(q, p) {
       if (part === "tw") lists.tw = r.trueworkshop || [];
       if (part === "ws") { lists.ws = r.workshop || []; (r.merged_tw || []).forEach((x) => merged.add(x)); }
       if (part === "s01") lists.s01 = r.studio01 || [];
+      if (part === "nx") lists.nx = r.nexus || [];
       errors.push(...(r.errors || []));
     } catch (e) {
       errors.push(e.message);
@@ -510,8 +516,16 @@ function interleave(...lists) {
 
 // sourceBadges labels where a result comes from (and, for True Workshop,
 // whether its maintainers reviewed it).
+// normTitle compares names across sites: "Jujutsu Playground [RELEASE]"
+// and "Jujutsu Playground" are the same mod.
+function normTitle(t) {
+  return (t || "").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/\bv(er(sion)?)?\s*[:.]?\s*\d+(\.\d+)*\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+}
+
 function sourceBadges(m) {
   if (m.ref.startsWith("gb:")) return [el("span", { class: "badge badge-gb" }, "GameBanana")];
+  if (m.ref.startsWith("nx:")) return [el("span", { class: "badge badge-nx" }, "Nexus Mods")];
   if (m.ref.startsWith("tw:")) return [
     el("span", { class: "badge badge-tw" }, "True Workshop"),
     m.reviewed ? el("span", { class: "badge badge-ok", title: "Reviewed by True Workshop's maintainers" }, "✓ reviewed")
@@ -521,6 +535,7 @@ function sourceBadges(m) {
   const out = [];
   if (m.source !== "01 STUDIO") out.push(el("span", { class: "badge badge-sky" }, m.mirrors && m.mirrors.length > 1 ? m.mirrors.length + " mirrors" : "Workshop mirror"));
   if (has01) out.push(el("span", { class: "badge badge-01", title: "Published by 01 STUDIO on 01studio.dev" }, "01 STUDIO"));
+  if ((m.mirrors || []).some((l) => l.startsWith("Nexus"))) out.push(el("span", { class: "badge badge-nx", title: "Also on Nexus Mods" }, "Nexus"));
   return out;
 }
 
@@ -610,7 +625,7 @@ function card(m) {
     thumbImg(m, "thumb"), pick,
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
-      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (m.version ? "v" + m.version + " · " : "") + (isGB ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : "copied ") + m.date + (m.size ? " · " + m.size : "")),
+      el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (m.version ? "v" + m.version + " · " : "") + (isGB || m.ref.startsWith("nx:") ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : m.source === "01 STUDIO" ? "published " : "copied ") + m.date + (m.size ? " · " + m.size : "")),
       m.trend ? el("div", { class: "mod-trend" }, m.trend) : null,
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
@@ -687,7 +702,7 @@ async function openDetails(m, mirror) {
   if (!sameMod) api("/api/details?ref=" + encodeURIComponent(m.ref) + "&name=" + encodeURIComponent(m.name || "")).then((v) => {
     if (detailsRef !== m.ref) return;
     const facts = [
-      [isGB ? "Updated" : m.ref.startsWith("tw:") ? "Uploaded" : "Version", v.revision || v.date],
+      [isGB || m.ref.startsWith("nx:") ? "Updated" : m.ref.startsWith("tw:") ? "Uploaded" : "Version", v.revision || v.date],
       ["Likes", v.likes ? v.likes.toLocaleString() : ""],
       ["Size", v.size],
       ["Category", v.category],

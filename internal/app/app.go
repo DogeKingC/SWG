@@ -153,6 +153,7 @@ type SearchResults struct {
 	TrueWS     []SearchResult `json:"trueworkshop"` // True Workshop uploads (maintainer-reviewed archive)
 	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
 	Studio01   []SearchResult `json:"studio01"`     // 01 STUDIO's own catalogue (each is also a Workshop item)
+	Nexus      []SearchResult `json:"nexus"`        // Nexus Mods
 	Errors     []string       `json:"errors,omitempty"`
 	MergedTW   []string       `json:"merged_tw,omitempty"` // True Workshop refs shown inside a Workshop card
 	Notes      []string       `json:"notes,omitempty"`     // how the results were chosen, when not obvious
@@ -201,6 +202,9 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	var r SearchResults
 	if parts["s01"] {
 		search01(&r, q, page, opt)
+	}
+	if parts["nx"] {
+		searchNexus(&r, q, page, opt)
 	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -477,6 +481,65 @@ func search01(r *SearchResults, q string, page int, opt SearchOpts) {
 	}
 }
 
+// NXResult is a search card for a Nexus Mods entry.
+func NXResult(m sources.NXMod, kind string) SearchResult {
+	return SearchResult{Ref: fmt.Sprintf("nx:%d", m.ID), Source: "Nexus Mods", Name: m.Name, Author: m.Author,
+		Date: FmtTime(m.UpdatedTime()), URL: m.Page(), Image: m.Thumbnail, Kind: kind, Version: m.Version,
+		Downloads: m.Downloads}
+}
+
+// NXKind is what a Nexus upload is, from its file's contents; unknown (no
+// content preview) counts as a mod.
+func NXKind(m sources.NXMod, infos map[int]sources.NXInfo) string {
+	if infos == nil {
+		infos = sources.NXInfos([]sources.NXMod{m})
+	}
+	if k := infos[m.ID].Kind; k != "" {
+		return k
+	}
+	return manager.KindMod
+}
+
+// searchNexus lists Nexus Mods' People Playground section: most downloaded
+// first for relevance and popularity, last updated first for "updated".
+func searchNexus(r *SearchResults, q string, page int, opt SearchOpts) {
+	all, err := sources.NXAll()
+	if err != nil {
+		r.Errors = append(r.Errors, "Nexus Mods: "+err.Error())
+		return
+	}
+	// Nexus files everything under one category: tell mods from
+	// contraptions by what each upload holds.
+	infos := sources.NXInfos(all)
+	words := strings.Fields(strings.ToLower(q))
+	var list []sources.NXMod
+	for _, m := range all {
+		if NXKind(m, infos) != opt.Kind {
+			continue
+		}
+		t := strings.ToLower(m.Name + " " + m.Author)
+		ok := true
+		for _, w := range words {
+			if !strings.Contains(t, w) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			list = append(list, m)
+		}
+	}
+	if opt.Sort == "updated" {
+		sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedTime().After(list[j].UpdatedTime()) })
+	} else {
+		sort.SliceStable(list, func(i, j int) bool { return list[i].Downloads > list[j].Downloads })
+	}
+	const per = 24
+	for i := (page - 1) * per; i < len(list) && i < page*per; i++ {
+		r.Nexus = append(r.Nexus, NXResult(list[i], NXKind(list[i], infos)))
+	}
+}
+
 // gbKind is what a GameBanana upload is: from its archive's contents when
 // known, else from its category.
 func gbKind(m sources.GBMod, kinds map[int]string) string {
@@ -595,8 +658,8 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 		return res
 	}
 	const per = 24
-	for _, src := range []string{"gb", "tw", "tm", "s01"} {
-		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws", "s01": "s01"}[src]
+	for _, src := range []string{"gb", "tw", "tm", "s01", "nx"} {
+		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws", "s01": "s01", "nx": "nx"}[src]
 		if !parts[part] {
 			continue
 		}
@@ -607,6 +670,9 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 				r.GameBanana = append(r.GameBanana, res)
 			case "tw":
 				r.TrueWS = append(r.TrueWS, res)
+			case "nx":
+				res.Source = "Nexus Mods"
+				r.Nexus = append(r.Nexus, res)
 			case "s01":
 				res.Ref = "sky:" + strings.TrimPrefix(it.Ref, "s01:")
 				res.Source, res.Mirrors = "01 STUDIO", []string{"01 STUDIO"}
@@ -634,6 +700,7 @@ func thousands(n int) string {
 // ---- install ----
 
 var reGBURL = regexp.MustCompile(`gamebanana\.com/mods/(\d+)`)
+var reNXURL = regexp.MustCompile(`nexusmods\.com/peopleplayground/mods/(\d+)`)
 var reTWURL = regexp.MustCompile(`ppgworkshop\.onrender\.com/.*?(?:item-|id=)(\d+)`)
 var reWSURL = regexp.MustCompile(`steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)`)
 
@@ -653,6 +720,9 @@ func NormalizeRef(ref string) string {
 	if reWorkshopDir.MatchString(ref) {
 		return "sky:" + ref
 	}
+	if mm := reNXURL.FindStringSubmatch(ref); mm != nil {
+		return "nx:" + mm[1]
+	}
 	if strings.Contains(ref, "top-mods.com/mods/people-playground/") {
 		if it, err := sources.TMDetails(ref); err == nil && it.WorkshopID != "" {
 			rememberTitle(it.WorkshopID, it.Title, ref)
@@ -669,8 +739,18 @@ type NeedsBrowser struct {
 	URL        string `json:"url"`
 	Reason     string `json:"reason"`
 	WorkshopID string `json:"workshop_id"`
-	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO)
+	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO, Nexus)
 	Mirror     string `json:"mirror,omitempty"`
+	Key        string `json:"key,omitempty"` // install under this ref instead of sky:<WorkshopID> (nx:<id>)
+	Name       string `json:"name,omitempty"`
+	Version    string `json:"version,omitempty"`
+}
+
+// nexusBrowser is the browser download of a Nexus Mods file (its files are
+// given to signed-in users).
+func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
+	return &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
+		Reason: "Nexus Mods gives its files to signed-in users: download it on the mod's Files tab"}
 }
 
 func (e *NeedsBrowser) Error() string {
@@ -735,8 +815,18 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 			return nil, fmt.Errorf("bad True Workshop id %q", ref)
 		}
 		return a.fetchTW(id, prev)
+	case strings.HasPrefix(ref, "nx:"):
+		id, err := strconv.Atoi(strings.TrimPrefix(ref, "nx:"))
+		if err != nil {
+			return nil, fmt.Errorf("bad Nexus Mods id %q", ref)
+		}
+		it, err := sources.NXGet(id)
+		if err != nil {
+			return nil, err
+		}
+		return nil, nexusBrowser(*it, ref)
 	}
-	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, tw:<id>, or a GameBanana/Steam Workshop link", ref)
+	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, tw:<id>, nx:<id>, or a mod page link", ref)
 }
 
 var fetchLocks sync.Map
@@ -875,8 +965,14 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 		return nil, fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, nb.WorkshopID)
 	}
 	a.logf("got %s", filepath.Base(file))
-	c, err := a.with(func(o *Options) { o.WorkshopID = nb.WorkshopID }).candidate(file)
-	if err == nil && c != nil && strings.HasPrefix(nb.Mirror, "01studio:") {
+	c, err := a.with(func(o *Options) { o.WorkshopID, o.Name = nb.WorkshopID, nb.Name }).candidate(file)
+	if err == nil && c != nil && nb.Key != "" {
+		c.Key = nb.Key
+	}
+	if err == nil && c != nil && nb.Version != "" {
+		c.Version = nb.Version
+	}
+	if err == nil && c != nil && (strings.HasPrefix(nb.Mirror, "01studio:") || strings.HasPrefix(nb.Mirror, "nexus:")) {
 		// From the author's own site, not a Steam copy: the worm-cutoff date
 		// check doesn't apply (the scanner and the rest of the policy do).
 		c.SteamOrig, c.Revision, c.Mirror, c.Source = false, time.Time{}, nb.Mirror, nb.URL
@@ -943,7 +1039,7 @@ func waitForDownload(dir, ws string, since time.Time, timeout time.Duration) (st
 // from scraped pages, so anything else (file:, other programs' URL schemes,
 // a link to an .exe on some other host) is refused.
 var browserHosts = []string{"gamebanana.com", "steamcommunity.com", "github.com", "catalogue.smods.ru",
-	"top-mods.com", "ppgworkshop.onrender.com", "modsbase.com", "modsfire.com", "01studio.dev"}
+	"top-mods.com", "ppgworkshop.onrender.com", "modsbase.com", "modsfire.com", "01studio.dev", "nexusmods.com"}
 
 // AllowedURL reports whether ppgmods may open u in the browser: https on one
 // of browserHosts (or a subdomain), or this app's own window on 127.0.0.1.

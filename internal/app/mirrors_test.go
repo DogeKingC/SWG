@@ -123,6 +123,12 @@ func TestSameMod(t *testing.T) {
 	if sameMod("Melee Pack", "", "Melee Pack 2 Ultimate", "") {
 		t.Error("different names matched")
 	}
+	if !sameMod("Jujutsu Playground [RELEASE]", "01 STUDIO", "Jujutsu Playground", "01 Studio") {
+		t.Error("bracketed tag")
+	}
+	if sameMod("Tank (Big)", "", "Plane (Big)", "") {
+		t.Error("only tags equal")
+	}
 }
 
 func writeVersionedZip(t *testing.T, path, version, ugc string) {

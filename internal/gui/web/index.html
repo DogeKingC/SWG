@@ -51,7 +51,7 @@
     <!-- Browse -->
     <section id="view-browse" class="view">
       <h1>Browse</h1>
-      <p class="lede">Mods and contraptions from GameBanana, True Workshop (uploads reviewed by its maintainers) and two mirrors of the deleted Steam Workshop (Skymods and top-mods), and 01 STUDIO's own site. Every mod is scanned before it is installed.</p>
+      <p class="lede">Mods and contraptions from GameBanana, Nexus Mods, True Workshop, 01 STUDIO and the mirrors of the deleted Steam Workshop, in one list. Every mod is scanned before it is installed.</p>
       <div class="tabs" role="tablist" aria-label="What to browse">
         <button type="button" role="tab" class="tab kind-btn active" data-kind="mod">Mods</button>
         <button type="button" role="tab" class="tab kind-btn" data-kind="contraption">Contraptions</button>
@@ -61,12 +61,16 @@
         <button class="btn btn-primary" type="submit">Search</button>
       </form>
       <div class="filters">
-        <div class="seg" role="group" aria-label="Source">
-          <button type="button" class="seg-btn active" data-src="all">All sites</button>
-          <button type="button" class="seg-btn" data-src="gb">GameBanana</button>
-          <button type="button" class="seg-btn" data-src="tw">True Workshop</button>
-          <button type="button" class="seg-btn" data-src="sky">Workshop mirrors</button>
-          <button type="button" class="seg-btn" data-src="s01">01 STUDIO</button>
+        <div class="sortbox">
+          <label for="srcSel">Site</label>
+          <select id="srcSel">
+            <option value="all">All sites</option>
+            <option value="gb">GameBanana</option>
+            <option value="nx">Nexus Mods</option>
+            <option value="tw">True Workshop</option>
+            <option value="s01">01 STUDIO</option>
+            <option value="sky">Steam Workshop mirrors</option>
+          </select>
         </div>
         <div class="sortbox">
           <label for="sortSel">Sort</label>

@@ -503,6 +503,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 				v.Kind = "Steam Workshop"
 			case strings.HasPrefix(m.Key, "tw:"):
 				v.Kind = "True Workshop"
+			case strings.HasPrefix(m.Key, "nx:"):
+				v.Kind = "Nexus Mods"
 			default:
 				v.Kind = "Local file"
 				v.Link = ""
@@ -1081,6 +1083,20 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		// True Workshop has no description field; the GUI shows the one
 		// from the mod's own mod.json once the safety check has run.
 		v.Details = sources.Details{Downloads: it.Downloads, Likes: it.Likes, Images: []string{it.Thumb()}}
+	case strings.HasPrefix(ref, "nx:"):
+		id, err := strconv.Atoi(strings.TrimPrefix(ref, "nx:"))
+		if err != nil {
+			http.Error(w, "bad ref", http.StatusBadRequest)
+			return
+		}
+		it, err := sources.NXGet(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		v.SearchResult = app.NXResult(*it, app.NXKind(*it, nil))
+		v.Page = it.Page()
+		v.Details = sources.Details{Description: it.Summary, Downloads: it.Downloads, Likes: it.Endorsements, Images: []string{it.Picture}}
 	default:
 		http.Error(w, "unknown ref", http.StatusBadRequest)
 		return
