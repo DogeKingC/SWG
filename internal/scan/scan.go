@@ -8,13 +8,17 @@
 package scan
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf16"
 )
 
 type Severity int
@@ -126,6 +130,7 @@ func Dir(root string) (*Report, error) { return DirWith(root, Options{}) }
 // DirWith is Dir with options.
 func DirWith(root string, opt Options) (*Report, error) {
 	r := &Report{Root: root}
+	var listed []string // files mod.json lists as scripts
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -167,7 +172,7 @@ func DirWith(root string, opt Options) (*Report, error) {
 			if err != nil {
 				return err
 			}
-			checkManifest(r, filepath.Dir(p), rel, b)
+			listed = append(listed, checkManifest(r, filepath.Dir(p), rel, b)...)
 		}
 		if ext != ".cs" && ext != ".json" && !executableExt[ext] {
 			if b, err := readHead(p, 4); err == nil && isNativeBinary(b) {
@@ -176,6 +181,9 @@ func DirWith(root string, opt Options) (*Report, error) {
 		}
 		return nil
 	})
+	if err == nil {
+		err = scanListed(r, root, listed)
+	}
 	sort.SliceStable(r.Findings, func(i, j int) bool { return r.Findings[i].Severity > r.Findings[j].Severity })
 	return r, err
 }
@@ -202,38 +210,89 @@ func isNativeBinary(b []byte) bool {
 	return len(b) >= 4 && b[0] == 0x7f && b[1] == 'E' && b[2] == 'L' && b[3] == 'F'
 }
 
-type manifest struct {
-	Name       string   `json:"Name"`
-	EntryPoint string   `json:"EntryPoint"`
-	Scripts    []string `json:"Scripts"`
-}
-
-func checkManifest(r *Report, dir, rel string, b []byte) {
-	var m manifest
-	if err := json.Unmarshal(stripBOM(b), &m); err != nil {
+// checkManifest checks a mod.json's script list and returns the listed
+// scripts that are not .cs files: the game compiles whatever the list
+// names, so those are code too.
+func checkManifest(r *Report, dir, rel string, b []byte) []string {
+	scripts, err := manifestScripts([]byte(decodeText(b)))
+	if err != nil {
 		r.add(Medium, "manifest-invalid", rel, 0, "mod.json does not parse: "+err.Error())
-		return
+		return nil
 	}
-	for _, s := range m.Scripts {
-		clean := filepath.Clean(filepath.FromSlash(s))
-		if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") {
+	var other []string
+	for _, s := range scripts {
+		clean := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(s, `\`, "/")))
+		if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") || filepath.VolumeName(clean) != "" || strings.Contains(clean, ":") {
 			r.add(Critical, "manifest-path-escape", rel, 0, fmt.Sprintf("script path %q points outside the mod", s))
 			continue
 		}
 		if strings.ToLower(filepath.Ext(clean)) != ".cs" {
 			r.add(High, "manifest-non-cs", rel, 0, fmt.Sprintf("script entry %q is not a .cs file", s))
+			other = append(other, filepath.Join(dir, clean))
 		}
 		if _, err := os.Stat(filepath.Join(dir, clean)); err != nil {
 			r.add(Info, "manifest-missing-script", rel, 0, fmt.Sprintf("script %q listed but not present", s))
 		}
 	}
+	return other
 }
 
-func stripBOM(b []byte) []byte {
-	if len(b) >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF {
-		return b[3:]
+// manifestScripts returns the script list of a mod.json. JSON readers
+// disagree on duplicate keys and on "Scripts" vs "scripts" (Go takes the
+// last, case-insensitively), so every such key counts: otherwise a second
+// list could hide the one the game reads.
+func manifestScripts(b []byte) ([]string, error) {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		if err == nil {
+			err = errors.New("not a JSON object")
+		}
+		return nil, err
 	}
-	return b
+	var out []string
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return nil, err
+		}
+		if k, _ := t.(string); strings.EqualFold(k, "Scripts") {
+			var list []any
+			json.Unmarshal(v, &list)
+			for _, x := range list {
+				if s, ok := x.(string); ok {
+					out = append(out, s)
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// scanListed scans scripts named by a mod.json that the walk did not scan
+// as C# (any extension but .cs), if they are files inside root.
+func scanListed(r *Report, root string, listed []string) error {
+	done := map[string]bool{}
+	for _, p := range listed {
+		rel, err := filepath.Rel(root, p)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || done[rel] {
+			continue
+		}
+		done[rel] = true
+		if fi, err := os.Lstat(p); err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		r.Scripts++
+		scanSource(r, rel, string(b))
+	}
+	return nil
 }
 
 // Source scans one C# file's text. Exposed for tests.
@@ -244,5 +303,37 @@ func Source(name, src string) *Report {
 }
 
 func scanSource(r *Report, rel, src string) {
-	analyzeCSharp(r, rel, string(stripBOM([]byte(src))))
+	analyzeCSharp(r, rel, decodeText([]byte(src)))
+}
+
+// decodeText reads source the way the compiler and File.ReadAllText do:
+// a byte order mark picks UTF-8, UTF-16 or UTF-32. Read as raw bytes, a
+// UTF-16 file is letters separated by NULs and no rule would match it.
+func decodeText(b []byte) string {
+	var u16 func([]byte) uint16
+	switch {
+	case bytes.HasPrefix(b, []byte{0xEF, 0xBB, 0xBF}):
+		return string(b[3:])
+	case bytes.HasPrefix(b, []byte{0xFF, 0xFE, 0, 0}), bytes.HasPrefix(b, []byte{0, 0, 0xFE, 0xFF}):
+		order := binary.ByteOrder(binary.LittleEndian)
+		if b[0] == 0 {
+			order = binary.BigEndian
+		}
+		var sb strings.Builder
+		for b = b[4:]; len(b) >= 4; b = b[4:] {
+			sb.WriteRune(rune(order.Uint32(b)))
+		}
+		return sb.String()
+	case bytes.HasPrefix(b, []byte{0xFF, 0xFE}):
+		u16 = binary.LittleEndian.Uint16
+	case bytes.HasPrefix(b, []byte{0xFE, 0xFF}):
+		u16 = binary.BigEndian.Uint16
+	default:
+		return string(b)
+	}
+	units := make([]uint16, 0, len(b)/2)
+	for b = b[2:]; len(b) >= 2; b = b[2:] {
+		units = append(units, u16(b))
+	}
+	return string(utf16.Decode(units))
 }

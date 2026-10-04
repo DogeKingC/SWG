@@ -195,6 +195,9 @@ func analyzeCSharp(r *Report, rel, src string) {
 	if lx.unicodeEscapes > 0 {
 		r.add(High, "unicode-escapes", rel, 0, fmt.Sprintf("%d \\u escapes in identifiers (identifier obfuscation)", lx.unicodeEscapes))
 	}
+	if lx.formatChars > 0 {
+		r.add(High, "hidden-characters", rel, 0, fmt.Sprintf("%d invisible formatting characters inside names (the compiler ignores them; they only hide names from readers)", lx.formatChars))
+	}
 
 	// using directives, aliases, using static, namespace declarations
 	imports := map[string]bool{}
@@ -326,6 +329,14 @@ func analyzeCSharp(r *Report, rel, src string) {
 						reflectionByName = true
 						hit("reflection-by-name", Medium, t.line, "looks up types or members by name: "+t.text+"(...)")
 					}
+				}
+				// Type.GetType(name) / assembly.GetType(name) with a name
+				// built at runtime: the strings rules cannot see which type,
+				// and from there any method can be invoked.
+				if t.text == "GetType" && i > 0 && toks[i-1].text == "." && i+2 < len(toks) && toks[i+1].text == "(" && toks[i+2].text != ")" &&
+					!(toks[i+2].kind == tString && i+3 < len(toks) && (toks[i+3].text == ")" || toks[i+3].text == ",")) {
+					reflectionByName = true
+					hit("reflection-computed-type", High, t.line, "looks up a type whose name is built at runtime, so the scanner cannot tell which: GetType(...)")
 				}
 			case "char":
 				if i > 0 && toks[i-1].text == "(" && i+2 < len(toks) && toks[i+1].text == ")" && toks[i+2].kind == tNumber {

@@ -32,12 +32,18 @@ type token struct {
 type lexResult struct {
 	toks           []token
 	unicodeEscapes int // \uXXXX escapes used inside identifiers
+	formatChars    int // invisible formatting characters inside identifiers
 }
 
+// newlines are every line terminator C# knows. The compiler ends a //
+// comment or a #directive at any of them, so the lexer must too, or code
+// after a lone CR or a U+2028 would be skipped as part of the comment.
+var newlines = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u0085", "\n", "\u2028", "\n", "\u2029", "\n")
+
 func lexCSharp(src string) lexResult {
-	l := &lexer{src: src, line: 1}
+	l := &lexer{src: newlines.Replace(src), line: 1}
 	l.run(0)
-	return lexResult{toks: l.toks, unicodeEscapes: l.esc}
+	return lexResult{toks: l.toks, unicodeEscapes: l.esc, formatChars: l.fmt}
 }
 
 type lexer struct {
@@ -46,6 +52,7 @@ type lexer struct {
 	line int
 	toks []token
 	esc  int
+	fmt  int
 }
 
 func (l *lexer) peek(off int) byte {
@@ -109,7 +116,7 @@ func (l *lexer) run(depth int) {
 			}
 			l.emit(tNumber, l.src[start:l.pos], l.line)
 		case c == '@' || c == '_' || c == '\\' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 0x80:
-			if !l.ident() {
+			if start := l.pos; !l.ident() && l.pos == start {
 				l.pos++
 			}
 		case c == '{':
@@ -162,15 +169,26 @@ func (l *lexer) ident() bool {
 			if err != nil {
 				return b.Len() > 0
 			}
-			b.WriteRune(rune(v))
 			l.esc++
 			l.pos += 2 + n
+			if unicode.Is(unicode.Cf, rune(v)) {
+				l.fmt++ // the compiler drops formatting characters from names
+				continue
+			}
+			b.WriteRune(rune(v))
 		case isIdentByte(c):
 			b.WriteByte(c)
 			l.pos++
 		case c >= 0x80:
 			r, size := utf8.DecodeRuneInString(l.src[l.pos:])
-			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.Is(unicode.Mn, r) && !unicode.Is(unicode.Pc, r) {
+			if unicode.Is(unicode.Cf, r) {
+				// Pro<U+00AD>cess is Process to the compiler: formatting
+				// characters are allowed in names and ignored.
+				l.fmt++
+				l.pos += size
+				continue
+			}
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.In(r, unicode.Mn, unicode.Mc, unicode.Nl, unicode.Pc) {
 				goto done
 			}
 			b.WriteRune(r)
@@ -298,6 +316,7 @@ func (l *lexer) hole() {
 	sub.run(1)
 	l.toks = append(l.toks, sub.toks...)
 	l.esc += sub.esc
+	l.fmt += sub.fmt
 	l.pos, l.line = sub.pos, sub.line
 }
 
