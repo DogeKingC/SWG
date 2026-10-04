@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -48,19 +49,23 @@ var periodOptions = []struct{ label, value string }{
 }
 
 type browseCard struct {
-	m       *app.SearchResult
-	root    fyne.CanvasObject
-	meta    *widget.Label
-	foot    *fyne.Container
-	install *widget.Button
-	pick    *widget.Check
+	m         *app.SearchResult
+	root      fyne.CanvasObject
+	bg        *canvas.Rectangle
+	installed fyne.CanvasObject
+	pickBox   *fyne.Container
+	meta      *widget.Label
+	foot      *fyne.Container
+	install   *widget.Button
+	pick      *widget.Check
 }
 
 type browseView struct {
 	u    *ui
 	root fyne.CanvasObject
 
-	kind                 *widget.RadioGroup
+	kind                 *tabBar
+	notesBox, errsBox    *fyne.Container
 	site, sort, period   *widget.Select
 	q, link              *widget.Entry
 	notes, errs, waiting *widget.Label
@@ -109,13 +114,11 @@ func labels(opts []struct{ label, value string }) []string {
 func newBrowse(u *ui) *browseView {
 	b := &browseView{u: u, cards: map[string]*browseCard{}, selected: map[string]string{}, page: 1}
 	p := u.app.Preferences()
-	b.kind = widget.NewRadioGroup([]string{"Mods", "Contraptions"}, nil)
-	b.kind.Horizontal = true
+	sel := 0
 	if p.StringWithFallback("browse.kind", "mod") == "contraption" {
-		b.kind.SetSelected("Contraptions")
-	} else {
-		b.kind.SetSelected("Mods")
+		sel = 1
 	}
+	b.kind = newTabBar([]string{"Mods", "Contraptions"}, sel, nil)
 	b.site = widget.NewSelect(labels(siteOptions), nil)
 	b.site.SetSelected("All sites")
 	b.sort = widget.NewSelect(labels(sortOptions), nil)
@@ -126,11 +129,15 @@ func newBrowse(u *ui) *browseView {
 	b.q.OnSubmitted = func(s string) { go b.search(strings.TrimSpace(s), 1) }
 	searchBtn := widget.NewButtonWithIcon("Search", theme.SearchIcon(), func() { go b.search(strings.TrimSpace(b.q.Text), 1) })
 	searchBtn.Importance = widget.HighImportance
-	b.notes, b.errs, b.waiting = small(""), small(""), small("")
+	b.notes, b.errs, b.waiting = small(""), widget.NewLabel(""), small("")
+	b.errs.Wrapping = fyne.TextWrapWord
 	b.errs.Importance = widget.WarningImportance
-	b.notes.Hide()
-	b.errs.Hide()
-	b.grid = container.NewGridWrap(fyne.NewSize(250, 310))
+	b.waiting.Alignment = fyne.TextAlignCenter
+	b.notesBox = tintBox(b.notes, pal().surface2)
+	b.errsBox = tintBox(b.errs, pal().warnBg)
+	b.notesBox.Hide()
+	b.errsBox.Hide()
+	b.grid = newCardGrid(230, 14)
 	b.more = widget.NewButton("Load more", func() {
 		b.mu.Lock()
 		q, p := b.lastQuery, b.page
@@ -163,7 +170,11 @@ func newBrowse(u *ui) *browseView {
 		}
 		b.updateSelection()
 	})
-	b.selBar = container.NewHBox(b.selCount, instSel, clear)
+	b.selCount.TextStyle = fyne.TextStyle{Bold: true}
+	selBg := canvas.NewRectangle(pal().surface)
+	selBg.CornerRadius = 10
+	selBg.StrokeColor, selBg.StrokeWidth = pal().accent, 1.5
+	b.selBar = container.NewStack(selBg, container.New(layout.NewCustomPaddedLayout(6, 6, 12, 8), container.NewHBox(b.selCount, instSel, clear)))
 	b.selBar.Hide()
 	b.link = widget.NewEntry()
 	b.link.SetPlaceHolder("Have a link? Paste a GameBanana / Steam Workshop / Nexus link or ID (gb:123, sky:123)")
@@ -189,25 +200,31 @@ func newBrowse(u *ui) *browseView {
 		b.mu.Unlock()
 		go b.search(q, 1)
 	}
-	b.kind.OnChanged = func(string) { refresh() }
+	b.kind.onChange = func(int) { refresh() }
 	b.site.OnChanged = func(string) { refresh() }
 	b.sort.OnChanged = func(string) { refresh() }
 	b.period.OnChanged = func(string) { refresh() }
 	b.sync()
 
-	lede := small("Mods and contraptions from the Open Workshop, GameBanana, Nexus Mods, True Workshop, 01 STUDIO and the mirrors of the deleted Steam Workshop, in one list. Every mod is scanned before it is installed.")
-	head := container.NewVBox(heading("Browse"), lede, b.kind,
-		container.NewBorder(nil, nil, nil, searchBtn, b.q),
-		container.NewHBox(widget.NewLabel("Site"), b.site, widget.NewLabel("Sort"), b.sort, b.period),
-		b.notes, b.selBar, b.errs)
-	b.scroll = container.NewVScroll(container.NewVBox(b.grid, b.waiting, container.NewCenter(b.more)))
-	foot := container.NewBorder(nil, nil, nil, linkBtn, b.link)
-	b.root = container.NewBorder(container.NewPadded(head), container.NewPadded(foot), nil, nil, b.scroll)
+	lede := muted("Mods and contraptions from the Open Workshop, GameBanana, Nexus Mods, True Workshop, 01 STUDIO and the mirrors of the deleted Steam Workshop, in one list. Every mod is scanned before it is installed.")
+	lede.SizeName = theme.SizeNameText
+	searchRow := container.NewBorder(nil, nil, nil, searchBtn, b.q)
+	label := func(s string) fyne.CanvasObject {
+		l := widget.NewLabel(s)
+		l.Importance = widget.LowImportance
+		return l
+	}
+	filters := container.NewHBox(label("Site"), b.site, widget.NewLabel(" "), label("Sort"), b.sort, b.period)
+	linkRow := container.NewBorder(nil, nil, nil, linkBtn, b.link)
+	page := container.NewVBox(h1("Browse"), lede, b.kind.root, searchRow, filters, b.notesBox, b.errsBox,
+		b.grid, b.waiting, container.NewCenter(b.more), widget.NewLabel(""), linkRow)
+	b.scroll = container.NewVScroll(container.New(layout.NewCustomPaddedLayout(22, 30, 26, 26), page))
+	b.root = container.NewStack(b.scroll, container.NewVBox(layout.NewSpacer(), container.NewCenter(b.selBar), widget.NewLabel("")))
 	return b
 }
 
 func (b *browseView) kindValue() string {
-	if b.kind.Selected == "Contraptions" {
+	if b.kind.selected == 1 {
 		return "contraption"
 	}
 	return "mod"
@@ -407,7 +424,7 @@ func (b *browseView) search(q string, page int) {
 			objs := append([]fyne.CanvasObject{}, b.earlier...)
 			for _, m := range shown {
 				c := b.card(m)
-				objs = append(objs, c.root)
+				objs = append(objs, fyne.CanvasObject(c.root))
 			}
 			b.grid.Objects = objs
 			b.grid.Refresh()
@@ -421,8 +438,8 @@ func (b *browseView) search(q string, page int) {
 			default:
 				b.waiting.Hide()
 			}
-			setShown(b.errs, errText)
-			setShown(b.notes, strings.Join(noteList, " "))
+			setShownBox(b.errs, b.errsBox, errText)
+			setShownBox(b.notes, b.notesBox, strings.Join(noteList, " "))
 			if len(waiting) == 0 && len(shown) > 0 {
 				b.more.Show()
 			} else {
@@ -473,6 +490,15 @@ func (b *browseView) search(q string, page int) {
 	wg.Wait()
 }
 
+func setShownBox(l *widget.Label, box fyne.CanvasObject, s string) {
+	l.SetText(s)
+	if s == "" {
+		box.Hide()
+	} else {
+		box.Show()
+	}
+}
+
 func setShown(l *widget.Label, s string) {
 	l.SetText(s)
 	if s == "" {
@@ -514,19 +540,19 @@ func interleave(lists ...[]*app.SearchResult) []*app.SearchResult {
 func sourceBadges(m *app.SearchResult) []fyne.CanvasObject {
 	switch {
 	case strings.HasPrefix(m.Ref, "gb:"):
-		return []fyne.CanvasObject{badge("GameBanana", bSource)}
+		return []fyne.CanvasObject{pill("GameBanana", pGB)}
 	case strings.HasPrefix(m.Ref, "nx:"):
-		return []fyne.CanvasObject{badge("Nexus Mods", bSource)}
+		return []fyne.CanvasObject{pill("Nexus Mods", pNX)}
 	case strings.HasPrefix(m.Ref, "ow:"):
 		if m.Reviewed {
-			return []fyne.CanvasObject{badge("Open Workshop", bSource), badge("✓ reviewed", bOK)}
+			return []fyne.CanvasObject{pill("Open Workshop", pOW), pill("✓ reviewed", pOK)}
 		}
-		return []fyne.CanvasObject{badge("Open Workshop", bSource), badge("checked automatically", bNeutral)}
+		return []fyne.CanvasObject{pill("Open Workshop", pOW), pill("checked automatically", pNeutral)}
 	case strings.HasPrefix(m.Ref, "tw:"):
 		if m.Reviewed {
-			return []fyne.CanvasObject{badge("True Workshop", bSource), badge("✓ reviewed", bOK)}
+			return []fyne.CanvasObject{pill("True Workshop", pTW), pill("✓ reviewed", pOK)}
 		}
-		return []fyne.CanvasObject{badge("True Workshop", bSource), badge("not reviewed", bWarn)}
+		return []fyne.CanvasObject{pill("True Workshop", pTW), pill("not reviewed", pWarn)}
 	}
 	var out []fyne.CanvasObject
 	if m.Source != "01 STUDIO" {
@@ -534,13 +560,13 @@ func sourceBadges(m *app.SearchResult) []fyne.CanvasObject {
 		if len(m.Mirrors) > 1 {
 			l = fmt.Sprintf("%d mirrors", len(m.Mirrors))
 		}
-		out = append(out, badge(l, bSource))
+		out = append(out, pill(l, pSky))
 	}
 	if m.Source == "01 STUDIO" || hasPrefixAny(m.Mirrors, "01 STUDIO") {
-		out = append(out, badge("01 STUDIO", bSource))
+		out = append(out, pill("01 STUDIO", p01))
 	}
 	if hasPrefixAny(m.Mirrors, "Nexus") {
-		out = append(out, badge("Nexus", bSource))
+		out = append(out, pill("Nexus", pNX))
 	}
 	return out
 }
@@ -572,37 +598,58 @@ func cardMeta(m *app.SearchResult) string {
 
 func (b *browseView) card(m *app.SearchResult) *browseCard {
 	u := b.u
+	p := pal()
 	installed := u.installedKeys()[m.Ref]
 	c := &browseCard{m: m}
 	name := widget.NewLabelWithStyle(m.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	name.Truncation = fyne.TextTruncateEllipsis
-	c.meta = small(cardMeta(m))
-	c.meta.Truncation = fyne.TextTruncateEllipsis
-	c.meta.Wrapping = fyne.TextWrapOff
-	info := container.NewVBox(name, c.meta)
+	name.Wrapping = fyne.TextWrapWord
+	c.meta = muted(cardMeta(m))
+	body := container.New(&vlist{gap: -8}, name, c.meta)
 	if m.Trend != "" {
-		t := small(m.Trend)
-		t.Truncation = fyne.TextTruncateEllipsis
-		t.Wrapping = fyne.TextWrapOff
-		info.Add(t)
+		t := widget.NewLabelWithStyle(m.Trend, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		t.Importance = widget.SuccessImportance
+		t.SizeName = sSmall
+		t.Wrapping = fyne.TextWrapWord
+		body.Add(t)
 	}
 	if !strings.HasPrefix(m.Ref, "gb:") && len(m.Mirrors) > 0 {
-		t := small(strings.Join(m.Mirrors, " · "))
-		t.Truncation = fyne.TextTruncateEllipsis
-		t.Wrapping = fyne.TextWrapOff
-		info.Add(t)
+		t := muted(strings.Join(m.Mirrors, " · "))
+		t.SizeName = sTiny
+		body.Add(t)
 	}
-	badges := sourceBadges(m)
+	pills := sourceBadges(m)
 	if m.Kind == "contraption" {
-		badges = append(badges, badge("contraption", bNeutral))
+		pills = append(pills, pill("contraption", pKind))
 	}
 	if m.Category != "" && m.Category != "Contraptions" {
-		badges = append(badges, badge(m.Category, bNeutral))
+		pills = append(pills, pill(m.Category, pNeutral))
 	}
 	if m.AfterCutoff {
-		badges = append(badges, badge("after cutoff", bBad))
+		pills = append(pills, pill("after cutoff", pBad))
 	}
-	info.Add(container.NewHBox(badges...))
+	c.installed = pill("installed", pOK)
+	pills = append(pills, c.installed)
+	if !installed {
+		c.installed.Hide()
+	}
+	c.install = widget.NewButton("Install", func() { u.install(m.Ref, m.Name, nil, "", "") })
+	c.install.Importance = widget.HighImportance
+	b.mu.Lock()
+	busy := b.busy
+	picked := b.selected[m.Ref] != ""
+	b.mu.Unlock()
+	if busy {
+		c.install.Disable()
+	}
+	if installed || m.AfterCutoff {
+		c.install.Hide()
+	}
+	c.foot = container.NewBorder(nil, nil, nil, container.NewVBox(layout.NewSpacer(), c.install), flowBox(6, pills...))
+
+	bg := canvas.NewRectangle(p.surface)
+	bg.CornerRadius = 10
+	bg.StrokeColor, bg.StrokeWidth = p.border, 1
+	c.bg = bg
 	c.pick = widget.NewCheck("", func(on bool) {
 		b.mu.Lock()
 		if on {
@@ -611,34 +658,45 @@ func (b *browseView) card(m *app.SearchResult) *browseCard {
 			delete(b.selected, m.Ref)
 		}
 		b.mu.Unlock()
+		c.paint(false)
 		b.updateSelection()
 	})
-	b.mu.Lock()
-	c.pick.Checked = b.selected[m.Ref] != ""
-	busy := b.busy
-	b.mu.Unlock()
-	details := widget.NewButton("Details", func() { u.openDetails(*m, "") })
-	c.install = widget.NewButton("Install", func() { u.install(m.Ref, m.Name, nil, "", "") })
-	c.install.Importance = widget.HighImportance
-	if busy {
-		c.install.Disable()
+	c.pick.Checked = picked
+	if installed || m.AfterCutoff {
+		c.pick.Hide()
 	}
-	c.foot = container.NewHBox(c.pick, layout.NewSpacer(), details)
-	switch {
-	case installed:
-		c.pick.Disable()
-		c.foot.Add(badge("installed", bOK))
-	case m.AfterCutoff:
-		c.pick.Disable()
-	default:
-		c.foot.Add(c.install)
+	thumb := u.thumbs.box(m.Ref, m.Name, m.Image, 0, 128, m, true)
+	pbg := p.surface
+	pbg.A = 225
+	pickBg := canvas.NewRectangle(pbg)
+	pickBg.CornerRadius = 6
+	pickBox := container.NewStack(pickBg, c.pick)
+	if !c.pick.Visible() {
+		pickBox.Hide()
 	}
-	thumb := u.thumbs.box(m.Ref, m.Name, m.Image, 250, 140, m)
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameInputBackground))
-	bg.CornerRadius = 8
-	c.root = container.NewStack(bg, container.NewBorder(thumb, c.foot, nil, nil, info))
+	c.pickBox = pickBox
+	media := container.NewStack(thumb, container.NewVBox(container.NewHBox(container.New(layout.NewCustomPaddedLayout(6, 0, 6, 0), pickBox))))
+	inner := container.NewBorder(media, nil, nil, nil,
+		container.New(layout.NewCustomPaddedLayout(4, 0, 4, 4), container.NewBorder(body, c.foot, nil, nil)))
+	content := container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(8, 10, 8, 8), inner))
+	c.root = newTapArea(content, func() { u.openDetails(*m, "") }, func(in bool) { c.paint(in) })
+	c.paint(false)
 	b.cards[m.Ref] = c
 	return c
+}
+
+// paint draws the card's border: accent when selected, stronger on hover.
+func (c *browseCard) paint(hover bool) {
+	p := pal()
+	switch {
+	case c.pick.Checked:
+		c.bg.StrokeColor, c.bg.StrokeWidth = p.accent, 2
+	case hover:
+		c.bg.StrokeColor, c.bg.StrokeWidth = p.muted, 1
+	default:
+		c.bg.StrokeColor, c.bg.StrokeWidth = p.border, 1
+	}
+	c.bg.Refresh()
 }
 
 func (b *browseView) markInstalled() {
@@ -648,11 +706,9 @@ func (b *browseView) markInstalled() {
 			continue
 		}
 		c.pick.SetChecked(false)
-		c.pick.Disable()
-		c.foot.Remove(c.install)
-		if len(c.foot.Objects) == 3 {
-			c.foot.Add(badge("installed", bOK))
-		}
+		c.pickBox.Hide()
+		c.install.Hide()
+		c.installed.Show()
 		c.foot.Refresh()
 	}
 	b.updateSelection()
@@ -721,6 +777,7 @@ type thumbBox struct {
 	ref, img string
 	stack    *fyne.Container
 	w, h     float32
+	cover    bool
 }
 
 func newThumbLoader(u *ui) *thumbLoader {
@@ -740,14 +797,17 @@ func (t *thumbLoader) forget() {
 
 // box returns a placeholder that turns into the image once loaded. With m
 // (a search card), a missing image may be fetched by pre-scanning the mod.
-func (t *thumbLoader) box(ref, name, img string, w, h float32, m *app.SearchResult) fyne.CanvasObject {
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameHover))
+// cover crops the image to fill the box; otherwise it is shown whole.
+func (t *thumbLoader) box(ref, name, img string, w, h float32, m *app.SearchResult, cover bool) fyne.CanvasObject {
+	p := pal()
+	bg := canvas.NewRectangle(p.surface2)
 	bg.CornerRadius = 6
 	bg.SetMinSize(fyne.NewSize(w, h))
-	letter := canvas.NewText(strings.ToUpper(firstRune(strings.TrimSpace(name))), theme.Color(theme.ColorNamePlaceHolder))
-	letter.TextSize = h / 3
+	letter := canvas.NewText(strings.ToUpper(firstRune(strings.TrimSpace(name))), p.muted)
+	letter.TextSize = h / 4
+	letter.TextStyle = fyne.TextStyle{Bold: true}
 	stack := container.NewStack(bg, container.NewCenter(letter))
-	tb := &thumbBox{ref: ref, img: img, stack: stack, w: w, h: h}
+	tb := &thumbBox{ref: ref, img: img, stack: stack, w: w, h: h, cover: cover}
 	t.mu.Lock()
 	t.boxes[ref] = append(t.boxes[ref], tb)
 	t.mu.Unlock()
@@ -787,9 +847,17 @@ func (t *thumbLoader) show(tb *thumbBox, img image.Image) {
 	fyne.Do(func() {
 		ci := canvas.NewImageFromImage(img)
 		ci.FillMode = canvas.ImageFillContain
+		ci.CornerRadius = 6
+		if tb.cover {
+			ci.FillMode = canvas.ImageFillCover
+		}
 		ci.ScaleMode = canvas.ImageScaleSmooth
 		ci.SetMinSize(fyne.NewSize(tb.w, tb.h))
-		bg := tb.stack.Objects[0]
+		bg := tb.stack.Objects[0].(*canvas.Rectangle)
+		if !tb.cover {
+			bg.FillColor = color.Black
+			bg.Refresh()
+		}
 		tb.stack.Objects = []fyne.CanvasObject{bg, ci}
 		tb.stack.Refresh()
 	})

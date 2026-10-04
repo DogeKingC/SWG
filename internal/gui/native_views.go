@@ -4,15 +4,18 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/DogeKingC/SWG/internal/app"
@@ -22,13 +25,13 @@ import (
 // ---------- details ----------
 
 type detailsWin struct {
-	w      fyne.Window
+	pop    *widget.PopUp
 	ref    string
 	mirror string
 	m      app.SearchResult
 
 	sub      *fyne.Container
-	facts    *widget.Label
+	facts    *fyne.Container
 	mirrors  *fyne.Container
 	check    *fyne.Container
 	required *fyne.Container
@@ -36,53 +39,87 @@ type detailsWin struct {
 	warn     fyne.CanvasObject
 	install  *widget.Button
 	page     string
+	scroll   *container.Scroll
+}
+
+func (d *detailsWin) close() {
+	d.pop.Hide()
 }
 
 // openDetails shows a mod's overview and runs the safety check on it (or
-// on the chosen mirror copy) before anything is installed.
+// on the chosen mirror copy) before anything is installed. Like the page,
+// it is a sheet over the window.
 func (u *ui) openDetails(m app.SearchResult, mirror string) {
 	d := u.details
-	same := d != nil && d.ref == m.Ref
-	if d == nil {
+	same := d != nil && d.ref == m.Ref && d.pop.Visible()
+	if !same {
+		if d != nil {
+			d.close()
+		}
 		d = &detailsWin{}
-		d.w = u.app.NewWindow(m.Name)
-		d.w.Resize(fyne.NewSize(760, 820))
-		d.w.SetOnClosed(func() { u.details = nil })
 		u.details = d
 	}
 	d.ref, d.mirror, d.m = m.Ref, mirror, m
 	if !same {
-		d.w.SetTitle(m.Name)
-		d.sub = container.NewHBox(sourceBadges(&m)...)
+		p := pal()
+		d.sub = flowBox(6, sourceBadges(&m)...)
 		if m.Author != "" {
-			d.sub.Add(widget.NewLabel("by " + m.Author))
+			d.sub.Add(muted("by " + m.Author))
 		}
-		d.facts = small("")
-		d.mirrors = container.NewVBox()
-		d.required = container.NewVBox()
+		d.facts = flowBox(8)
+		d.mirrors = tight()
+		d.required = tight()
 		d.desc = text("Loading description…")
-		d.check = container.NewVBox()
+		d.check = tight()
 		d.warn = warnBox("Only continue if you have read the findings above and trust this mod's author. Mods run with full access to your PC.")
 		d.install = widget.NewButton("Install", nil)
 		d.install.Importance = widget.HighImportance
 		pageBtn := widget.NewButton("View original page", func() { u.openURL(orStr(d.page, m.URL)) })
 		pageBtn.Importance = widget.LowImportance
-		closeBtn := widget.NewButton("Close", func() { d.w.Close() })
-		body := container.NewVBox(
-			u.thumbs.box(m.Ref, m.Name, m.Image, 700, 300, nil),
-			heading(m.Name), d.sub, d.facts, d.mirrors,
-			heading("Safety check"), d.check, d.required,
-			heading("Description"), d.desc)
-		actions := container.NewVBox(d.warn, container.NewHBox(pageBtn, layout.NewSpacer(), closeBtn, d.install))
-		d.w.SetContent(container.NewBorder(nil, container.NewPadded(actions), nil, nil, container.NewVScroll(container.NewPadded(body))))
+		closeBtn := widget.NewButton("Close", func() { d.close() })
+		title := widget.NewLabelWithStyle(m.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		title.SizeName = sH1
+		title.Wrapping = fyne.TextWrapWord
+		hero := u.thumbs.box(m.Ref, m.Name, m.Image, 0, 300, nil, false)
+		section := func(name string, c fyne.CanvasObject) fyne.CanvasObject { return tight(sectionTitle(name), c) }
+		body := container.New(&vlist{gap: 14},
+			tight(title, d.sub), d.facts, d.mirrors,
+			section("Safety check", d.check), d.required,
+			section("Description", d.desc))
+		d.scroll = container.NewVScroll(container.NewBorder(hero, nil, nil, nil,
+			container.New(layout.NewCustomPaddedLayout(16, 16, 22, 22), body)))
+		actBg := canvas.NewRectangle(p.surface)
+		actions := container.NewStack(actBg, container.NewBorder(hline(), nil, nil, nil,
+			container.New(layout.NewCustomPaddedLayout(10, 10, 22, 22),
+				tight(d.warn, container.NewHBox(pageBtn, layout.NewSpacer(), closeBtn, d.install)))))
+		sheetBg := canvas.NewRectangle(p.surface)
+		sheetBg.CornerRadius = 12
+		sheetBg.StrokeColor, sheetBg.StrokeWidth = p.border, 1
+		sheet := container.NewStack(sheetBg, container.NewBorder(nil, actions, nil, nil, d.scroll))
+		d.pop = widget.NewModalPopUp(sheet, u.win.Canvas())
+		cs := u.win.Canvas().Size()
+		d.pop.Resize(fyne.NewSize(minF(860, cs.Width-24), cs.Height-24))
+		d.pop.Show()
 		go u.loadDetails(d, m)
 	}
-	d.check.Objects = []fyne.CanvasObject{container.NewHBox(widget.NewProgressBarInfinite(), widget.NewLabel("Downloading and scanning before install…"))}
+	d.check.Objects = []fyne.CanvasObject{container.NewHBox(widget.NewActivity(), muted("Downloading and scanning before install…"))}
+	if a, ok := d.check.Objects[0].(*fyne.Container).Objects[0].(*widget.Activity); ok {
+		a.Start()
+	}
 	d.check.Refresh()
 	u.setDetailActions(d, nil)
-	d.w.Show()
-	d.w.RequestFocus()
 	go u.previewDetails(d, m, mirror)
+}
+
+func fact(k, v string) fyne.CanvasObject {
+	l := widget.NewLabel(k)
+	l.Importance = widget.LowImportance
+	l.SizeName = sTiny
+	val := widget.NewLabelWithStyle(v, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	val.SizeName = sSmall
+	bg := canvas.NewRectangle(pal().surface2)
+	bg.CornerRadius = 8
+	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 4, 10), container.New(&vlist{gap: -10}, l, val)))
 }
 
 func (u *ui) loadDetails(d *detailsWin, m app.SearchResult) {
@@ -104,44 +141,61 @@ func (u *ui) loadDetails(d *detailsWin, m app.SearchResult) {
 		case strings.HasPrefix(m.Ref, "tw:"):
 			when = "Uploaded"
 		}
-		var facts []string
-		add := func(k, v string) {
-			if v != "" && v != "0" {
-				facts = append(facts, k+": "+v)
+		add := func(k, val string) {
+			if val != "" && val != "0" {
+				d.facts.Add(fact(k, val))
 			}
 		}
+		num := func(n int) string {
+			if n == 0 {
+				return ""
+			}
+			return thousands(n)
+		}
 		add(when, orStr(v.Revision, v.Date))
-		add("Likes", strconv.Itoa(v.Likes))
+		add("Likes", num(v.Likes))
 		add("Size", v.Size)
 		add("Category", v.Category)
-		add("Downloads", strconv.Itoa(v.Details.Downloads))
-		add("Views", strconv.Itoa(v.Views))
+		add("Downloads", num(v.Details.Downloads))
+		add("Views", num(v.Views))
 		add("ID", m.Ref)
-		d.facts.SetText(strings.Join(facts, "   ·   "))
+		d.facts.Refresh()
 		d.desc.SetText(orStr(v.Description, "No description."))
 		if v.AfterCutoff {
-			d.sub.Add(badge("revised after the worm cutoff", bBad))
+			d.sub.Add(pill("revised after the worm cutoff", pBad))
 		}
 		if len(v.Required) > 0 {
-			d.required.Add(heading("Needs these mods too"))
+			reqs := flowBox(6)
 			var refs []string
 			for _, r := range v.Required {
 				r := r
 				refs = append(refs, "sky:"+r.WorkshopID)
-				b := widget.NewButton(r.Title+"  ·  sky:"+r.WorkshopID, func() {
+				reqs.Add(widget.NewButton(r.Title, func() {
 					u.openDetails(app.SearchResult{Ref: "sky:" + r.WorkshopID, Name: r.Title}, "")
-				})
-				b.Alignment = widget.ButtonAlignLeading
-				d.required.Add(b)
+				}))
 			}
-			d.required.Add(u.busyButton("Install all required mods", func() {
+			all := u.busyButton("Install all required mods", func() {
 				u.run(map[string]any{"action": "install", "refs": refs}, "Installing required mods")
-			}))
+			})
+			d.required.Objects = []fyne.CanvasObject{sectionTitle("Needs these mods too"), reqs, container.NewHBox(all)}
+			d.required.Refresh()
 		}
 		if len(v.Mirrors) > 0 && len(d.mirrors.Objects) == 0 {
 			u.renderMirrors(d, v.Mirrors, "")
 		}
 	})
+}
+
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
 }
 
 func (u *ui) previewDetails(d *detailsWin, m app.SearchResult, mirror string) {
@@ -156,9 +210,8 @@ func (u *ui) previewDetails(d *detailsWin, m app.SearchResult, mirror string) {
 			return
 		}
 		if err != nil {
-			l := text("Could not check this mod: " + err.Error())
-			l.Importance = widget.DangerImportance
-			d.check.Objects = []fyne.CanvasObject{l}
+			pl := pal()
+			d.check.Objects = []fyne.CanvasObject{tinted("Could not check this mod: "+err.Error(), pl.bad, pl.badBg, true)}
 			d.check.Refresh()
 			u.setDetailActions(d, &app.Preview{Verdict: "error"})
 			return
@@ -167,6 +220,55 @@ func (u *ui) previewDetails(d *detailsWin, m app.SearchResult, mirror string) {
 			u.renderMirrors(d, p.Mirrors, p.Chosen)
 		}
 		u.showCheck(d, m, &p)
+	})
+}
+
+// mirrorRow is one copy in the mirror list: a bordered row, accented when
+// it is the one checked and installed.
+func (u *ui) mirrorRow(d *detailsWin, id string, main fyne.CanvasObject, tags []fyne.CanvasObject, page string, off bool) fyne.CanvasObject {
+	p := pal()
+	on := d.mirror == id
+	bg := canvas.NewRectangle(color.Transparent)
+	bg.CornerRadius = 8
+	bg.StrokeColor, bg.StrokeWidth = p.border, 1
+	if on {
+		bg.FillColor, bg.StrokeColor = p.surface2, p.accent
+	}
+	icon := theme.RadioButtonIcon()
+	if on {
+		icon = theme.RadioButtonCheckedIcon()
+	}
+	ic := widget.NewIcon(icon)
+	if on {
+		ic = widget.NewIcon(theme.NewPrimaryThemedResource(icon))
+	}
+	right := container.NewHBox()
+	for _, t := range tags {
+		right.Add(container.NewCenter(t))
+	}
+	if page != "" {
+		b := widget.NewButton("page", func() { u.openURL(page) })
+		b.Importance = widget.LowImportance
+		right.Add(b)
+	}
+	row := container.NewBorder(nil, nil, container.NewCenter(ic), container.NewCenter(right), main)
+	box := container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 8, 6), row))
+	if off {
+		return container.NewStack(box, canvas.NewRectangle(color.NRGBA{p.surface.R, p.surface.G, p.surface.B, 120}))
+	}
+	return newTapArea(box, func() {
+		if id != d.mirror {
+			u.openDetails(d.m, id)
+		}
+	}, func(in bool) {
+		if !on {
+			if in {
+				bg.FillColor = p.surface2
+			} else {
+				bg.FillColor = color.Transparent
+			}
+			bg.Refresh()
+		}
 	})
 }
 
@@ -189,32 +291,35 @@ func (u *ui) renderMirrors(d *detailsWin, mirrors []app.Mirror, chosen string) {
 			}
 		}
 	}
-	const auto = "Automatic: highest mod.json version from before the worm, skipping any the scanner flags"
-	opts := []string{auto}
-	ids := map[string]string{auto: ""}
-	var off []fyne.CanvasObject
-	selected := auto
+	rows := []fyne.CanvasObject{u.mirrorRow(d, "", container.NewHBox(widget.NewLabelWithStyle("Automatic", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		muted("highest mod.json version from before the worm, skipping any the scanner flags")), nil, "", false)}
 	for _, mr := range mirrors {
-		var tags []string
+		var tags []fyne.CanvasObject
 		if newestOK != nil && mr.ID == newestOK.ID {
-			tags = append(tags, map[bool]string{true: "highest version", false: "newest safe date"}[best != nil])
+			tags = append(tags, pill(map[bool]string{true: "highest version", false: "newest safe date"}[best != nil], pOK))
 		}
 		if mr.Reviewed {
-			tags = append(tags, "reviewed")
+			tags = append(tags, pill("reviewed", pTW))
 		}
 		switch mr.Archived {
 		case "verified":
-			tags = append(tags, "✓ pre-worm archive")
+			tags = append(tags, pill("✓ pre-worm archive", pOK))
 		case "recorded":
-			tags = append(tags, "in pre-worm archive")
+			tags = append(tags, pill("in pre-worm archive", pNeutral))
 		}
 		if mr.Browser {
-			tags = append(tags, "in your browser")
+			tags = append(tags, pill("in your browser", pNeutral))
+		}
+		if mr.Gone {
+			tags = append(tags, pill("file gone", pBad))
+		}
+		if mr.AfterCutoff {
+			tags = append(tags, pill("after worm cutoff", pBad))
 		}
 		if chosen != "" && mr.ID == chosen {
-			tags = append(tags, "checked below")
+			tags = append(tags, pill("checked below", pNeutral))
 		}
-		line := mr.Source + " · " + orStr(mr.Version, "date unknown")
+		line := " · " + orStr(mr.Version, "date unknown")
 		if mr.ModVersion != "" {
 			line += " · mod v" + mr.ModVersion
 		} else if mr.TitleVer != "" {
@@ -223,40 +328,14 @@ func (u *ui) renderMirrors(d *detailsWin, mirrors []app.Mirror, chosen string) {
 		if mr.Size != "" {
 			line += " · " + mr.Size
 		}
-		if len(tags) > 0 {
-			line += "   [" + strings.Join(tags, "] [") + "]"
-		}
-		if mr.AfterCutoff || mr.Gone {
-			why := "after worm cutoff"
-			if mr.Gone {
-				why = "file gone"
-			}
-			l := small(line + "   (" + why + ")")
-			l.Importance = widget.LowImportance
-			off = append(off, l)
-			continue
-		}
-		opts = append(opts, line)
-		ids[line] = mr.ID
-		if d.mirror == mr.ID {
-			selected = line
-		}
-	}
-	radio := widget.NewRadioGroup(opts, nil)
-	radio.SetSelected(selected)
-	radio.OnChanged = func(s string) {
-		if s == "" {
-			return
-		}
-		if id := ids[s]; id != d.mirror {
-			u.openDetails(d.m, id)
-		}
+		main := container.NewHBox(widget.NewLabelWithStyle(mr.Source, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), muted(strings.TrimPrefix(line, " ")))
+		rows = append(rows, u.mirrorRow(d, mr.ID, main, tags, mr.Page, mr.AfterCutoff || mr.Gone))
 	}
 	title := "Mirror"
 	if len(mirrors) > 1 {
 		title = fmt.Sprintf("Mirrors (%d copies)", len(mirrors))
 	}
-	d.mirrors.Objects = append([]fyne.CanvasObject{heading(title), radio}, off...)
+	d.mirrors.Objects = []fyne.CanvasObject{sectionTitle(title), container.New(&vlist{gap: 6}, rows...)}
 	d.mirrors.Refresh()
 }
 
@@ -265,38 +344,37 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	if p.Thumb {
 		u.thumbs.reload(m.Ref)
 	}
+	pl := pal()
 	verdicts := map[string]struct {
-		imp widget.Importance
-		msg string
+		fg, bg color.NRGBA
+		msg    string
 	}{
-		"ok":          {widget.SuccessImportance, "✓ Passed every check. Ready to install."},
-		"review":      {widget.WarningImportance, "⚠ Needs your review before installing."},
-		"blocked":     {widget.DangerImportance, "✕ ppgmods will not install this mod."},
-		"risk":        {widget.DangerImportance, "✕ CRITICAL findings. ppgmods won't install this unless you read them and accept the risk."},
-		"browser":     {widget.WarningImportance, "This copy has to be downloaded in your browser."},
-		"unavailable": {widget.DangerImportance, "✕ This mod's mirror copy is gone."},
+		"ok":          {pl.ok, pl.okBg, "✓ Passed every check. Ready to install."},
+		"review":      {pl.warn, pl.warnBg, "⚠ Needs your review before installing."},
+		"blocked":     {pl.bad, pl.badBg, "✕ ppgmods will not install this mod."},
+		"risk":        {pl.bad, pl.badBg, "✕ CRITICAL findings. ppgmods won't install this unless you read them and accept the risk."},
+		"browser":     {pl.warn, pl.warnBg, "This copy has to be downloaded in your browser."},
+		"unavailable": {pl.bad, pl.badBg, "✕ This mod's mirror copy is gone."},
 	}
 	v, ok := verdicts[p.Verdict]
 	if !ok {
-		v.imp, v.msg = widget.DangerImportance, p.Verdict
+		v.fg, v.bg, v.msg = pl.bad, pl.badBg, p.Verdict
 	}
-	head := widget.NewLabelWithStyle(v.msg, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	head.Importance = v.imp
-	box := []fyne.CanvasObject{head}
+	box := []fyne.CanvasObject{tinted(v.msg, v.fg, v.bg, true)}
 	if p.Verdict == "browser" && p.Browser != nil && p.Browser.NXM {
-		box = append(box, small("On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."))
+		box = append(box, muted("On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."))
 	} else if p.Verdict == "browser" && p.Browser != nil {
-		box = append(box, small("Reason: "+p.Browser.Reason+". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."))
+		box = append(box, muted("Reason: "+p.Browser.Reason+". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."))
 		if strings.HasPrefix(p.Browser.Mirror, "01studio:") {
-			box = append(box, small("No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."))
+			box = append(box, muted("No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."))
 		}
 	}
 	if len(p.Reasons) > 0 && p.Verdict != "browser" {
 		var rs []string
 		for _, r := range p.Reasons {
-			rs = append(rs, "• "+stripOverride(r))
+			rs = append(rs, "•  "+stripOverride(r))
 		}
-		box = append(box, small(strings.Join(rs, "\n")))
+		box = append(box, text(strings.Join(rs, "\n")))
 	}
 	var info []string
 	if p.Chosen != "" {
@@ -325,7 +403,7 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 		}
 	}
 	if len(info) > 0 {
-		box = append(box, small(strings.Join(info, " · ")))
+		box = append(box, muted(strings.Join(info, " · ")))
 	}
 	if len(p.Findings) > 0 {
 		box = append(box, mono(strings.Join(p.Findings, "\n")))
@@ -333,7 +411,7 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	if p.Description != "" && strings.HasPrefix(d.desc.Text, "No description") {
 		d.desc.SetText(p.Description)
 	}
-	d.check.Objects = box
+	d.check.Objects = []fyne.CanvasObject{container.New(&vlist{gap: 6}, box...)}
 	d.check.Refresh()
 	u.setDetailActions(d, p)
 }
@@ -349,7 +427,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 	} else {
 		btn.SetText("Install")
 	}
-	btn.OnTapped = func() { d.w.Close(); u.install(m.Ref, m.Name, nil, d.mirror, "") }
+	btn.OnTapped = func() { d.close(); u.install(m.Ref, m.Name, nil, d.mirror, "") }
 	defer btn.Refresh()
 	if p == nil {
 		return
@@ -365,7 +443,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 			return
 		}
 		btn.SetText("Open download page")
-		btn.OnTapped = func() { d.w.Close(); u.install(m.Ref, m.Name, map[string]bool{"browser": true}, d.mirror, "") }
+		btn.OnTapped = func() { d.close(); u.install(m.Ref, m.Name, map[string]bool{"browser": true}, d.mirror, "") }
 	case "risk":
 		over := map[string]bool{"accept_risk": true}
 		for _, r := range p.Reasons {
@@ -378,7 +456,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 		d.warn.Show()
 		findings, mirror := p.Findings, d.mirror
 		btn.OnTapped = func() {
-			d.w.Close()
+			d.close()
 			u.riskDialog(m.Name, findings, func(phrase string) { u.install(m.Ref, m.Name, over, mirror, phrase) })
 		}
 	case "review":
@@ -397,7 +475,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 		btn.Importance = widget.DangerImportance
 		btn.SetText("Install anyway")
 		d.warn.Show()
-		btn.OnTapped = func() { d.w.Close(); u.install(m.Ref, m.Name, over, d.mirror, "") }
+		btn.OnTapped = func() { d.close(); u.install(m.Ref, m.Name, over, d.mirror, "") }
 	}
 }
 
@@ -406,7 +484,7 @@ func (u *ui) setDetailActions(d *detailsWin, p *app.Preview) {
 type installedPane struct {
 	u         *ui
 	root      fyne.CanvasObject
-	kind      *widget.RadioGroup
+	kind      *tabBar
 	list      *fyne.Container
 	missing   *fyne.Container
 	verify    *fyne.Container
@@ -416,17 +494,15 @@ type installedPane struct {
 }
 
 func newInstalled(u *ui) *installedPane {
-	p := &installedPane{u: u, list: container.NewVBox(), missing: container.NewVBox(), verify: container.NewVBox()}
-	p.kind = widget.NewRadioGroup([]string{"Mods", "Contraptions"}, func(string) {
+	p := &installedPane{u: u, list: container.New(&vlist{gap: 8}), missing: tight(), verify: tight()}
+	sel := 0
+	if u.app.Preferences().String("installed.kind") == "contraption" {
+		sel = 1
+	}
+	p.kind = newTabBar([]string{"Mods", "Contraptions"}, sel, func(int) {
 		u.app.Preferences().SetString("installed.kind", p.kindValue())
 		p.render()
 	})
-	p.kind.Horizontal = true
-	if u.app.Preferences().String("installed.kind") == "contraption" {
-		p.kind.Selected = "Contraptions"
-	} else {
-		p.kind.Selected = "Mods"
-	}
 	check := u.busyButton("Check for updates", func() {
 		p.lastApply = false
 		u.run(map[string]any{"action": "update", "apply": false}, "Checking for updates")
@@ -445,14 +521,13 @@ func newInstalled(u *ui) *installedPane {
 	p.openMods.Importance, p.openContr.Importance = widget.LowImportance, widget.LowImportance
 	p.missing.Hide()
 	p.verify.Hide()
-	head := container.NewVBox(heading("Installed"), p.kind,
-		container.NewHBox(check, apply, verify, find, p.openMods, p.openContr), p.missing, p.verify)
-	p.root = container.NewBorder(container.NewPadded(head), nil, nil, nil, container.NewVScroll(container.NewPadded(p.list)))
+	p.root = view(container.New(&vlist{gap: 12}, h1("Installed"), p.kind.root,
+		flowBox(8, check, apply, verify, find, p.openMods, p.openContr), p.missing, p.verify, p.list))
 	return p
 }
 
 func (p *installedPane) kindValue() string {
-	if strings.HasPrefix(p.kind.Selected, "Contraptions") {
+	if p.kind.selected == 1 {
 		return "contraption"
 	}
 	return "mod"
@@ -471,14 +546,9 @@ func (p *installedPane) render() {
 			nm++
 		}
 	}
-	p.kind.Options = []string{fmt.Sprintf("Mods (%d)", nm), fmt.Sprintf("Contraptions (%d)", nc)}
-	if p.kindValue() == "contraption" || strings.HasPrefix(p.kind.Selected, "Contraptions") {
-		p.kind.Selected = p.kind.Options[1]
-	} else {
-		p.kind.Selected = p.kind.Options[0]
-	}
-	p.kind.Refresh()
-	wantC := strings.HasPrefix(p.kind.Selected, "Contraptions")
+	p.kind.SetText(0, fmt.Sprintf("Mods  %d", nm))
+	p.kind.SetText(1, fmt.Sprintf("Contraptions  %d", nc))
+	wantC := p.kind.selected == 1
 	if wantC {
 		p.openMods.Hide()
 		p.openContr.Show()
@@ -489,7 +559,7 @@ func (p *installedPane) render() {
 	var rows []fyne.CanvasObject
 	for _, m := range all {
 		if isC(m) == wantC {
-			rows = append(rows, p.row(m), widget.NewSeparator())
+			rows = append(rows, p.row(m))
 		}
 	}
 	if len(rows) == 0 {
@@ -497,32 +567,52 @@ func (p *installedPane) render() {
 		if wantC {
 			msg = "No contraptions installed yet. Switch Browse to Contraptions to find some."
 		}
-		rows = []fyne.CanvasObject{text(msg)}
+		l := muted(msg)
+		l.Alignment = fyne.TextAlignCenter
+		l.SizeName = theme.SizeNameText
+		rows = []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(30, 30, 0, 0), l)}
 	}
 	p.list.Objects = rows
 	p.list.Refresh()
 }
 
+func kindPill(kind string) pillKind {
+	switch kind {
+	case "GameBanana":
+		return pGB
+	case "Steam Workshop":
+		return pSky
+	case "True Workshop":
+		return pTW
+	case "Open Workshop":
+		return pOW
+	case "Nexus Mods":
+		return pNX
+	}
+	return pNeutral
+}
+
 func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	u := p.u
-	badges := []fyne.CanvasObject{widget.NewLabelWithStyle(m.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), badge(m.Kind, bSource)}
+	name := widget.NewLabelWithStyle(m.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	pills := []fyne.CanvasObject{pill(m.Kind, kindPill(m.Kind))}
 	if m.Adopted {
-		badges = append(badges, badge("found on this PC", bNeutral))
+		pills = append(pills, pill("found on this PC", pNeutral))
 	}
 	if m.ScanMax == "HIGH" || m.ScanMax == "CRITICAL" {
-		badges = append(badges, badge("scanner: "+m.ScanMax, bBad))
+		pills = append(pills, pill("scanner: "+m.ScanMax, pBad))
 	}
 	if m.Missing {
-		badges = append(badges, badge("missing", bBad))
+		pills = append(pills, pill("missing", pBad))
 	}
 	if m.Withdrawn != "" {
-		badges = append(badges, badge("withdrawn: "+m.Withdrawn, bBad))
+		pills = append(pills, pill("withdrawn", pBad))
 	}
 	if m.RiskAccepted {
-		badges = append(badges, badge("risk accepted", bBad))
+		pills = append(pills, pill("risk accepted", pBad))
 	}
 	if m.Pinned {
-		badges = append(badges, badge("pinned", bNeutral))
+		pills = append(pills, pill("pinned", pNeutral))
 	}
 	meta := ""
 	if m.Author != "" {
@@ -533,6 +623,9 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 		meta += " · source date " + m.Revision.Format("2006-01-02")
 	}
 	meta += " · " + strings.Join(m.Folders, ", ")
+	if m.Withdrawn != "" {
+		meta += "\nWithdrawn from the Open Workshop: " + m.Withdrawn
+	}
 	actions := container.NewHBox()
 	if m.Link != "" {
 		link := m.Link
@@ -558,8 +651,13 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 			u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
 		})
 	}))
-	thumb := u.thumbs.box(m.Key, m.Name, "", 64, 64, nil)
-	return container.NewBorder(nil, nil, thumb, actions, container.NewVBox(container.NewHBox(badges...), small(meta)))
+	thumb := fixed(u.thumbs.box(m.Key, m.Name, "", 96, 54, nil, true), 96, 54)
+	main := container.New(&vlist{gap: -6}, flowBox(6, append([]fyne.CanvasObject{name}, pills...)...), muted(meta))
+	vcenter := func(o fyne.CanvasObject) fyne.CanvasObject {
+		return container.NewVBox(layout.NewSpacer(), o, layout.NewSpacer())
+	}
+	return panelBox(container.NewBorder(nil, nil, vcenter(thumb), vcenter(actions),
+		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 8), vcenter(main))))
 }
 
 // renderMissing offers to restore tracked items whose folders disappeared.
@@ -590,11 +688,17 @@ func (p *installedPane) renderMissing(all []installedView) {
 			restorable = append(restorable, m.Key)
 		}
 	}
-	head := text(fmt.Sprintf("%d installed item(s) missing from your game folder: %s.", len(gone), strings.Join(names, ", ")))
+	pl := pal()
+	what := fmt.Sprintf("%d installed items are missing from your game folder", len(gone))
+	if len(gone) == 1 {
+		what = "1 installed item is missing from your game folder"
+	}
+	head := widget.NewLabelWithStyle(what+": "+strings.Join(names, ", ")+".", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	head.Wrapping = fyne.TextWrapWord
 	head.Importance = widget.WarningImportance
-	objs := []fyne.CanvasObject{head, small("If you didn't delete them, check your PC for malware before restoring: whatever deleted them could do it again.")}
+	objs := []fyne.CanvasObject{head, muted("If you didn't delete them, check your PC for malware before restoring: whatever deleted them could do it again.")}
 	if n := len(gone) - len(restorable); n > 0 {
-		objs = append(objs, small(fmt.Sprintf("%d of them came from a file on this PC, not a mod site, so ppgmods can't download them again.", n)))
+		objs = append(objs, muted(fmt.Sprintf("%d of them came from a file on this PC, not a mod site, so ppgmods can't download them again.", n)))
 	}
 	row := container.NewHBox()
 	if len(restorable) > 0 {
@@ -608,13 +712,15 @@ func (p *installedPane) renderMissing(all []installedView) {
 		b.Importance = widget.HighImportance
 		row.Add(b)
 	}
-	row.Add(widget.NewButton("Stop tracking", func() {
+	stop := widget.NewButton("Stop tracking", func() {
 		u.confirm("Stop tracking?", text("ppgmods forgets "+strings.Join(names, ", ")+". Nothing is deleted; their folders are already gone."), "Stop tracking", false, func() {
 			u.run(map[string]any{"action": "forget", "refs": all2}, fmt.Sprintf("Forgetting %d item(s)", len(all2)))
 		})
-	}))
+	})
+	stop.Importance = widget.LowImportance
+	row.Add(stop)
 	objs = append(objs, row)
-	p.missing.Objects = []fyne.CanvasObject{banner(container.NewVBox(objs...))}
+	p.missing.Objects = []fyne.CanvasObject{tintBox(container.New(&vlist{gap: 2}, objs...), pl.warnBg)}
 	p.missing.Refresh()
 	p.missing.Show()
 }
@@ -640,21 +746,23 @@ func (p *installedPane) showVerify(probs []manager.Problem) {
 		head.Importance = widget.DangerImportance
 	}
 	objs := []fyne.CanvasObject{head}
-	var lines []string
 	for _, x := range probs {
-		lines = append(lines, x.Folder+": "+x.Issue)
-	}
-	if len(lines) > 0 {
-		objs = append(objs, mono(strings.Join(lines, "\n")))
+		l := widget.NewLabel("•  " + x.Folder + ": " + x.Issue)
+		l.Wrapping = fyne.TextWrapWord
+		l.SizeName = sSmall
+		if x.Bad {
+			l.Importance = widget.DangerImportance
+		}
+		objs = append(objs, l)
 	}
 	if len(refs) > 0 {
 		b := u.busyButton(fmt.Sprintf("Restore %d damaged item(s) from their source", len(refs)), func() {
 			u.run(map[string]any{"action": "repair", "refs": refs}, fmt.Sprintf("Restoring %d item(s)", len(refs)))
 		})
 		b.Importance = widget.HighImportance
-		objs = append(objs, b)
+		objs = append(objs, container.NewHBox(b))
 	}
-	p.verify.Objects = []fyne.CanvasObject{banner(container.NewVBox(objs...))}
+	p.verify.Objects = []fyne.CanvasObject{panelBox(container.New(&vlist{gap: 0}, objs...))}
 	p.verify.Refresh()
 	p.verify.Show()
 }
@@ -674,8 +782,24 @@ type recoverView struct {
 
 var reWorkshopID = regexp.MustCompile(`^\d{6,12}$`)
 
+// step is one numbered recovery step (the page's .step).
+func step(n, title string, desc fyne.CanvasObject, body ...fyne.CanvasObject) fyne.CanvasObject {
+	p := pal()
+	circle := canvas.NewCircle(p.accent)
+	num := canvas.NewText(n, p.accentInk)
+	num.TextStyle = fyne.TextStyle{Bold: true}
+	num.TextSize = 14
+	badge := fixed(container.NewStack(circle, container.NewCenter(num)), 30, 30)
+	content := container.New(&vlist{gap: 6}, append([]fyne.CanvasObject{h2(title), desc}, body...)...)
+	return panelWith(container.NewBorder(nil, nil, container.NewVBox(badge), nil,
+		container.New(layout.NewCustomPaddedLayout(0, 0, 12, 0), content)), p.surface, 16, 16)
+}
+
 func newRecover(u *ui) *recoverView {
-	r := &recoverView{u: u, cache: mono(""), cutoff: text(""), path: widget.NewEntry(), file: widget.NewEntry(), ws: widget.NewEntry()}
+	r := &recoverView{u: u, cache: widget.NewLabel(""), cutoff: muted(""), path: widget.NewEntry(), file: widget.NewEntry(), ws: widget.NewEntry()}
+	r.cache.TextStyle = fyne.TextStyle{Monospace: true}
+	r.cache.SizeName = sSmall
+	r.cache.Wrapping = fyne.TextWrapBreak
 	r.backup = u.busyButton("Back up now", func() { u.run(map[string]any{"action": "backup"}, "Backing up the Workshop cache") })
 	r.backup.Importance = widget.HighImportance
 	r.path.SetPlaceHolder("Backup folder")
@@ -723,17 +847,18 @@ func newRecover(u *ui) *recoverView {
 		}
 	})
 	imp.Importance = widget.HighImportance
-	step := func(n, title, desc string, body ...fyne.CanvasObject) fyne.CanvasObject {
-		return container.NewVBox(heading(n+". "+title), text(desc), container.NewVBox(body...), widget.NewSeparator())
-	}
-	r.root = container.NewVScroll(container.NewPadded(container.NewVBox(
-		heading("Recover Workshop mods"),
-		text("Steam deletes removed Workshop items from your PC the next time it syncs. Back up the cache first, then install only the copies that predate the worm."),
-		step("1", "Back up your Steam Workshop cache", "Copies steamapps/workshop/content/1118200 somewhere Steam cannot touch, and records each item's date and scan result.", r.cache, container.NewHBox(r.backup)),
-		step("2", "Install the safe copies", "", r.cutoff, container.NewBorder(nil, nil, nil, container.NewHBox(pick, restore), r.path)),
-		step("3", "Import a file you downloaded", "A .zip, .rar or .7z mod archive. Add its Workshop ID if it came from Skymods/modsbase so its date can be checked.",
+	lede := muted("Steam deletes removed Workshop items from your PC the next time it syncs. Back up the cache first, then install only the copies that predate the worm.")
+	lede.SizeName = theme.SizeNameText
+	r.root = view(container.New(&vlist{gap: 12},
+		h1("Recover Workshop mods"), lede,
+		step("1", "Back up your Steam Workshop cache",
+			muted("Copies steamapps/workshop/content/1118200 somewhere Steam cannot touch, and records each item's date and scan result."),
+			r.cache, container.NewHBox(r.backup)),
+		step("2", "Install the safe copies", r.cutoff, container.NewBorder(nil, nil, nil, container.NewHBox(pick, restore), r.path)),
+		step("3", "Import a file you downloaded",
+			muted("A .zip, .rar or .7z mod archive. Add its Workshop ID if it came from Skymods/modsbase so its date can be checked."),
 			container.NewBorder(nil, nil, nil, choose, r.file), container.NewBorder(nil, nil, nil, imp, r.ws)),
-	)))
+	))
 	return r
 }
 
@@ -763,24 +888,26 @@ func (r *recoverView) update(st *stateView) {
 // ---------- Safety ----------
 
 func safetyView(u *ui) fyne.CanvasObject {
-	u.safetyCut, u.safetyCool = text(""), text("")
+	u.safetyCut, u.safetyCool = muted(""), muted("")
 	card := func(title string, body fyne.CanvasObject) fyne.CanvasObject {
-		return banner(container.NewVBox(widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), body))
+		return panelBox(container.New(&vlist{gap: 0}, widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), body))
 	}
-	return container.NewVScroll(container.NewPadded(container.NewVBox(
-		heading("How mods are checked"),
-		text("The September 2026 worm spread because the Workshop pushed code to every subscriber within hours. Each check below closes part of that path. No scanner makes mods safe: install mods from authors you trust."),
-		container.NewGridWithColumns(2,
-			card("Worm cutoff", u.safetyCut),
-			card("Cooldown", u.safetyCool),
-			card("Source checks", text("GameBanana's own antivirus result must be clean and the file checksum must match; True Workshop and Open Workshop files must match their published SHA-256.")),
-			card("Code scanner", text("Blocks process launching, networking, Steam Workshop uploads, Steam friends/chat, Steam login tickets, file deletion, self-copying into other mods, hidden code and shipped .exe/.dll files.")),
-			card("Pre-worm archive", text("Mirror copies are checked against the archive's record from before the worm; a copy that changed since is refused.")),
-			card("Blocklist", text("Known-bad mods listed in the GitHub repository are refused. The list can only block, never allow.")),
-			card("Tamper check", text("Every installed file is fingerprinted. Verify files reports anything changed or added afterwards, which is how the worm infected mods.")),
-			card("Safe updates", text("An update that adds new risky code is held back. Bad update anyway? Rollback restores the previous version.")),
-			card("Overrides", text("HIGH findings and the cooldown can be overridden per install. CRITICAL findings need the typed confirmation; worm-like findings and the cutoff need the command line.")),
-		))))
+	m := func(s string) fyne.CanvasObject { return muted(s) }
+	lede := widget.NewRichTextFromMarkdown("The September 2026 worm spread because the Workshop pushed code to every subscriber within hours. Each check below closes part of that path. **No scanner makes mods safe**: install mods from authors you trust.")
+	lede.Wrapping = fyne.TextWrapWord
+	grid := newCardGrid(250, 12)
+	grid.Objects = []fyne.CanvasObject{
+		card("Worm cutoff", u.safetyCut),
+		card("Cooldown", u.safetyCool),
+		card("Source checks", m("GameBanana's own antivirus result must be clean and the file checksum must match; True Workshop and Open Workshop files must match their published SHA-256.")),
+		card("Code scanner", m("Blocks process launching, networking, Steam Workshop uploads, Steam friends/chat, Steam login tickets, file deletion, self-copying into other mods, hidden code and shipped .exe/.dll files.")),
+		card("Pre-worm archive", m("Mirror copies are checked against the archive's record from before the worm; a copy that changed since is refused.")),
+		card("Blocklist", m("Known-bad mods listed in the GitHub repository are refused. The list can only block, never allow.")),
+		card("Tamper check", m("Every installed file is fingerprinted. Verify files reports anything changed or added afterwards, which is how the worm infected mods.")),
+		card("Safe updates", m("An update that adds new risky code is held back. Bad update anyway? Rollback restores the previous version.")),
+		card("Overrides", m("HIGH findings and the cooldown can be overridden per install. CRITICAL findings need the typed confirmation; worm-like findings and the cutoff need the command line.")),
+	}
+	return view(container.New(&vlist{gap: 12}, h1("How mods are checked"), lede, grid))
 }
 
 // ---------- Settings ----------
@@ -803,9 +930,41 @@ type settingsView struct {
 	about     *widget.Label
 }
 
+// field is a form row: bold label, control, hint.
+func field(label string, control fyne.CanvasObject, hint fyne.CanvasObject) fyne.CanvasObject {
+	l := widget.NewLabelWithStyle(label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	objs := []fyne.CanvasObject{l, control}
+	if hint != nil {
+		objs = append(objs, hint)
+	}
+	return container.New(&vlist{gap: 2}, objs...)
+}
+
+// maxWidth keeps a form from stretching across a wide window.
+type maxWidth struct{ w float32 }
+
+func (m *maxWidth) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	s := objs[0].MinSize()
+	return fyne.NewSize(minF(s.Width, m.w), s.Height)
+}
+
+func (m *maxWidth) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	w := minF(size.Width, m.w)
+	objs[0].Resize(fyne.NewSize(w, objs[0].MinSize().Height))
+	objs[0].Move(fyne.NewPos(0, 0))
+	if h := objs[0].MinSize().Height; h != objs[0].Size().Height {
+		objs[0].Resize(fyne.NewSize(w, h))
+	}
+}
+
+func narrow(w float32, o fyne.CanvasObject) fyne.CanvasObject { return container.New(&maxWidth{w}, o) }
+
 func newSettings(u *ui) *settingsView {
-	v := &settingsView{u: u, game: widget.NewEntry(), gameHint: small(""), cooldown: widget.NewEntry(), nexus: container.NewVBox(),
-		paths: mono(""), appInfo: small(""), version: widget.NewLabel(""), about: small("")}
+	v := &settingsView{u: u, game: widget.NewEntry(), gameHint: muted(""), cooldown: widget.NewEntry(), nexus: container.New(&vlist{gap: 6}),
+		paths: widget.NewLabel(""), appInfo: muted(""), version: widget.NewLabel(""), about: muted("")}
+	v.paths.TextStyle = fyne.TextStyle{Monospace: true}
+	v.paths.SizeName = sSmall
+	v.paths.Wrapping = fyne.TextWrapBreak
 	v.game.SetPlaceHolder("Detected automatically from Steam")
 	mark := func() { v.dirty = true }
 	v.game.OnChanged = func(string) { mark() }
@@ -836,11 +995,12 @@ func newSettings(u *ui) *settingsView {
 		}()
 	})
 	save.Importance = widget.HighImportance
-	form := container.NewVBox(
-		widget.NewLabel("People Playground folder"), container.NewBorder(nil, nil, nil, pick, v.game), v.gameHint,
-		widget.NewLabel("Cooldown for new uploads (hours)"), v.cooldown,
-		v.offline, v.bgThumbs,
-		small("Valve deleted the preview images of the removed mods. ppgmods can fetch small mods (under 3 MB) one at a time to show their own thumbnail; this also pre-scans them so installing is instant."),
+	thumbsHint := muted("Valve deleted the preview images of the removed mods. ppgmods can fetch small mods (under 3 MB) one at a time to show their own thumbnail; this also pre-scans them so installing is instant.")
+	form := container.New(&vlist{gap: 14},
+		field("People Playground folder", container.NewBorder(nil, nil, nil, pick, v.game), v.gameHint),
+		field("Cooldown for new uploads (hours)", v.cooldown, nil),
+		v.offline,
+		container.New(&vlist{gap: 0}, v.bgThumbs, container.New(layout.NewCustomPaddedLayout(0, 0, 30, 0), thumbsHint)),
 		container.NewHBox(save))
 	v.install = u.busyButton("Install on this PC", u.installApp)
 	v.uninstall = widget.NewButton("Uninstall from this PC", func() {
@@ -850,16 +1010,17 @@ func newSettings(u *ui) *settingsView {
 	v.uninstall.Importance = widget.LowImportance
 	openData := widget.NewButton("Open ppgmods data folder", func() { u.open("data") })
 	openData.Importance = widget.LowImportance
-	repo := widget.NewButton("GitHub repository", func() { u.openURL("https://github.com/DogeKingC/SWG") })
-	repo.Importance = widget.LowImportance
-	v.root = container.NewVScroll(container.NewPadded(container.NewVBox(
-		heading("Settings"), form,
-		heading("Nexus Mods"), v.nexus,
-		heading("Folders"), v.paths, container.NewHBox(openData),
-		heading("This app"), v.appInfo, container.NewHBox(v.install, v.uninstall),
-		heading("About"), v.version, v.about,
-		container.NewHBox(widget.NewButton("Check for a new version", func() { go u.checkRelease(true) }), repo),
-	)))
+	section := func(title string, objs ...fyne.CanvasObject) fyne.CanvasObject {
+		return container.New(&vlist{gap: 8}, append([]fyne.CanvasObject{h2(title)}, objs...)...)
+	}
+	v.root = view(container.New(&vlist{gap: 22},
+		tight(h1("Settings"), narrow(620, form)),
+		section("Nexus Mods", narrow(720, panelBox(v.nexus))),
+		section("Folders", panelBox(v.paths), container.NewHBox(openData)),
+		section("This app", v.appInfo, container.NewHBox(v.install, v.uninstall)),
+		section("About", v.version, v.about,
+			container.NewHBox(widget.NewButton("Check for a new version", func() { go u.checkRelease(true) }))),
+	))
 	return v
 }
 
@@ -927,10 +1088,9 @@ func (v *settingsView) renderNexus(n nexusView) {
 		return
 	}
 	u.nexusSig = sig
-	keyPage := widget.NewButton("Open your Nexus account's API page", func() {
-		u.openURL("https://www.nexusmods.com/users/myaccount?tab=api+access")
-	})
-	keyPage.Importance = widget.LowImportance
+	keyPage := widget.NewHyperlink("your Nexus account's API page", nil)
+	keyPage.OnTapped = func() { u.openURL("https://www.nexusmods.com/users/myaccount?tab=api+access") }
+	keyPage.SizeName = sSmall
 	post := func(body map[string]any, ok string) {
 		go func() {
 			if err := u.s.call("POST", "/api/nexus", body, nil); err != nil {
@@ -941,6 +1101,9 @@ func (v *settingsView) renderNexus(n nexusView) {
 			fyne.Do(func() { u.nexusSig = "" })
 			u.refreshState()
 		}()
+	}
+	hint := func(s string) fyne.CanvasObject {
+		return container.New(layout.NewCustomPaddedLayout(0, 0, 30, 0), muted(s))
 	}
 	if !n.Linked {
 		key := widget.NewPasswordEntry()
@@ -954,18 +1117,19 @@ func (v *settingsView) renderNexus(n nexusView) {
 		})
 		link.Importance = widget.HighImportance
 		v.nexus.Objects = []fyne.CanvasObject{
-			small("Link your account to install from Nexus Mods without saving files by hand. Copy your Personal API Key from your account's API page (at the bottom). It stays on this PC and is only sent to Nexus Mods."),
-			container.NewHBox(keyPage),
-			container.NewBorder(nil, nil, nil, link, key), handler,
-			small("Free accounts: that button on a mod's Files tab sends the file to ppgmods. While this is on, Vortex or Mod Organizer don't get Nexus links (for other games either); turning it off gives them back."),
+			muted("Link your account to install from Nexus Mods without saving files by hand. Copy your Personal API Key (at the bottom of the page) from"),
+			keyPage,
+			muted("It stays on this PC and is only sent to Nexus Mods."),
+			container.NewBorder(nil, nil, nil, link, key),
+			container.New(&vlist{gap: 0}, handler, hint("Free accounts: that button on a mod's Files tab sends the file to ppgmods. While this is on, Vortex or Mod Organizer don't get Nexus links (for other games either); turning it off gives them back.")),
 		}
 		v.nexus.Refresh()
 		return
 	}
-	acct := "free"
+	acct, kind := "free", pNeutral
 	how := "Free accounts download through the site: Install opens the mod's Files tab, where \"Mod Manager Download\" sends the file to ppgmods."
 	if n.Premium {
-		acct, how = "premium", "Install downloads from Nexus Mods directly."
+		acct, kind, how = "premium", pOK, "Install downloads from Nexus Mods directly."
 	}
 	handler := widget.NewCheck("Handle \"Mod Manager Download\" links", nil)
 	handler.SetChecked(n.Handler)
@@ -982,10 +1146,11 @@ func (v *settingsView) renderNexus(n nexusView) {
 		})
 	})
 	unlink.Importance = widget.LowImportance
+	who := widget.NewLabelWithStyle(n.User, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	v.nexus.Objects = []fyne.CanvasObject{
-		container.NewHBox(widget.NewLabel("Linked as "+n.User), badge(acct, bOK)),
-		small(how), handler,
-		small("While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either; turning it off gives them back."),
+		container.NewHBox(widget.NewLabel("Linked as"), who, container.NewCenter(pill(acct, kind))),
+		muted(how),
+		container.New(&vlist{gap: 0}, handler, hint("While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either; turning it off gives them back.")),
 		container.NewHBox(unlink),
 	}
 	v.nexus.Refresh()

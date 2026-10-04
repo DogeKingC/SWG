@@ -59,7 +59,6 @@ type ui struct {
 	jobLabel  string
 
 	status   *widget.Label
-	progress *widget.ProgressBarInfinite
 	logText  *widget.Label
 	logBox   *container.Scroll
 	logLines []string
@@ -72,11 +71,18 @@ type ui struct {
 	installText   *widget.Label
 	installDesk   *widget.Check
 
-	gameChip    *widget.Label
-	safetyCut   *widget.Label
-	safetyCool  *widget.Label
-	tabs        *container.AppTabs
-	installedTI *container.TabItem
+	gameChipText *canvas.Text
+	gameChipBg   *canvas.Rectangle
+	versionChip  *canvas.Text
+	safetyCut    *widget.Label
+	safetyCool   *widget.Label
+	navs         []*navItem
+	views        []fyne.CanvasObject
+	viewStack    *fyne.Container
+	dot          *canvas.Circle
+	dotAnim      *fyne.Animation
+	dotBox       *fyne.Container
+	logWrap      *fyne.Container
 
 	browse    *browseView
 	installed *installedPane
@@ -93,6 +99,7 @@ type ui struct {
 func runNative(s *server) error {
 	a := fyneapp.NewWithID("io.github.dogekingc.ppgmods")
 	a.SetIcon(fyne.NewStaticResource("icon.png", desktop.IconPNG()))
+	a.Settings().SetTheme(newTheme())
 	u := &ui{s: s, app: a}
 	u.thumbs = newThumbLoader(u)
 	u.win = a.NewWindow(desktop.AppName)
@@ -127,34 +134,47 @@ func runNative(s *server) error {
 }
 
 func (u *ui) build() {
+	p := pal()
+	// footer: task status with a pulsing dot, and the log
 	u.status = widget.NewLabel("Ready")
 	u.status.Truncation = fyne.TextTruncateEllipsis
-	u.progress = widget.NewProgressBarInfinite()
-	u.progress.Hide()
+	u.status.Importance = widget.LowImportance
+	u.status.SizeName = sSmall
+	u.dot, u.dotAnim = pulseDot()
+	u.dotBox = container.NewCenter(fixed(u.dot, 9, 9))
+	u.dotBox.Hide()
 	u.logText = widget.NewLabel("")
 	u.logText.TextStyle = fyne.TextStyle{Monospace: true}
+	u.logText.SizeName = sSmall
+	u.logText.Wrapping = fyne.TextWrapBreak
+	logBg := canvas.NewRectangle(p.bg)
 	u.logBox = container.NewScroll(u.logText)
-	u.logBox.SetMinSize(fyne.NewSize(0, 170))
-	u.logBox.Hide()
+	u.logBox.SetMinSize(fyne.NewSize(0, 190))
+	u.logWrap = container.NewStack(logBg, container.NewBorder(hline(), nil, nil, nil, u.logBox))
+	u.logWrap.Hide()
 	logBtn := widget.NewButton("Show log", nil)
 	logBtn.Importance = widget.LowImportance
 	logBtn.OnTapped = func() {
-		if u.logBox.Visible() {
-			u.logBox.Hide()
+		if u.logWrap.Visible() {
+			u.logWrap.Hide()
 			logBtn.SetText("Show log")
 		} else {
-			u.logBox.Show()
+			u.logWrap.Show()
 			u.logBox.ScrollToBottom()
 			logBtn.SetText("Hide log")
 		}
 	}
-	footer := container.NewVBox(widget.NewSeparator(),
-		container.NewBorder(nil, nil, nil, container.NewHBox(u.progress, logBtn), u.status), u.logBox)
+	footBg := canvas.NewRectangle(p.surface)
+	footRow := container.New(layout.NewCustomPaddedLayout(0, 0, 12, 8),
+		container.NewBorder(nil, nil, u.dotBox, logBtn, u.status))
+	footer := container.NewStack(footBg, container.NewBorder(hline(), nil, nil, nil, container.NewVBox(footRow, u.logWrap)))
 
-	u.updateText = widget.NewLabel("")
+	// banners
+	u.updateText = widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	u.updateText.Importance = widget.WarningImportance
 	upd := widget.NewButton("Update now", func() { u.run(map[string]any{"action": "self-update"}, "Updating ppgmods") })
 	upd.Importance = widget.HighImportance
-	u.updateBanner = banner(container.NewBorder(nil, nil, nil, upd, u.updateText))
+	u.updateBanner = banner(container.NewCenter(container.NewHBox(u.updateText, upd)), p.warnBg)
 	u.updateBanner.Hide()
 
 	u.installText = widget.NewLabel("")
@@ -168,44 +188,119 @@ func (u *ui) build() {
 		u.installBanner.Hide()
 	})
 	later.Importance = widget.LowImportance
-	u.installBanner = banner(container.NewBorder(nil, nil, nil, container.NewHBox(u.installDesk, inst, later), u.installText))
+	u.installBanner = banner(container.NewBorder(nil, nil, nil, container.NewHBox(u.installDesk, inst, later), u.installText), p.surface2)
 	u.installBanner.Hide()
 
-	u.gameChip = widget.NewLabel("Checking game…")
-	title := widget.NewLabelWithStyle(desktop.AppName, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	// top bar: brand, game chip, version chip
 	icon := canvas.NewImageFromResource(fyne.NewStaticResource("icon.png", desktop.IconPNG()))
 	icon.SetMinSize(fyne.NewSize(28, 28))
 	icon.FillMode = canvas.ImageFillContain
-	quit := widget.NewButton("Quit", func() { u.s.stop("") })
-	quit.Importance = widget.LowImportance
-	top := container.NewVBox(container.NewBorder(nil, nil, container.NewHBox(icon, title, widget.NewLabel("People Playground mod recovery")),
-		container.NewHBox(u.gameChip, quit)), u.updateBanner, u.installBanner)
+	name := canvas.NewText(desktop.AppName, p.text)
+	name.TextStyle = fyne.TextStyle{Bold: true}
+	name.TextSize = 15
+	sub := canvas.NewText("People Playground mod recovery", p.muted)
+	sub.TextSize = 12
+	brand := container.NewHBox(container.NewCenter(icon), container.NewCenter(container.New(&vlist{gap: 0}, name, sub)))
+	var game *fyne.Container
+	game, u.gameChipText, u.gameChipBg = chip("Checking game…", p.surface2, p.text, true)
+	gameTap := newTapArea(game, func() {
+		if u.state().Paths.Game == "" {
+			u.show(4)
+		}
+	}, nil)
+	var ver *fyne.Container
+	ver, u.versionChip, _ = chip("ppgmods", p.surface2, p.muted, true)
+	topBg := canvas.NewRectangle(p.surface)
+	topRow := container.New(layout.NewCustomPaddedLayout(10, 10, 18, 18),
+		container.NewBorder(nil, nil, brand, container.NewCenter(container.NewHBox(gameTap, ver))))
+	top := container.NewVBox(container.NewStack(topBg, container.NewBorder(nil, hline(), nil, nil, topRow)), u.updateBanner, u.installBanner)
 
+	// views and the sidebar
 	u.browse = newBrowse(u)
 	u.installed = newInstalled(u)
 	u.recover = newRecover(u)
 	u.set = newSettings(u)
-	u.installedTI = container.NewTabItemWithIcon("Installed", theme.ListIcon(), u.installed.root)
-	u.tabs = container.NewAppTabs(
-		container.NewTabItemWithIcon("Browse", theme.SearchIcon(), u.browse.root),
-		u.installedTI,
-		container.NewTabItemWithIcon("Recover Workshop", theme.HistoryIcon(), u.recover.root),
-		container.NewTabItemWithIcon("Safety", theme.WarningIcon(), safetyView(u)),
-		container.NewTabItemWithIcon("Settings", theme.SettingsIcon(), u.set.root),
-	)
-	u.tabs.SetTabLocation(container.TabLocationLeading)
-	u.tabs.OnSelected = func(t *container.TabItem) {
-		if t == u.installedTI {
-			go u.refreshState()
+	u.views = []fyne.CanvasObject{u.browse.root, u.installed.root, u.recover.root, safetyView(u), u.set.root}
+	for i, v := range u.views {
+		if i > 0 {
+			v.Hide()
 		}
 	}
-	u.win.SetContent(container.NewBorder(container.NewPadded(top), footer, nil, nil, u.tabs))
+	u.viewStack = container.NewStack(u.views...)
+	items := []struct {
+		icon fyne.Resource
+		name string
+	}{
+		{theme.SearchIcon(), "Browse"}, {theme.ListIcon(), "Installed"}, {theme.HistoryIcon(), "Recover Workshop"},
+		{theme.WarningIcon(), "Safety"}, {theme.SettingsIcon(), "Settings"},
+	}
+	nav := tight()
+	for i, it := range items {
+		i := i
+		n := newNavItem(it.icon, it.name, func() { u.show(i) })
+		u.navs = append(u.navs, n)
+		nav.Add(n.root)
+	}
+	u.navs[0].setActive(true)
+	repo := widget.NewHyperlink("GitHub repository", nil)
+	repo.OnTapped = func() { u.openURL("https://github.com/DogeKingC/SWG") }
+	repo.SizeName = sSmall
+	quit := widget.NewButton("Quit", func() { u.s.stop("") })
+	quit.Importance = widget.LowImportance
+	sideBg := canvas.NewRectangle(p.surface)
+	side := container.NewStack(sideBg, container.NewBorder(nil, nil, nil, vline(),
+		container.New(layout.NewCustomPaddedLayout(14, 10, 10, 10),
+			container.NewBorder(nil, container.NewVBox(repo, container.NewHBox(quit)), nil, nil, nav))))
+	sideFixed := container.New(&widthLayout{220}, side)
+	u.win.SetContent(container.NewBorder(top, footer, sideFixed, nil, u.viewStack))
+	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if k.Name == fyne.KeyEscape && u.details != nil {
+			u.details.close()
+		}
+	})
 }
 
-func banner(content fyne.CanvasObject) *fyne.Container {
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameHover))
-	bg.CornerRadius = 6
-	return container.NewStack(bg, container.NewPadded(content))
+// show switches the sidebar section.
+func (u *ui) show(i int) {
+	for j, v := range u.views {
+		if j == i {
+			v.Show()
+		} else {
+			v.Hide()
+		}
+		u.navs[j].setActive(j == i)
+	}
+	if i == 1 {
+		go u.refreshState()
+	}
+}
+
+// view wraps a section's content like the page's main area.
+func view(content fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewVScroll(container.New(layout.NewCustomPaddedLayout(22, 30, 26, 26), content))
+}
+
+type widthLayout struct{ w float32 }
+
+func (l *widthLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(l.w, objs[0].MinSize().Height)
+}
+
+func (l *widthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objs {
+		o.Resize(size)
+	}
+}
+
+func vline() fyne.CanvasObject {
+	r := canvas.NewRectangle(pal().border)
+	r.SetMinSize(fyne.NewSize(1, 1))
+	return r
+}
+
+func banner(content fyne.CanvasObject, fill color.Color) *fyne.Container {
+	bg := canvas.NewRectangle(fill)
+	return container.NewStack(bg, container.NewBorder(nil, hline(), nil, nil, container.New(layout.NewCustomPaddedLayout(4, 4, 16, 16), content)))
 }
 
 // loop polls the log, the running task and the state, like the web page.
@@ -254,13 +349,18 @@ func (u *ui) refreshState() {
 		sig += fmt.Sprint(m.Key, m.Name, m.Missing, m.Folders, m.ScanMax, m.Pinned, m.RiskAccepted, m.Author, m.Withdrawn, "|")
 	}
 	fyne.Do(func() {
+		p := pal()
 		if st.Paths.Game != "" {
-			u.gameChip.SetText("● People Playground found")
+			u.gameChipText.Text, u.gameChipText.Color, u.gameChipBg.FillColor = "● People Playground found", p.ok, p.okBg
 		} else {
-			u.gameChip.SetText("Game not found: set its folder in Settings")
+			u.gameChipText.Text, u.gameChipText.Color, u.gameChipBg.FillColor = "Game not found: set folder", p.bad, p.badBg
 		}
-		u.installedTI.Text = fmt.Sprintf("Installed (%d)", len(st.Installed))
-		u.tabs.Refresh()
+		u.gameChipBg.StrokeWidth = 0
+		u.gameChipText.Refresh()
+		u.gameChipBg.Refresh()
+		u.versionChip.Text = "ppgmods " + st.Version
+		u.versionChip.Refresh()
+		u.navs[1].setCount(fmt.Sprint(len(st.Installed)))
 		if sig != u.installedSig {
 			u.installedSig = sig
 			u.installed.render()
@@ -327,7 +427,7 @@ func (u *ui) install(ref, name string, override map[string]bool, mirror, confirm
 func (u *ui) setJob(j *job, label string) {
 	if j == nil || j.Background && !j.Running {
 		u.status.SetText("Ready")
-		u.progress.Hide()
+		u.setRunning(false)
 		u.setBusy(false)
 		return
 	}
@@ -340,15 +440,31 @@ func (u *ui) setJob(j *job, label string) {
 			label = j.Name
 		}
 		u.status.SetText(label + "…")
-		u.progress.Show()
+		u.setRunning(true)
 		return
 	}
-	u.progress.Hide()
+	u.setRunning(false)
 	if j.OK {
 		u.status.SetText("Last task: " + j.Name + " finished")
 	} else {
 		u.status.SetText("Last task: " + j.Name + " " + orStr(j.Error, "failed"))
 	}
+}
+
+func (u *ui) setRunning(on bool) {
+	if on == u.dotBox.Visible() {
+		return
+	}
+	if on {
+		u.dotBox.Show()
+		u.status.Importance = widget.MediumImportance
+		u.dotAnim.Start()
+	} else {
+		u.dotBox.Hide()
+		u.status.Importance = widget.LowImportance
+		u.dotAnim.Stop()
+	}
+	u.status.Refresh()
 }
 
 func (u *ui) setBusy(b bool) {
@@ -415,7 +531,7 @@ func (u *ui) pollLog() {
 	u.mu.Unlock()
 	fyne.Do(func() {
 		u.logText.SetText(text)
-		if u.logBox.Visible() {
+		if u.logWrap.Visible() {
 			u.logBox.ScrollToBottom()
 		}
 		if running && len(last) > 9 {
@@ -429,7 +545,7 @@ func (u *ui) jobDone(j *job) {
 	sum := j.Summary
 	if j.Name == "verify" {
 		u.installed.showVerify(j.Problems)
-		u.tabs.Select(u.installedTI)
+		u.show(1)
 		return
 	}
 	if j.OK {
@@ -660,19 +776,25 @@ func (u *ui) toast(msg string) { u.toastAction(msg, "", nil) }
 
 func (u *ui) toastAction(msg, label string, f func()) {
 	fyne.Do(func() {
-		content := container.NewHBox(widget.NewLabel(msg))
+		p := pal()
+		t := widget.NewRichText(&widget.TextSegment{Text: msg, Style: widget.RichTextStyle{
+			ColorName: theme.ColorNameBackground, TextStyle: fyne.TextStyle{Bold: true}, Inline: true}})
+		t.Wrapping = fyne.TextWrapWord
 		var pop *widget.PopUp
+		row := container.NewBorder(nil, nil, nil, nil, t)
 		if f != nil {
-			content.Add(widget.NewButton(label, func() { pop.Hide(); f() }))
+			b := widget.NewButton(label, func() { pop.Hide(); f() })
+			row = container.NewBorder(nil, nil, nil, container.NewCenter(b), t)
 		}
-		bg := canvas.NewRectangle(theme.Color(theme.ColorNameOverlayBackground))
-		bg.CornerRadius = 8
-		bg.StrokeColor = theme.Color(theme.ColorNamePrimary)
-		bg.StrokeWidth = 1
-		pop = widget.NewPopUp(container.NewStack(bg, container.NewPadded(content)), u.win.Canvas())
-		size := pop.MinSize()
+		bg := canvas.NewRectangle(p.text)
+		bg.CornerRadius = 10
+		box := container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(6, 6, 10, 10), row))
+		pop = widget.NewPopUp(box, u.win.Canvas())
 		cs := u.win.Canvas().Size()
-		pop.ShowAtPosition(fyne.NewPos((cs.Width-size.Width)/2, cs.Height-size.Height-60))
+		w := minF(420, cs.Width-36)
+		pop.Resize(fyne.NewSize(w, box.MinSize().Height))
+		h := pop.MinSize().Height
+		pop.ShowAtPosition(fyne.NewPos(cs.Width-w-18, cs.Height-h-56))
 		d := 4 * time.Second
 		if f != nil || len(msg) > 60 {
 			d = 8 * time.Second
@@ -757,57 +879,33 @@ func text(s string) *widget.Label {
 	return l
 }
 
-func small(s string) *widget.Label {
-	l := text(s)
-	l.SizeName = theme.SizeNameCaptionText
-	return l
-}
+func small(s string) *widget.Label { return muted(s) }
 
-func mono(s string) *widget.Label {
-	l := text(s)
-	l.TextStyle = fyne.TextStyle{Monospace: true}
-	l.SizeName = theme.SizeNameCaptionText
-	return l
-}
-
-func heading(s string) *widget.Label {
+func mono(s string) fyne.CanvasObject {
 	l := widget.NewLabel(s)
-	l.SizeName = theme.SizeNameSubHeadingText
-	l.TextStyle = fyne.TextStyle{Bold: true}
-	return l
+	l.Wrapping = fyne.TextWrapBreak
+	l.TextStyle = fyne.TextStyle{Monospace: true}
+	l.SizeName = sSmall
+	return tintBox(l, pal().bg)
 }
+
+func heading(s string) *widget.Label { return h2(s) }
 
 func warnBox(s string) fyne.CanvasObject {
-	l := text(s)
-	l.Importance = widget.DangerImportance
-	return l
+	p := pal()
+	return tinted(s, p.bad, p.badBg, false)
 }
 
-// badge is a small coloured tag, like the web page's.
-type badgeKind int
+type badgeKind = pillKind
 
 const (
-	bNeutral badgeKind = iota
-	bOK
-	bBad
-	bWarn
-	bSource
+	bNeutral = pNeutral
+	bOK      = pOK
+	bBad     = pBad
+	bWarn    = pWarn
 )
 
-func badge(s string, k badgeKind) fyne.CanvasObject {
-	c := map[badgeKind]color.NRGBA{
-		bNeutral: {0x80, 0x80, 0x80, 0x40},
-		bOK:      {0x2e, 0xa0, 0x43, 0x60},
-		bBad:     {0xd0, 0x30, 0x30, 0x60},
-		bWarn:    {0xd0, 0x90, 0x10, 0x60},
-		bSource:  {0x30, 0x70, 0xd0, 0x50},
-	}[k]
-	bg := canvas.NewRectangle(c)
-	bg.CornerRadius = 4
-	t := canvas.NewText(s, theme.Color(theme.ColorNameForeground))
-	t.TextSize = theme.CaptionTextSize()
-	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(1, 1, 5, 5), t))
-}
+func badge(s string, k pillKind) fyne.CanvasObject { return pill(s, k) }
 
 func orStr(a, b string) string {
 	if a != "" {
