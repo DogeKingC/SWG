@@ -149,6 +149,7 @@ func DirWith(root string, opt Options) (*Report, error) {
 				r.add(Info, "game-library", rel, 0, "identical to the game's own "+d.Name())
 			} else {
 				r.add(Critical, "executable-file", rel, 0, "unknown compiled library (.dll): its code cannot be checked")
+				inspectDLL(r, rel, p)
 			}
 		case executableExt[ext]:
 			r.add(Critical, "executable-file", rel, 0, "executable/script file "+ext+" has no place in a mod")

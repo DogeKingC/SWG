@@ -900,7 +900,7 @@ func safetyView(u *ui) fyne.CanvasObject {
 		card("Worm cutoff", u.safetyCut),
 		card("Cooldown", u.safetyCool),
 		card("Source checks", m("GameBanana's own antivirus result must be clean and the file checksum must match; True Workshop and Open Workshop files must match their published SHA-256.")),
-		card("Code scanner", m("Blocks process launching, networking, Steam Workshop uploads, Steam friends/chat, Steam login tickets, file deletion, self-copying into other mods, hidden code and shipped .exe/.dll files.")),
+		card("Code scanner", m("Blocks process launching, networking, Steam Workshop uploads, Steam friends/chat, Steam login tickets, file deletion, self-copying into other mods, hidden code, the FPS++ worms' deserialization and UnityEvent tricks, executables hidden in base64, and shipped .exe/.dll files.")),
 		card("Pre-worm archive", m("Mirror copies are checked against the archive's record from before the worm; a copy that changed since is refused.")),
 		card("Blocklist", m("Known-bad mods listed in the GitHub repository are refused. The list can only block, never allow.")),
 		card("Tamper check", m("Every installed file is fingerprinted. Verify files reports anything changed or added afterwards, which is how the worm infected mods.")),

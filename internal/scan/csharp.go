@@ -35,8 +35,19 @@ var apiRules = []apiRule{
 	{"steamworks-any", High, []string{"Steamworks", "Facepunch.Steamworks"}, "touches the Steamworks API"},
 	{"file-delete", High, []string{"System.IO.File.Delete", "System.IO.Directory.Delete", "Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile", "Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory"}, "deletes files or folders"},
 	{"registry", Critical, []string{"Microsoft.Win32"}, "accesses the Windows registry"},
-	{"dynamic-code", High, []string{"System.Reflection.Emit", "System.Reflection.Assembly.Load", "System.Reflection.Assembly.LoadFrom", "System.Reflection.Assembly.LoadFile",
-		"System.Reflection.Assembly.UnsafeLoadFrom", "System.AppDomain", "System.CodeDom", "Microsoft.CSharp", "Microsoft.CodeAnalysis", "Mono.CSharp", "Mono.Cecil"}, "loads or compiles code at runtime"},
+	{"code-loader", Critical, []string{"System.Reflection.Assembly.Load", "System.Reflection.Assembly.LoadFrom", "System.Reflection.Assembly.LoadFile",
+		"System.Reflection.Assembly.UnsafeLoadFrom", "System.Reflection.Assembly.LoadWithPartialName", "System.AppDomain.Load", "System.AppDomain.ExecuteAssembly",
+		"System.Runtime.Loader"}, "loads compiled code at runtime (how both FPS++ worms ran their payload)"},
+	{"dynamic-code", High, []string{"System.Reflection.Emit", "System.AppDomain", "System.CodeDom", "Microsoft.CSharp", "Microsoft.CodeAnalysis", "Mono.CSharp", "Mono.Cecil"}, "loads or compiles code at runtime"},
+	// The FPS++++ worm never named Assembly.Load: it deserialized ready-made
+	// delegates for it (BinaryFormatter, or ClaimsIdentity's bootstrap
+	// context). No mod needs .NET object deserialization.
+	{"deserialization", Critical, []string{"System.Runtime.Serialization.IFormatter", "System.Runtime.Serialization.Formatters",
+		"System.Runtime.Serialization.SerializationInfo", "System.Runtime.Serialization.FormatterConverter", "System.Runtime.Serialization.IFormatterConverter",
+		"System.Runtime.Serialization.ObjectManager", "System.Runtime.Serialization.SurrogateSelector", "System.Runtime.Serialization.ISerializationSurrogate",
+		"System.Runtime.Serialization.NetDataContractSerializer", "System.Runtime.Serialization.ISerializable", "System.Security.Claims",
+		"System.DelegateSerializationHolder", "System.Web.UI.LosFormatter", "System.Web.UI.ObjectStateFormatter"},
+		"uses .NET object deserialization (the worm smuggled in its code loader this way)"},
 	{"base64", Medium, []string{"System.Convert.FromBase64String", "System.Convert.FromBase64CharArray"}, "decodes base64 data (common obfuscation)"},
 	{"env-paths", High, []string{"System.Environment.GetFolderPath", "System.Environment.GetEnvironmentVariable", "System.Environment.GetEnvironmentVariables",
 		"System.Environment.UserName", "System.Environment.SpecialFolder", "System.Environment.CurrentDirectory", "System.Environment.GetCommandLineArgs"}, "reads user folders or environment variables"},
@@ -69,7 +80,7 @@ var reviewNamespaces = map[string]string{
 // framework namespaces mods have no use for).
 var deniedBelowAllowed = []string{
 	"System.Net", "System.Web", "System.Security", "System.Data", "System.Xml", "System.Management", "System.ServiceProcess",
-	"System.DirectoryServices", "System.Runtime.Remoting", "System.Runtime.Loader", "System.Configuration", "System.Media",
+	"System.DirectoryServices", "System.Runtime.Remoting", "System.Runtime.Serialization", "System.Runtime.Loader", "System.Configuration", "System.Media",
 	"System.Windows", "System.Device", "System.IO.Pipes", "System.IO.MemoryMappedFiles", "System.IO.IsolatedStorage",
 	"UnityEngine.Networking", "UnityEngine.Windows", "UnityEngine.WSA", "System.Diagnostics.Eventing", "System.Threading.AccessControl",
 }
@@ -320,6 +331,25 @@ func analyzeCSharp(r *Report, rel, src string) {
 				if i > 0 && toks[i-1].text == "(" && i+2 < len(toks) && toks[i+1].text == ")" && toks[i+2].kind == tNumber {
 					charCasts++
 				}
+			case "DefaultMembersSearchFlags":
+				hit("json-gadget", Critical, t.line, "makes the JSON reader fill private fields (the worm built UnityEvents that call any method this way)")
+			case "TypeNameHandling":
+				hit("json-gadget", Critical, t.line, "lets JSON data choose which .NET types to create")
+			case "RejectShadyCode":
+				hit("disables-protection", Critical, t.line, "touches the game's \"reject shady code\" protection (the worm turned it off)")
+			case "DeserializeObject", "Deserialize", "PopulateObject":
+				// Deserializing into a UnityEvent, or into a type named by a
+				// string, makes data decide what code runs.
+				for k := i + 1; k < len(toks) && k < i+40 && toks[k].text != ";"; k++ {
+					if toks[k].kind == tIdent && strings.HasPrefix(toks[k].text, "UnityEvent") {
+						hit("json-gadget", Critical, t.line, "deserializes a UnityEvent from data (makes it call any method, e.g. File.WriteAllBytes)")
+						break
+					}
+					if toks[k].kind == tIdent && toks[k].text == "GetType" {
+						hit("json-gadget", Critical, t.line, "deserializes into a type named by a string")
+						break
+					}
+				}
 			}
 		}
 		if t.kind == tString && i+2 < len(toks) && toks[i+1].text == "+" && toks[i+2].kind == tString {
@@ -333,7 +363,7 @@ func analyzeCSharp(r *Report, rel, src string) {
 	// String literals, with adjacent "a" + "b" concatenations joined.
 	writes := seen["file-write"] || seen["file-delete"]
 	destructive := seen["file-delete"] || seen["file-enumerate"]
-	dynamic := reflectionByName || seen["dynamic-code"]
+	dynamic := reflectionByName || seen["dynamic-code"] || seen["code-loader"]
 	for _, s := range joinedStrings(toks) {
 		low := strings.ToLower(strings.Join(strings.Fields(s.text), ""))
 		sev, ok := sensitiveExact[low]
@@ -354,11 +384,12 @@ func analyzeCSharp(r *Report, rel, src string) {
 		case bySubstr:
 			hit("sensitive-string", Medium, s.line, fmt.Sprintf("string mentions %q", clip(s.text)))
 		}
+		checkMarkers(hit, s.line, low, "string")
 		if reShellStr.MatchString(s.text) {
 			hit("shell-string", High, s.line, fmt.Sprintf("string names a shell or download tool: %q", clip(s.text)))
 		}
 		if reLongB64Str.MatchString(s.text) {
-			if seen["dynamic-code"] {
+			if seen["dynamic-code"] || seen["code-loader"] {
 				hit("encoded-code", Critical, s.line, "embeds encoded data in a file that loads code at runtime")
 			} else {
 				hit("encoded-blob", Medium, s.line, fmt.Sprintf("long base64-like string literal (%d chars), e.g. an embedded image", len(s.text)))
@@ -383,10 +414,11 @@ func analyzeCSharp(r *Report, rel, src string) {
 			}
 		}
 	}
+	checkEncoded(hit, joinedStrings(toks))
 	if seen["file-delete"] && seen["file-enumerate"] {
 		hit("mass-delete", Critical, 0, "lists folders and deletes files (the worm deleted game files this way)")
 	}
-	if seen["base64"] && seen["dynamic-code"] {
+	if seen["base64"] && (seen["dynamic-code"] || seen["code-loader"]) {
 		hit("encoded-code", Critical, 0, "decodes base64 and loads code at runtime")
 	}
 	if splitConcats >= 6 && dynamic {

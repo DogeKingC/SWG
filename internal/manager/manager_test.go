@@ -2,6 +2,9 @@ package manager
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,5 +70,32 @@ func TestBlocklistCannotBeOverridden(t *testing.T) {
 	rep := &scan.Report{Findings: []scan.Finding{{Severity: scan.Critical, Rule: "blocklisted", Detail: "blocklisted: worm"}}}
 	if !rejected(m.Check(&Candidate{}, rep, nil)) {
 		t.Fatal("blocklisted candidate accepted")
+	}
+}
+
+func TestVerifyFindsWormInGameCode(t *testing.T) {
+	game := t.TempDir()
+	mods := filepath.Join(game, "Mods")
+	os.MkdirAll(mods, 0o755)
+	cm := filepath.Join(game, "CompiledMods")
+	os.MkdirAll(cm, 0o755)
+	os.WriteFile(filepath.Join(cm, "Amy-Atomics-1.dll"), []byte("MZ ... get_NewCommunityFile WhereUserPublished"), 0o644)
+	os.WriteFile(filepath.Join(cm, "Clean-2.dll"), []byte("MZ ... nothing"), 0o644)
+	m := &Manager{ModsDir: mods, State: &State{Mods: map[string]*Installed{}}}
+	probs, err := m.Verify()
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, p := range probs {
+		if strings.HasPrefix(p.Issue, "WORM") {
+			n++
+			if !p.Bad || !strings.Contains(p.Folder, "Amy-Atomics-1.dll") {
+				t.Errorf("unexpected %+v", p)
+			}
+		}
+	}
+	if n != 1 {
+		t.Errorf("want 1 worm problem, got %+v", probs)
 	}
 }

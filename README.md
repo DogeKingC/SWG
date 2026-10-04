@@ -244,7 +244,9 @@ program, or by malware), Installed shows how many and offers **Restore
 them**: each is downloaded again from where it came from (the same
 GameBanana file or mirror copy) and goes through every safety check again,
 or **Stop tracking**. **Verify files** offers the same for mods whose files
-were changed or added to. Items found on the PC with no mod site behind them
+were changed or added to, and checks the game's own code folders
+(`CompiledMods`, `CompiledModAssemblies`, `People Playground_Data/Managed`) for
+DLLs the FPS++ worms left there, with what to do about each. Items found on the PC with no mod site behind them
 can't be downloaded again. If you didn't delete them yourself, check the PC
 for malware first: whatever deleted them can do it again.
 
@@ -302,7 +304,7 @@ automatically, within hours. Each layer here targets part of that:
 | GameBanana antivirus/analysis result not `clean` | refused | none |
 | GameBanana MD5 mismatch | refused | none |
 | Archive or file hash, Workshop ID or GameBanana ID on the [blocklist](blocklist/blocklist.json) | refused | none |
-| **CRITICAL** findings that match the worm: Workshop upload API, Steam friends/chat, Steam auth tickets, self-replication, deleting or rewriting game files, base64 + loading code, symlinks | refused | `--allow-critical` (command line only) |
+| **CRITICAL** findings that match the worm: Workshop upload API, Steam friends/chat, Steam auth tickets, self-replication, deleting or rewriting game files, base64 + loading code, symlinks, .NET deserialization tricks, Json.NET/UnityEvent gadgets, executables hidden in base64, writing to the game's code folders, turning off the game's "reject shady code", DLLs referencing the worms' Workshop republishing or theft ([how the FPS++ worms work](docs/fpsplusplus-analysis.md)) | refused | `--allow-critical` (command line only) |
 | Other **CRITICAL** scan findings | refused | **Accept the risk…** in the window (typed confirmation), or `--allow-critical` |
 | **HIGH** scan findings | refused | `--allow-high` |
 | Update adds findings the installed version did not have | held | `--allow-new-findings` |

@@ -637,7 +637,49 @@ func (m *Manager) Verify() ([]Problem, error) {
 		}
 		probs = append(probs, pr)
 	}
+	probs = append(probs, m.verifyGameCode()...)
 	return probs, nil
+}
+
+// verifyGameCode checks the game's own code folders for what the FPS++
+// worms left there: infected compiled mods in CompiledMods (where the game
+// keeps the mods it compiled) and DLLs dropped into People
+// Playground_Data/Managed. Deleting CompiledMods is safe (the game compiles
+// the mods again); a worm DLL in Managed means reinstalling the game.
+func (m *Manager) verifyGameCode() []Problem {
+	if m.ModsDir == "" {
+		return nil
+	}
+	game := filepath.Dir(m.ModsDir)
+	var probs []Problem
+	check := func(dir, label, fix string) {
+		ents, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, e := range ents {
+			if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".dll") {
+				continue
+			}
+			p := filepath.Join(dir, e.Name())
+			why := ""
+			if h, err := fileSHA(p); err == nil && m.Blocklist != nil {
+				if b, ok := m.Blocklist.sha[h]; ok {
+					why = "blocklisted: " + b.Reason
+				}
+			}
+			if why == "" {
+				why = scan.WormDLL(p)
+			}
+			if why != "" {
+				probs = append(probs, Problem{filepath.Join(label, e.Name()), "WORM: " + why + ". " + fix, true, ""})
+			}
+		}
+	}
+	check(filepath.Join(game, "CompiledMods"), "CompiledMods", "Delete the CompiledMods folder (the game rebuilds it), remove the mod it came from, and reset your Discord and Steam passwords.")
+	check(filepath.Join(game, "CompiledModAssemblies"), "CompiledModAssemblies", "Delete that folder (the game rebuilds it) and remove the mod it came from.")
+	check(filepath.Join(game, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (Steam: Properties → Installed Files → Verify integrity) and reset your Discord and Steam passwords.")
+	return probs
 }
 
 // PrintReport prints findings at MEDIUM and above, grouped by rule.
@@ -694,7 +736,8 @@ func RiskReason(reason string) bool { return strings.Contains(reason, "override:
 // delete game files. A finding like this is never accepted from the window.
 var wormRules = map[string]bool{
 	"steam-ugc": true, "steam-friends": true, "steam-auth": true, "self-replication": true,
-	"game-path-tamper": true, "mass-delete": true, "encoded-code": true, "symlink": true, "blocklisted": true,
+	"game-path-tamper": true, "mass-delete": true, "encoded-code": true, "symlink": true,
+	"deserialization": true, "json-gadget": true, "embedded-executable": true, "disables-protection": true, "worm-dll": true, "blocklisted": true,
 }
 
 func wormFindings(rep *scan.Report) []string {

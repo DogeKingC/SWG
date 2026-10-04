@@ -1,4 +1,69 @@
 {
   "notes": "Deny-only list of known-bad mods. Entries here can only block installs, never allow them. Add the SHA-256 of a malicious archive or .cs file, a Steam Workshop ID, or a GameBanana mod/file ID, with a short reason, via pull request.",
-  "entries": []
+  "entries": [
+    {
+      "sha256": "411e2b8c1f6498e72cf252756735a1b7d2455ddc2caa9c92fd7d951f82820186",
+      "reason": "FPS++ worm (Feb 2026): payload DLL that republishes your Workshop items, wipes saves, turns off RejectShadyCode"
+    },
+    {
+      "sha256": "fd327d716930d303c9f507b20a3305bf480fd9e1d7bd96a2d2b9e86d82a3f166",
+      "reason": "FPS++ worm (Feb 2026): loader script that loads FPSPlusPlus.dll through reflection"
+    },
+    {
+      "sha256": "49258afb5f6bd874bae2d7349a4bd0370015d1d460cd557be03e248452fe7c08",
+      "reason": "FPS+++++ worm (Sep 2026): infected compiled mod (Amy-Atomics-3454540789.dll), stage 1 loader"
+    },
+    {
+      "sha256": "9666555e39ba289f167864878ceba222a38781a58739eb2915d5ccf0e6c1a2fa",
+      "reason": "FPS+++++ worm (Sep 2026): infected compiled mod (Amy-Vanilla Tools-3468095876.dll), stage 1 loader"
+    },
+    {
+      "sha256": "d7b5055ae2c78b8e346f08ed93cf32e33f38dfd110f5fc4fc6494ade8cc2010a",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "3d58ee20e662a36ddfa9bc074a1c7bf10469313e1f62e2c29a9afecffd1cacc5",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "1206bb5c2e8a006f54ec640d9ee9de8150dee3446b8acadb6320fda6560b6f0b",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "02588c81f43a28f435dcf5ebadd19ed79492761467f062d02080894b6123d4f8",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "2d3772ca614f53d1bbb93e3aaf3d7052909a219fba9cbfc5009d498e0876d8c6",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "59ed7e5cc8ecfbee9499ad7edf22439770ccfa56f4a1dda447d36a00233f763e",
+      "reason": "FPS+++++ worm (Sep 2026): stage 2 loader"
+    },
+    {
+      "sha256": "c41bdb9ffd3c5f6e17d2382c1012d73703e035e3f1100245fdd4e08c8dc6eb5b",
+      "reason": "FPS+++++ worm (Sep 2026): stage 3 payload (steals the Discord token and Steam config, deletes personal files)"
+    },
+    {
+      "sha256": "0ba7fe0236771cd16a2edd9630fb3d85a607ed2bc373290cb687a48ef2beb946",
+      "reason": "FPS+++++ worm (Sep 2026): stage 3 payload (steals the Discord token and Steam config, deletes personal files)"
+    },
+    {
+      "sha256": "07bd8b5a641aabf870858518214b97ec350cd6847709f712bac87306640c219a",
+      "reason": "FPS+++++ worm (Sep 2026): stage 3 payload (steals the Discord token and Steam config, deletes personal files)"
+    },
+    {
+      "sha256": "94f198a705f818c24680f65c7bc0e0b7246b813e6fa43551edcc94dffb011852",
+      "reason": "FPS+++++ worm (Sep 2026): stage 3 payload (steals the Discord token and Steam config, deletes personal files)"
+    },
+    {
+      "sha256": "91a790b87b58cd334690bb614ae35d9c330f452ac206d3f5ad31c10d30685189",
+      "reason": "FPS+++++ worm (Sep 2026): assembled payload"
+    },
+    {
+      "workshop_id": "3603531358",
+      "reason": "FPS++ worm (Feb 2026): the worm's own Workshop upload"
+    }
+  ]
 }

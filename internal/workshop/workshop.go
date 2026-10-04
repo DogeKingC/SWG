@@ -175,7 +175,8 @@ type Result struct {
 
 // wormRules can't be published at all (see manager.wormRules).
 var wormRules = map[string]bool{"steam-ugc": true, "steam-friends": true, "steam-auth": true, "self-replication": true,
-	"game-path-tamper": true, "mass-delete": true, "encoded-code": true, "symlink": true}
+	"game-path-tamper": true, "mass-delete": true, "encoded-code": true, "symlink": true,
+	"deserialization": true, "json-gadget": true, "embedded-executable": true, "disables-protection": true, "worm-dll": true}
 
 // Fetch downloads a submission's file into dir and checks its SHA-256.
 func Fetch(client *http.Client, s *Submission, dir string) (string, string, int64, error) {
