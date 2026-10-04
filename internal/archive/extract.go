@@ -56,6 +56,11 @@ func (l *limiter) target(dest, name string) (string, error) {
 	if strings.ContainsAny(name, ":\x00") || strings.IndexFunc(name, func(r rune) bool { return r < 0x20 }) >= 0 {
 		return "", fmt.Errorf("archive entry %q has an invalid name", name)
 	}
+	for _, part := range strings.Split(name, "/") {
+		if part != "." && part != ".." && WindowsUnsafe(part) {
+			return "", fmt.Errorf("archive entry %q has a name Windows cannot store as written", name)
+		}
+	}
 	clean := filepath.Clean(filepath.FromSlash(name))
 	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.VolumeName(clean) != "" {
 		return "", fmt.Errorf("archive entry %q escapes the extraction folder", name)
@@ -65,6 +70,32 @@ func (l *limiter) target(dest, name string) (string, error) {
 		return "", fmt.Errorf("archive has more than %d entries", MaxFiles)
 	}
 	return filepath.Join(dest, clean), nil
+}
+
+// WindowsUnsafe reports whether a file or folder name means something else
+// on Windows than it says: a trailing dot or space is dropped (so the file
+// on disk is not the one that was checked, and two names can land on one
+// file), and device names (CON, NUL, COM1, ...) open a device instead of a
+// file, with any extension.
+func WindowsUnsafe(name string) bool {
+	if name == "" {
+		return false
+	}
+	if strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return true
+	}
+	stem := strings.ToUpper(strings.TrimRight(strings.SplitN(name, ".", 2)[0], " "))
+	switch stem {
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
+		return true
+	}
+	if len(stem) >= 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) {
+		switch stem[3:] {
+		case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "¹", "²", "³":
+			return true
+		}
+	}
+	return false
 }
 
 func (l *limiter) write(path string, r io.Reader) error {

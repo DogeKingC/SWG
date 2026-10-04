@@ -63,3 +63,19 @@ func TestHiddenStreamNameRejected(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// Names Windows rewrites (trailing dot or space) or opens as a device.
+func TestRejectsWindowsUnsafeNames(t *testing.T) {
+	for _, name := range []string{"Mod/script.cs.", "Mod/script.cs ", "Mod. /a.cs", "Mod/CON", "Mod/nul.cs", "aux/x.cs", "Mod/COM1.json", "Mod/lpt9.txt", "Mod/COM¹.cs"} {
+		src := writeZip(t, map[string]string{"Mod/mod.json": "{}", name: "x"})
+		if err := Extract(src, t.TempDir()); err == nil {
+			t.Errorf("%q extracted", name)
+		}
+	}
+	for _, ok := range []string{"Mod/console.cs", "Mod/Auxiliary.cs", "Mod/COM.cs", "Mod/COM10.cs", "Mod/.hidden"} {
+		src := writeZip(t, map[string]string{"Mod/mod.json": "{}", ok: "x"})
+		if err := Extract(src, t.TempDir()); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+}

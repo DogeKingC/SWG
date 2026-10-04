@@ -225,6 +225,9 @@ func folderName(root, key string) string {
 	if len(name) > 60 {
 		name = name[:60]
 	}
+	if name = strings.TrimRight(name, ". "); name == "" {
+		name = "mod"
+	}
 	tag := strings.ReplaceAll(key, ":", "-")
 	if len(tag) > 24 {
 		tag = tag[:24]
@@ -971,8 +974,8 @@ func contraptionRoots(dir string) (roots, names []string, err error) {
 	stage := filepath.Join(dir, ".ppgmods-contraptions")
 	for i, j := range jaaps {
 		base := strings.TrimSuffix(filepath.Base(j), filepath.Ext(j))
-		name := strings.TrimSpace(reUnsafeName.ReplaceAllString(base, "_"))
-		if name == "" || name == "." || name == ".." {
+		name := strings.TrimRight(strings.TrimSpace(reUnsafeName.ReplaceAllString(base, "_")), ". ")
+		if name == "" || archive.WindowsUnsafe(name) {
 			name = fmt.Sprintf("contraption %d", i+1)
 		}
 		unit := filepath.Join(stage, fmt.Sprint(i), name)
