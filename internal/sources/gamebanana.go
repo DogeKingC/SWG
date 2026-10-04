@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,8 @@ type GBMod struct {
 	Name      string `json:"_sName"`
 	URL       string `json:"_sProfileUrl"`
 	Modified  int64  `json:"_tsDateModified"`
+	Views     int    `json:"_nViewCount"`
+	Likes     int    `json:"_nLikeCount"`
 	Submitter struct {
 		Name string `json:"_sName"`
 	} `json:"_aSubmitter"`
@@ -80,6 +83,36 @@ func getJSON(u string, v any) error {
 
 // GBSearch searches People Playground mods by name. An empty query lists the
 // newest mods.
+// GBContraptions is the GameBanana category holding People Playground
+// contraptions.
+const GBContraptions = 12793
+
+// GBList lists People Playground mods with GameBanana's own sorting
+// (Generic_LatestModified, Generic_MostDownloaded, Generic_MostViewed,
+// Generic_Newest), optionally only one category and names containing query.
+func GBList(query string, category int, sort string, page, perPage int) ([]GBMod, error) {
+	q := url.Values{}
+	q.Set("_nPage", fmt.Sprint(page))
+	q.Set("_nPerpage", fmt.Sprint(perPage))
+	q.Set("_aFilters[Generic_Game]", fmt.Sprint(GBGameID))
+	if sort != "" {
+		q.Set("_sSort", sort)
+	}
+	if category != 0 {
+		q.Set("_aFilters[Generic_Category]", fmt.Sprint(category))
+	}
+	if s := strings.TrimSpace(query); s != "" {
+		q.Set("_aFilters[Generic_Name]", "contains,"+s)
+	}
+	var out struct {
+		Records []GBMod `json:"_aRecords"`
+	}
+	if err := getJSON(gbAPI+"/Mod/Index?"+q.Encode(), &out); err != nil {
+		return nil, err
+	}
+	return out.Records, nil
+}
+
 func GBSearch(query string, page int) ([]GBMod, error) {
 	var out struct {
 		Records []GBMod `json:"_aRecords"`

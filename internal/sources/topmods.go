@@ -30,6 +30,7 @@ type TMSummary struct {
 	Title  string    `json:"title"`
 	Image  string    `json:"image,omitempty"`
 	Posted time.Time `json:"posted,omitempty"`
+	Views  int       `json:"views,omitempty"` // all-time page views, from list pages
 }
 
 type TMItem struct {
@@ -57,6 +58,7 @@ var (
 	reTMSize     = reTMField("File size")
 	reTMSource   = regexp.MustCompile(`Source:\s*<span class="float-right"><a href="https://steamcommunity\.com/(?:sharedfiles|workshop)/filedetails/\?id=(\d+)"`)
 	reTMPosted   = regexp.MustCompile(`<time[^>]*datetime="([^"]+)"`)
+	reTMHits     = regexp.MustCompile(`bi_hits"[^>]*title="([^"]*)"`)
 	reTMImage    = regexp.MustCompile(`<img src="(/upload/[^"]+-photo-big\.[a-z]+)"`)
 	reTMDesc     = regexp.MustCompile(`(?s)<section id="content-tab1" class="value">(.*?)</section>`)
 	reTMDownload = regexp.MustCompile(`href="(https://(?:modsfire\.com|modsbase\.com)/[^"]+)"`)
@@ -116,6 +118,12 @@ func tmBlocks(h, marker string) []TMSummary {
 			sm.Image = tmBase + img
 		}
 		sm.Posted, _ = time.Parse(time.RFC3339, first(reTMPosted, b))
+		sm.Views, _ = strconv.Atoi(strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, first(reTMHits, b)))
 		if sm.ID != "" && sm.Title != "" {
 			out = append(out, sm)
 		}
@@ -126,6 +134,20 @@ func tmBlocks(h, marker string) []TMSummary {
 // TMLatest lists the newest People Playground items.
 func TMLatest(page int) ([]TMSummary, error) {
 	u := tmBase + "/mods/people-playground"
+	if page > 1 {
+		u += fmt.Sprintf("?page=%d", page)
+	}
+	h, err := tmGet(u)
+	if err != nil {
+		return nil, err
+	}
+	return tmBlocks(h, `<div class="content_list_item mods_list_item">`), nil
+}
+
+// TMTop lists People Playground items by downloads, most first (top-mods
+// does not publish the counts; list pages show views).
+func TMTop(page int) ([]TMSummary, error) {
+	u := tmBase + "/mods-downloaded/people-playground"
 	if page > 1 {
 		u += fmt.Sprintf("?page=%d", page)
 	}

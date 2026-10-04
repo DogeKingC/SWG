@@ -72,3 +72,18 @@ func TestParseTMList(t *testing.T) {
 		t.Fatalf("%+v", got[0])
 	}
 }
+
+func TestTMListViews(t *testing.T) {
+	b, err := os.ReadFile("testdata/topmods_list.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := tmBlocks(string(b), `<div class="content_list_item mods_list_item">`)
+	views := 0
+	for _, s := range list {
+		views += s.Views
+	}
+	if len(list) == 0 || views == 0 {
+		t.Fatalf("no views parsed from %d items", len(list))
+	}
+}

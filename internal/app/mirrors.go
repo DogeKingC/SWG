@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/scan"
 	"github.com/DogeKingC/SWG/internal/sources"
 )
@@ -382,6 +383,9 @@ func useIndexCache() {
 		if d, err := manager.ConfigDir(); err == nil {
 			sources.IndexCacheDir = filepath.Join(d, "cache")
 		}
+	}
+	if popularity.CacheDir == "" {
+		popularity.CacheDir = sources.IndexCacheDir
 	}
 }
 

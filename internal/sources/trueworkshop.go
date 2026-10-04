@@ -88,13 +88,16 @@ func twGet(u string, v any) (int, error) {
 	return total, json.NewDecoder(resp.Body).Decode(v)
 }
 
-// TWSearch lists True Workshop mods and contraptions (sort: popular, likes
-// or newest).
-func TWSearch(query, sort string, offset, limit int) ([]TWItem, int, error) {
+// TWSearch lists True Workshop items (sort: popular, likes or newest; kind:
+// "mod", "contraption" or "" for both).
+func TWSearch(query, sort, kind string, offset, limit int) ([]TWItem, int, error) {
 	if sort == "" {
 		sort = "popular"
 	}
 	q := url.Values{"sort": {sort}, "limit": {strconv.Itoa(limit)}, "offset": {strconv.Itoa(offset)}}
+	if kind != "" {
+		q.Set("type", kind)
+	}
 	if s := strings.TrimSpace(query); s != "" {
 		q.Set("search", s)
 	}

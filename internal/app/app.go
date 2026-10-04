@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/DogeKingC/SWG/internal/game"
 	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/DogeKingC/SWG/internal/popularity"
 	"github.com/DogeKingC/SWG/internal/sources"
 )
 
@@ -113,6 +115,7 @@ type SearchResult struct {
 	Downloads   int      `json:"download_count,omitempty"`
 	Kind        string   `json:"kind,omitempty"`    // "contraption" when known
 	Mirrors     []string `json:"mirrors,omitempty"` // Workshop: "top-mods 19.09.2026", ...
+	Trend       string   `json:"trend,omitempty"`   // popularity sort: "+1,204 views this week"
 
 	newest time.Time
 }
@@ -123,19 +126,49 @@ type SearchResults struct {
 	Workshop   []SearchResult `json:"workshop"`     // deleted Steam Workshop items, merged across mirrors
 	Errors     []string       `json:"errors,omitempty"`
 	MergedTW   []string       `json:"merged_tw,omitempty"` // True Workshop refs shown inside a Workshop card
+	Notes      []string       `json:"notes,omitempty"`     // how the results were chosen, when not obvious
+}
+
+// SearchOpts chooses what a search lists and in which order.
+type SearchOpts struct {
+	Kind   string // "mod" (default) or "contraption"
+	Sort   string // "relevance" (default), "updated" or "popular"
+	Period string // with "popular": "day", "week", "month", or "" for all time
+}
+
+func (o SearchOpts) normalized(q string) SearchOpts {
+	if o.Kind != manager.KindContraption {
+		o.Kind = manager.KindMod
+	}
+	switch o.Sort {
+	case "updated", "popular":
+	default:
+		o.Sort = "relevance"
+		if strings.TrimSpace(q) == "" {
+			o.Sort = "updated" // nothing to be relevant to
+		}
+	}
+	if _, ok := popularity.Periods[o.Period]; !ok || o.Sort != "popular" {
+		o.Period = ""
+	}
+	return o
 }
 
 // Search queries GameBanana and both Workshop mirrors. Skymods and top-mods
 // results for the same Workshop item are merged into one entry.
 func Search(q string, page int) SearchResults {
-	return SearchParts(q, page, map[string]bool{"gb": true, "tw": true, "ws": true})
+	return SearchParts(q, page, map[string]bool{"gb": true, "tw": true, "ws": true}, SearchOpts{})
 }
 
 // SearchParts runs only some sources (gb, tw, ws = Workshop mirrors), so a
 // window can show each as soon as it answers instead of waiting for the
 // slowest site.
-func SearchParts(q string, page int, parts map[string]bool) SearchResults {
+func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) SearchResults {
 	useIndexCache()
+	opt = opt.normalized(q)
+	if opt.Period != "" {
+		return searchTrending(q, page, parts, opt)
+	}
 	var r SearchResults
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -148,11 +181,11 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 		if !parts["tw"] && !parts["ws"] {
 			return
 		}
-		sort := "popular"
-		if strings.TrimSpace(q) == "" {
+		sort := "popular" // True Workshop has no relevance order; its search filters
+		if opt.Sort == "updated" {
 			sort = "newest"
 		}
-		items, _, err := sources.TWSearch(q, sort, (page-1)*24, 24)
+		items, _, err := sources.TWSearch(q, sort, opt.Kind, (page-1)*24, 24)
 		if err != nil {
 			addErr("True Workshop: " + err.Error())
 			return
@@ -166,22 +199,43 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 		if !parts["gb"] {
 			return
 		}
-		gb, err := sources.GBSearch(q, page)
+		var gb []sources.GBMod
+		var err error
+		cat := 0
+		if opt.Kind == manager.KindContraption {
+			cat = sources.GBContraptions
+		}
+		switch {
+		case opt.Sort == "relevance" && cat == 0:
+			gb, err = sources.GBSearch(q, page)
+		case opt.Sort == "relevance":
+			gb, err = sources.GBList(q, cat, "Generic_MostViewed", page, 20)
+		case opt.Sort == "popular":
+			gb, err = sources.GBList(q, cat, "Generic_MostDownloaded", page, 20)
+		default:
+			gb, err = sources.GBList(q, cat, "Generic_LatestModified", page, 20)
+		}
 		if err != nil {
 			addErr("GameBanana: " + err.Error())
 			return
 		}
 		for _, m := range gb {
+			if (m.Category.Name == "Contraptions") != (opt.Kind == manager.KindContraption) {
+				continue
+			}
 			r.GameBanana = append(r.GameBanana, SearchResult{
 				Ref: fmt.Sprintf("gb:%d", m.ID), Source: "GameBanana", Name: m.Name, Author: m.Submitter.Name,
-				Category: m.Category.Name, Date: time.Unix(m.Modified, 0).Format("2006-01-02"), URL: m.URL, Image: m.Thumb(),
+				Category: m.Category.Name, Date: time.Unix(m.Modified, 0).Format("2006-01-02"), URL: m.URL, Image: m.Thumb(), Kind: opt.Kind,
 			})
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		if !parts["ws"] {
+		if !parts["ws"] || opt.Kind == manager.KindContraption {
 			return
+		}
+		if opt.Sort == "popular" && strings.TrimSpace(q) == "" {
+			return // Skymods has no popularity order; top-mods lists by downloads
 		}
 		var err error
 		if strings.TrimSpace(q) == "" {
@@ -195,12 +249,14 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 	}()
 	go func() {
 		defer wg.Done()
-		if !parts["ws"] {
+		if !parts["ws"] || opt.Kind == manager.KindContraption {
 			return
 		}
 		var list []sources.TMSummary
 		var err error
-		if strings.TrimSpace(q) == "" {
+		if strings.TrimSpace(q) == "" && opt.Sort == "popular" {
+			list, err = sources.TMTop(page)
+		} else if strings.TrimSpace(q) == "" {
 			list, err = sources.TMLatest(page)
 		} else if list, err = sources.TMFind(q, page*12); err == nil {
 			if len(list) > (page-1)*12 {
@@ -294,6 +350,12 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 	if !parts["tw"] {
 		r.TrueWS = nil
 	}
+	if parts["ws"] && opt.Kind == manager.KindContraption {
+		r.Notes = append(r.Notes, "The Workshop mirrors (Skymods, top-mods) only carry mods, not contraptions.")
+	}
+	if parts["ws"] && opt.Sort == "popular" && strings.TrimSpace(q) != "" && opt.Kind != manager.KindContraption {
+		r.Notes = append(r.Notes, "Workshop mirror results stay in search order: the mirrors don't publish download counts for searches.")
+	}
 	for _, ws := range order {
 		e := byWS[ws]
 		if e.Author == "" {
@@ -301,7 +363,76 @@ func SearchParts(q string, page int, parts map[string]bool) SearchResults {
 		}
 		r.Workshop = append(r.Workshop, *e)
 	}
+	if opt.Sort == "updated" {
+		sort.SliceStable(r.Workshop, func(i, j int) bool { return r.Workshop[i].newest.After(r.Workshop[j].newest) })
+	}
 	return r
+}
+
+// searchTrending ranks by what gained the most views or downloads in the
+// period, from the daily snapshots published by the popularity Action.
+func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) SearchResults {
+	var r SearchResults
+	ix, err := popularity.Fetch()
+	if err != nil {
+		r.Errors = append(r.Errors, "Popularity data: "+err.Error()+"; showing all-time popularity instead")
+		opt.Period = ""
+		return SearchParts(q, page, parts, opt)
+	}
+	label := map[string]string{"day": "today", "week": "this week", "month": "this month"}[opt.Period]
+	if days := ix.Days(); days < popularity.Periods[opt.Period] {
+		r.Notes = append(r.Notes, fmt.Sprintf("Popularity history starts %s (%d day(s) so far), so \"%s\" covers less than the full period for now.", ix.Since, days, label))
+	}
+	conv := func(it popularity.Item) SearchResult {
+		res := SearchResult{Ref: it.Ref, Name: it.Name, Author: it.Author, Category: it.Category, Date: it.Date, URL: it.URL,
+			Image: it.Image, Reviewed: it.Reviewed, Kind: it.Kind}
+		if g := it.Gain(opt.Period); g > 0 {
+			res.Trend = fmt.Sprintf("+%s %s %s", thousands(g), ix.Metric[it.Src], label)
+		} else {
+			res.Trend = fmt.Sprintf("%s %s all time", thousands(it.N), ix.Metric[it.Src])
+		}
+		switch it.Src {
+		case "gb":
+			res.Source = "GameBanana"
+		case "tw":
+			res.Source = "True Workshop"
+		default:
+			res.Source = "Steam Workshop"
+			res.Mirrors = []string{"top-mods " + it.Date}
+		}
+		return res
+	}
+	const per = 24
+	for _, src := range []string{"gb", "tw", "tm"} {
+		part := map[string]string{"gb": "gb", "tw": "tw", "tm": "ws"}[src]
+		if !parts[part] {
+			continue
+		}
+		for _, it := range ix.Query(src, opt.Kind, q, opt.Period, (page-1)*per, per) {
+			res := conv(it)
+			switch src {
+			case "gb":
+				r.GameBanana = append(r.GameBanana, res)
+			case "tw":
+				r.TrueWS = append(r.TrueWS, res)
+			default:
+				rememberTitle(strings.TrimPrefix(it.Ref, "sky:"), it.Name, it.URL)
+				r.Workshop = append(r.Workshop, res)
+			}
+		}
+	}
+	if parts["ws"] && opt.Kind == manager.KindContraption {
+		r.Notes = append(r.Notes, "The Workshop mirrors (Skymods, top-mods) only carry mods, not contraptions.")
+	}
+	return r
+}
+
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
 }
 
 // ---- install ----
@@ -623,7 +754,11 @@ func (a *App) Import(m *manager.Manager, p string) error {
 	if err != nil {
 		return err
 	}
-	return m.Install(c)
+	if err := m.Install(c); err != nil {
+		return err
+	}
+	installedThumb(m, c.Key)
+	return nil
 }
 
 // candidate describes an archive or folder on disk as an install candidate.

@@ -1,0 +1,50 @@
+name: popularity
+
+# Once a day, record GameBanana views, True Workshop downloads and top-mods
+# views, and publish what gained the most in the last day, week and month
+# (popularity.json on the popularity-data branch, read by ppgmods). No
+# database and no secrets: the data is public and lives in this repository.
+# Snapshots older than 31 days are deleted and the branch is rewritten as a
+# single commit each run, so it never grows.
+on:
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: popularity
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fetch previous snapshots
+        run: |
+          if git ls-remote --exit-code --heads origin popularity-data >/dev/null; then
+            git fetch --depth 1 origin popularity-data
+            git worktree add data FETCH_HEAD
+          else
+            mkdir data
+          fi
+      - name: Record today and rank
+        run: go run ./cmd/popindex -dir data
+      - name: Publish
+        run: |
+          out=$(mktemp -d)
+          cp -r data/snapshots data/popularity.json data/topmods.json "$out"/
+          cd "$out"
+          git init -q -b popularity-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Popularity snapshot $(date -u +%F)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" popularity-data:popularity-data

@@ -123,3 +123,22 @@ func TestKnownLibrary(t *testing.T) {
 		t.Fatalf("known dll: %+v", r.Findings)
 	}
 }
+
+func TestGameLibraryCopy(t *testing.T) {
+	game, mod := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(game, "UnityEngine.UI.dll"), []byte("MZ unity ui"), 0o644)
+	os.WriteFile(filepath.Join(mod, "UnityEngine.UI.dll"), []byte("MZ unity ui"), 0o644)
+	os.WriteFile(filepath.Join(mod, "UnityEngine.dll"), []byte("MZ tampered"), 0o644)
+	r, err := DirWith(mod, Options{GameManaged: game})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(r, "game-library") || !has(r, "executable-file") || r.Max() != Critical {
+		t.Fatalf("got %+v", r.Findings)
+	}
+	for _, f := range r.Findings {
+		if f.Rule == "executable-file" && f.File != "UnityEngine.dll" {
+			t.Fatalf("identical copy flagged: %+v", f)
+		}
+	}
+}

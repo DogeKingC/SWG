@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -43,6 +44,40 @@ func knownLibrary(p string) (knownLib, bool) {
 	}
 	l, ok := knownLibs[hex.EncodeToString(h.Sum(nil))]
 	return l, ok
+}
+
+// gameCopy reports whether the DLL at p is byte-identical to the file of
+// the same name in the game's Managed folder (Unity and game assemblies that
+// some mods ship by accident).
+func gameCopy(p, managed string) bool {
+	if managed == "" {
+		return false
+	}
+	own := filepath.Join(managed, filepath.Base(p))
+	a, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+	b, err := os.Stat(own)
+	if err != nil || a.Size() != b.Size() {
+		return false
+	}
+	ha, errA := fileSHA(p)
+	hb, errB := fileSHA(own)
+	return errA == nil && errB == nil && ha == hb
+}
+
+func fileSHA(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Harmony and Cecil exist to rewrite other code (Harmony patches methods

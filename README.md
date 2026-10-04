@@ -70,7 +70,7 @@ The window covers everything:
   deleted the Workshop preview images of the removed mods, so ppgmods shows
   each mod's own thumbnail from inside its archive. For small mods it fetches
   these in the background (this can be turned off in Settings).
-- **Installed**: check for and apply safe updates, verify files, rollback,
+- **Installed** (switch between **Mods** and **Contraptions**): check for and apply safe updates, verify files, rollback,
   pin, remove.
 - **Recover Workshop**: back up the Steam cache, restore the safe copies, or
   import a downloaded archive.
@@ -80,8 +80,11 @@ The window covers everything:
 
 When a mod is refused, the window shows the scanner's findings. HIGH findings
 and the cooldown can be overridden for that one install with
-**Install anyway**. CRITICAL findings and the worm cutoff can't be overridden
-from the window.
+**Install anyway**. CRITICAL findings need **Accept the risk…**: you type
+`I accept the risk`, one mod at a time, and the mod is marked "risk accepted"
+in Installed (its updates are held until you accept again). CRITICAL findings
+that match what the worm did, and the worm cutoff, can't be overridden from
+the window (see [Safety model](#safety-model)).
 
 ### Always the latest version
 
@@ -146,6 +149,33 @@ contain no code. A contraption you saved yourself under the same name is never
 overwritten. The Installed view has an **Open Contraptions folder** button,
 and verify, rollback and remove work for contraptions the same way as for mods.
 
+### Browsing: mods or contraptions, and sort order
+
+**Mods / Contraptions** switches what Browse lists. Contraptions come from
+GameBanana's Contraptions category and True Workshop; the Workshop mirrors
+only carry mods. **Sort by**:
+
+- **Relevance**: each site's own search order (True Workshop has none, so its
+  results are by downloads).
+- **Recently updated**: newest first.
+- **Popularity** over **1 day**, **1 week**, **1 month** or **all time**.
+
+All-time popularity uses each site's own counters. The sites don't say what
+was popular *this week*, and ppgmods has no server or database, so a
+scheduled GitHub Action ([popularity.yml](.github/workflows/popularity.yml))
+records the public counters once a day: GameBanana views, True Workshop
+downloads and top-mods views (the top 1,000 by downloads plus the 200
+newest). What gained the most since 1, 7 or 30 days ago is published as
+`popularity.json` on the `popularity-data` branch, which ppgmods downloads
+(at most once an hour). There are no keys or credentials anywhere: the data
+is public and lives in this repository. Snapshots older than 31 days are
+deleted and the branch is rewritten as one commit each run, so it stays
+small (about 3 MB at most). Until a month of history exists, "1 month"
+covers what there is; the window says so.
+
+The counters measure different things on each site (views vs downloads), so
+each site's results are ranked separately and shown side by side.
+
 ### Finding mods, and duplicates across sites
 
 - **top-mods** is searched through its sitemap (every People Playground item,
@@ -166,7 +196,8 @@ True Workshop v3.2 (uploaded later), top-mods v1.0. It installs the highest
 version from before the worm cutoff, skipping copies the scanner flags.
 Before a copy is downloaded, the version in its title ("V:2.8", "v3.1") is
 shown instead; a copy whose file host says the file is gone is marked
-"file gone" and skipped.
+"file gone" and skipped. Copies that turn out to have no `mod.json` (not a
+People Playground mod) or no author anywhere are never offered or installed.
 
 A copy whose `mod.json` names a different Workshop item (`CreatorUGCIdentity`)
 is ignored. The details view lists every copy with its date, `mod.json`
@@ -209,7 +240,8 @@ automatically, within hours. Each layer here targets part of that:
 | GameBanana antivirus/analysis result not `clean` | refused | none |
 | GameBanana MD5 mismatch | refused | none |
 | Archive or file hash, Workshop ID or GameBanana ID on the [blocklist](blocklist/blocklist.json) | refused | none |
-| **CRITICAL** scan findings | refused | `--allow-critical` |
+| **CRITICAL** findings that match the worm: Workshop upload API, Steam friends/chat, Steam auth tickets, self-replication, deleting or rewriting game files, base64 + loading code, symlinks | refused | `--allow-critical` (command line only) |
+| Other **CRITICAL** scan findings | refused | **Accept the risk…** in the window (typed confirmation), or `--allow-critical` |
 | **HIGH** scan findings | refused | `--allow-high` |
 | Update adds findings the installed version did not have | held | `--allow-new-findings` |
 | Unsafe archives: path traversal, symlinks, >2 GiB unpacked, >20,000 entries | refused | none |
@@ -224,17 +256,28 @@ fine, anything else must be explained by a rule or is HIGH.
 - **CRITICAL**:
   - starting processes, network access, native interop (`DllImport`, `extern`), the Windows registry
   - the Steam Workshop upload API (how the worm spread), Steam friends/chat (how it spammed), Steam auth tickets
-  - reflection on a sensitive name (`"Assembly"`, `"Process"`, `"SteamUGC"`…), including names built from fragments
+  - reflection on a sensitive name (`"Assembly"`, `"System.Reflection.Assembly"`, `"Process"`, `"SteamUGC"`…), including names built from fragments or assembly-qualified (`"…, mscorlib"`)
   - combinations the worm used: listing folders + deleting files; writing `.cs`/`mod.json` while listing folders or naming game paths (self-replication); deleting under game/Steam paths; base64 + loading code at runtime
-  - shipped executables (`.dll`, `.exe` and similar) or binaries disguised with another extension
+  - shipped executables (`.exe` and similar), unknown `.dll`s, or binaries disguised with another extension
   - `mod.json` script paths that point outside the mod
-- **HIGH**: deleting files, any other Steamworks use, loading assemblies or code at runtime, `unsafe` code, namespaces outside the allowlist, reading user folders or environment variables, strings naming a shell or download tool (`cmd.exe`, `powershell`, `curl`…), writing `.cs`/`mod.json` files or under game paths, character-code or split-string obfuscation, nested archives.
-- **MEDIUM** (shown, not blocking): writing or listing files, reflection by name, base64, long encoded strings (usually embedded images), opening URLs.
+- **HIGH**: deleting files, reaching `System.IO.File`/`Directory` through reflection (gets around the game's block on file access), bundled Harmony or Mono.Cecil (genuine builds, but they exist to rewrite code), any other Steamworks use, loading assemblies or code at runtime, `unsafe` code, namespaces outside the allowlist, reading user folders or environment variables, strings naming a shell or download tool (`cmd.exe`, `powershell`, `curl`…), writing `.cs`/`mod.json` files or under game paths, character-code or split-string obfuscation, nested archives.
+- **MEDIUM** (shown, not blocking): bundled Newtonsoft.Json, writing or listing files, reflection by name, base64, long encoded strings (usually embedded images), opening URLs.
+
+Bundled DLLs are identified, not just counted:
+
+- byte-identical to an official NuGet build of Mono.Cecil, Harmony or
+  Newtonsoft.Json (673 known builds, generated by
+  [knownlibs/gen.go](internal/scan/knownlibs/gen.go)): named, HIGH or MEDIUM;
+- byte-identical to the same file in your game's
+  `People Playground_Data/Managed` folder (Unity and game assemblies some
+  mods ship by accident): INFO;
+- anything else stays CRITICAL: its code can't be read by a source scanner.
 
 Measured on the 116 maintainer-reviewed True Workshop mods (500 `.cs` files,
-16 MB): the old regex scanner flagged 25 of them in 20.6 s; this one flags 8
-in 3.3 s, each doing something worth reading (native calls, loading
-assemblies, deleting files after listing folders, writing into game paths).
+16 MB, 119 bundled DLLs): 13 are CRITICAL, mostly for unknown DLLs, and 7
+HIGH. Four of the HIGH ones reach `System.IO.Directory` through reflection to
+get around the game's file-access block. The previous regex scanner needed
+20.6 s for the C# in this set; the token-based one needs 3.3 s.
 Scanning is not the slow part of an install: downloading from modsbase takes
 about 7 s per file and a Skymods page 12 to 17 s.
 
@@ -276,6 +319,9 @@ The config folder holds `state.json` (installed mods and their file hashes),
 - Windows: `%AppData%\ppgmods`
 - Linux: `~/.config/ppgmods`
 - Override with the `PPGMODS_HOME` environment variable.
+
+`cache/` in it keeps downloads, thumbnails, the top-mods sitemap and the
+last `popularity.json` (used offline).
 
 Installed mods go into `<game>/Mods/<Mod Name> [gb-<id>]` or
 `[sky-<workshop id>]`.

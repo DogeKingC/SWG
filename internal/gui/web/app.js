@@ -152,11 +152,29 @@ async function refreshState() {
   if (!lastJobId) setJob(state.job);
 }
 
+// The Installed view shows either mods or contraptions.
+let installedKind = "mod";
+try { installedKind = localStorage.getItem("installedKind") || "mod"; } catch { /* default */ }
+$$(".seg-btn[data-ikind]").forEach((b) => (b.onclick = () => {
+  installedKind = b.dataset.ikind;
+  try { localStorage.setItem("installedKind", installedKind); } catch { /* not saved */ }
+  renderInstalled();
+}));
+
 function renderInstalled() {
   const list = $("#installedList");
-  const mods = state.installed || [];
+  const all = state.installed || [];
+  const isC = (m) => m.item_kind === "contraption";
+  $("#countMods").textContent = all.filter((m) => !isC(m)).length;
+  $("#countContraptions").textContent = all.filter(isC).length;
+  $$(".seg-btn[data-ikind]").forEach((x) => x.classList.toggle("active", x.dataset.ikind === installedKind));
+  const mods = all.filter((m) => isC(m) === (installedKind === "contraption"));
+  $("#openMods").hidden = installedKind === "contraption";
+  $("#openContraptions").hidden = installedKind !== "contraption";
   if (!mods.length) {
-    list.replaceChildren(el("div", { class: "empty" }, "Nothing installed yet. Find mods under Browse mods, or recover them from your Workshop cache."));
+    list.replaceChildren(el("div", { class: "empty" }, installedKind === "contraption"
+      ? "No contraptions installed yet. Switch Browse to Contraptions to find some."
+      : "No mods installed yet. Find mods under Browse, or recover them from your Workshop cache."));
     return;
   }
   list.replaceChildren(...mods.map((m) => {
@@ -171,7 +189,6 @@ function renderInstalled() {
       thumbImg({ ref: m.key, name: m.name, image: "" }, "item-thumb"),
       el("div", { class: "item-main" },
         el("div", { class: "item-name" }, m.name, " ", el("span", { class: kindBadge }, m.kind),
-          m.item_kind === "contraption" ? el("span", { class: "badge badge-kind" }, " contraption") : null,
           m.adopted ? el("span", { class: "badge", title: "Installed without this app; found in your game folder" }, "found on this PC") : null,
           m.scan_max === "HIGH" || m.scan_max === "CRITICAL" ? el("span", { class: "badge badge-bad", title: "The scanner flagged this mod; run Verify for details" }, "scanner: " + m.scan_max) : null,
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
@@ -291,7 +308,7 @@ function jobDone(j) {
   }
   $("#dlgExtra").className = "btn btn-danger";
   if (j.retry && j.risk) {
-    const name = (j.retry.refs || [j.retry.path || "this mod"])[0];
+    const name = ((j.retry.refs && j.retry.refs[0]) || (j.retry.path || "this mod").split(/[\\/]/).pop());
     extra = { label: "Accept the risk…", run: () => riskDialog(name, j.findings, (confirm) => run({ ...j.retry, confirm }, "Installing (risk accepted)")) };
   } else if (j.retry) {
     body.push(el("div", { class: "warnbox" }, "Only continue if you have read the findings above and trust this mod's author. Mods run with full access to your PC."));
@@ -338,11 +355,27 @@ let page = 1;
 let lastQuery = "";
 const selected = new Map();
 
-$$(".seg-btn").forEach((b) => (b.onclick = () => {
+$$(".seg-btn[data-src]").forEach((b) => (b.onclick = () => {
   src = b.dataset.src;
-  $$(".seg-btn").forEach((x) => x.classList.toggle("active", x === b));
+  $$(".seg-btn[data-src]").forEach((x) => x.classList.toggle("active", x === b));
   search(lastQuery, 1);
 }));
+
+// Type, sort order and popularity period; remembered in this browser.
+const browse = { kind: "mod", sort: "relevance", period: "week" };
+try { Object.assign(browse, JSON.parse(localStorage.getItem("browse") || "{}")); } catch { /* defaults */ }
+function syncBrowse() {
+  $$(".kind-btn").forEach((x) => x.classList.toggle("active", x.dataset.kind === browse.kind));
+  $("#sortSel").value = browse.sort;
+  $("#periodSel").value = browse.period;
+  $("#periodLbl").hidden = browse.sort !== "popular";
+  $("#q").placeholder = browse.kind === "contraption" ? "Search contraptions, e.g. tank, house, bridge" : "Search mods, e.g. melee, tank, zombie";
+  try { localStorage.setItem("browse", JSON.stringify(browse)); } catch { /* not saved */ }
+}
+$$(".kind-btn").forEach((b) => (b.onclick = () => { browse.kind = b.dataset.kind; syncBrowse(); search(lastQuery, 1); }));
+$("#sortSel").onchange = () => { browse.sort = $("#sortSel").value; syncBrowse(); search(lastQuery, 1); };
+$("#periodSel").onchange = () => { browse.period = $("#periodSel").value; syncBrowse(); search(lastQuery, 1); };
+syncBrowse();
 $("#searchForm").onsubmit = (e) => { e.preventDefault(); search($("#q").value.trim(), 1); };
 $("#moreBtn").onclick = () => search(lastQuery, page + 1);
 $("#linkForm").onsubmit = (e) => {
@@ -370,6 +403,7 @@ async function search(q, p) {
   const lists = { gb: [], tw: [], ws: [] };
   const merged = new Set();
   const errors = [];
+  const notes = new Set();
   const start = p === 1 ? 0 : grid.querySelectorAll(".mod").length;
   if (p === 1) grid.replaceChildren();
   const status = el("div", { class: "empty search-status" });
@@ -385,13 +419,17 @@ async function search(q, p) {
     status.hidden = !status.textContent;
     errs.hidden = !errors.length;
     errs.textContent = errors.join(" · ");
+    $("#searchNotes").hidden = !notes.size;
+    $("#searchNotes").textContent = [...notes].join(" ");
     $("#moreBtn").hidden = pending.size > 0 || !shown.length;
     markInstalledCards();
   };
   render();
   await Promise.all(parts.map(async (part) => {
     try {
-      const r = await api("/api/search?q=" + encodeURIComponent(q) + "&page=" + p + "&part=" + part);
+      const r = await api("/api/search?q=" + encodeURIComponent(q) + "&page=" + p + "&part=" + part +
+        "&kind=" + browse.kind + "&sort=" + browse.sort + "&period=" + (browse.sort === "popular" ? browse.period : ""));
+      (r.notes || []).forEach((n) => notes.add(n));
       if (part === "gb") lists.gb = r.gamebanana || [];
       if (part === "tw") lists.tw = r.trueworkshop || [];
       if (part === "ws") { lists.ws = r.workshop || []; (r.merged_tw || []).forEach((x) => merged.add(x)); }
@@ -510,11 +548,12 @@ function card(m) {
     el("div", { class: "mod-body" },
       el("div", { class: "mod-name" }, m.name),
       el("div", { class: "mod-meta" }, (m.author ? "by " + m.author + " · " : "") + (isGB ? "updated " : m.ref.startsWith("tw:") ? "uploaded " : "version ") + m.date + (m.size ? " · " + m.size : "")),
+      m.trend ? el("div", { class: "mod-trend" }, m.trend) : null,
       !isGB && m.mirrors && m.mirrors.length ? el("div", { class: "mod-mirrors", title: "Mirror copies found in this search" }, m.mirrors.join(" · ")) : null,
       el("div", { class: "mod-foot" },
         ...sourceBadges(m),
         m.kind === "contraption" ? el("span", { class: "badge badge-kind" }, "contraption") : null,
-        m.category ? el("span", { class: "badge" }, m.category) : null,
+        m.category && m.category !== "Contraptions" ? el("span", { class: "badge" }, m.category) : null,
         m.after_cutoff ? el("span", { class: "badge badge-bad", title: "Revised after the worm started; refused" }, "after cutoff") : null,
         installed ? el("span", { class: "badge badge-ok" }, "installed") : null,
         installed || m.after_cutoff ? null : el("button", {

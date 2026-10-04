@@ -441,7 +441,8 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if p := r.URL.Query().Get("part"); p != "" {
 		parts = map[string]bool{p: true}
 	}
-	writeJSON(w, app.SearchParts(r.URL.Query().Get("q"), page, parts))
+	qs := r.URL.Query()
+	writeJSON(w, app.SearchParts(qs.Get("q"), page, parts, app.SearchOpts{Kind: qs.Get("kind"), Sort: qs.Get("sort"), Period: qs.Get("period")}))
 }
 
 func (s *server) handleJob(w http.ResponseWriter, r *http.Request) {

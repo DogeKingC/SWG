@@ -113,8 +113,18 @@ func PruneBuildOutput(root string) ([]string, error) {
 	return removed, err
 }
 
+// Options adds what the scanner can compare against.
+type Options struct {
+	// GameManaged is the game's People_Playground_Data/Managed folder: a
+	// bundled DLL identical to the game's own copy is not a payload.
+	GameManaged string
+}
+
 // Dir scans a mod folder (or a folder holding several mods).
-func Dir(root string) (*Report, error) {
+func Dir(root string) (*Report, error) { return DirWith(root, Options{}) }
+
+// DirWith is Dir with options.
+func DirWith(root string, opt Options) (*Report, error) {
 	r := &Report{Root: root}
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -135,6 +145,8 @@ func Dir(root string) (*Report, error) {
 		case ext == ".dll":
 			if lib, ok := knownLibrary(p); ok {
 				r.add(lib.severity(), "known-library", rel, 0, lib.describe())
+			} else if gameCopy(p, opt.GameManaged) {
+				r.add(Info, "game-library", rel, 0, "identical to the game's own "+d.Name())
 			} else {
 				r.add(Critical, "executable-file", rel, 0, "unknown compiled library (.dll): its code cannot be checked")
 			}

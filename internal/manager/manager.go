@@ -114,7 +114,7 @@ func (m *Manager) Stage(c *Candidate) (string, *scan.Report, error) {
 	} else if len(removed) > 0 {
 		m.logf("  stripped build output: %s", strings.Join(removed, ", "))
 	}
-	rep, err := scan.Dir(dir)
+	rep, err := scan.DirWith(dir, m.scanOpts())
 	if err != nil {
 		os.RemoveAll(dir)
 		return "", nil, err
@@ -327,7 +327,12 @@ func (m *Manager) Install(c *Candidate) error {
 		}
 		return err
 	}
-	inst.Author = modJSONAuthor(filepath.Join(m.dirFor(inst), inst.Folders[0]))
+	name, author := modJSONNames(filepath.Join(m.dirFor(inst), inst.Folders[0]))
+	inst.Author = author
+	// An import is named after its file or folder; the mod's own name is better.
+	if base := filepath.Base(c.Path); name != "" && (inst.Name == "" || inst.Name == base || inst.Name == strings.TrimSuffix(base, filepath.Ext(base))) {
+		inst.Name = name
+	}
 	if ugc := workshopIDIn(filepath.Join(m.dirFor(inst), inst.Folders[0])); ugc != "" && c.Key != "sky:"+ugc {
 		inst.Aliases = append(inst.Aliases, "sky:"+ugc) // shows as installed on its Workshop card too
 	}
@@ -506,7 +511,7 @@ func (m *Manager) Verify() ([]Problem, error) {
 		if !e.IsDir() || m.State.OwnerOf(KindMod, e.Name()) != nil {
 			continue
 		}
-		rep, err := scan.Dir(filepath.Join(m.ModsDir, e.Name()))
+		rep, err := scan.DirWith(filepath.Join(m.ModsDir, e.Name()), m.scanOpts())
 		if err != nil {
 			return nil, err
 		}
@@ -671,7 +676,7 @@ func (m *Manager) Adopt(key, name, author, source, version, kind, folder string,
 	if prev := m.State.Mods[key]; prev != nil {
 		return nil, fmt.Errorf("%s is already installed (in %s)", key, strings.Join(prev.Folders, ", "))
 	}
-	rep, err := scan.Dir(dir)
+	rep, err := scan.DirWith(dir, m.scanOpts())
 	if err != nil {
 		return nil, err
 	}
@@ -707,13 +712,21 @@ func workshopIDIn(dir string) string {
 	return u
 }
 
-// modJSONAuthor returns the Author field of the mod.json in dir, if any.
-func modJSONAuthor(dir string) string {
+// modJSONNames returns the Name and Author fields of the mod.json in dir.
+func modJSONNames(dir string) (name, author string) {
 	b, err := os.ReadFile(filepath.Join(dir, "mod.json"))
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	var mj struct{ Author string }
+	var mj struct{ Name, Author string }
 	json.Unmarshal(trimBOM(b), &mj)
-	return strings.TrimSpace(mj.Author)
+	return strings.TrimSpace(mj.Name), strings.TrimSpace(mj.Author)
+}
+
+// scanOpts lets the scanner compare bundled DLLs with the game's own.
+func (m *Manager) scanOpts() scan.Options {
+	if m.ModsDir == "" {
+		return scan.Options{}
+	}
+	return scan.Options{GameManaged: filepath.Join(filepath.Dir(m.ModsDir), "People Playground_Data", "Managed")}
 }
