@@ -390,7 +390,30 @@ type Entry struct {
 // Index is index.json.
 type Index struct {
 	Generated time.Time `json:"generated"`
-	Entries   []Entry   `json:"entries"`
+	// Paused freezes the Open Workshop while a worm may be spreading: no
+	// submission is published and the app installs and updates nothing
+	// from it. Only the owner's "pause"/"resume" run changes it.
+	Paused       bool       `json:"paused,omitempty"`
+	PausedReason string     `json:"paused_reason,omitempty"`
+	PausedAt     *time.Time `json:"paused_at,omitempty"`
+	// SuspectSince: versions published at or after it are treated as
+	// withdrawn until the owner resumes (the worm may have been spreading
+	// before anyone noticed).
+	SuspectSince *time.Time `json:"suspect_since,omitempty"`
+	Entries      []Entry    `json:"entries"`
+}
+
+// Blocked returns why an entry must not be installed, kept or updated to:
+// it was withdrawn, or the Open Workshop is paused and this version was
+// published in the suspect window. "" means it is fine.
+func (ix *Index) Blocked(e *Entry) string {
+	switch {
+	case e.Withdrawn:
+		return e.WithdrawnReason
+	case ix.Paused && ix.SuspectSince != nil && !e.Published.Before(*ix.SuspectSince):
+		return "published while a worm may have been spreading (" + ix.PausedReason + "); held back until the Open Workshop resumes"
+	}
+	return ""
 }
 
 // AssetName is the release asset for a version: content-addressed, so a

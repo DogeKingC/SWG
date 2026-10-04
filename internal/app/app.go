@@ -85,6 +85,7 @@ func (a *App) Manager(needGame bool) (*manager.Manager, error) {
 				ix, _ := loaders.Fetch()
 				return ix
 			}
+			m.Withdrawn = owWithdrawn
 		}
 	}
 	return m, nil

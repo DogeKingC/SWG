@@ -85,6 +85,23 @@ your review and the click.
 
 The workflow sets `published`, `needs-changes` and `needs-approval` itself.
 
+### Emergency: a worm may be spreading
+
+- **Freeze the Open Workshop:** Actions → workshop → Run workflow, action
+  `pause`, a reason, and `since` (when it may have started: a date like
+  `2026-10-01` or how long ago, like `72h`). Nothing is published or
+  approved until you resume; withdrawing still works. In the app, nothing
+  installs or updates from the Open Workshop, versions published since
+  `since` are hidden and treated as withdrawn, and Verify names every
+  installed copy of one. Apps see it within 15 minutes (their next index
+  check). Lift it with action `resume`.
+- **Stop installs from any site** (GameBanana, Steam copies, Nexus, ...): add
+  `{"sources": ["gb"], "reason": "..."}` to `"pause"` in
+  `blocklist/blocklist.json` on `main` (sources: `gb`, `sky`, `tw`, `nx`,
+  `ow`, `local`, or `*` for all). Apps read it on their next action. Remove
+  the entry to lift it. The blocklist can only refuse, so a tampered copy can
+  never allow anything.
+
 Signing (recommended): run `go run ./cmd/workshop keygen`, put the public key
 in `internal/workshop/key.go` and the private key in the repository secret
 `WORKSHOP_SIGNING_KEY`. From then on the app refuses an unsigned or altered

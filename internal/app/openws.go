@@ -39,9 +39,12 @@ func searchOW(r *SearchResults, q string, page int, opt SearchOpts) {
 		}
 		return
 	}
+	if ix.Paused {
+		r.Errors = append(r.Errors, "Open Workshop is PAUSED: "+ix.PausedReason+". Nothing can be installed or updated from it until it resumes.")
+	}
 	var list []workshop.Entry
 	for _, e := range ix.Entries {
-		if !e.Withdrawn && e.Kind == opt.Kind {
+		if ix.Blocked(&e) == "" && e.Kind == opt.Kind {
 			list = append(list, e)
 		}
 	}
@@ -60,27 +63,59 @@ func searchOW(r *SearchResults, q string, page int, opt SearchOpts) {
 }
 
 // owEntry finds a published entry by slug.
-func owEntry(slug string) (*workshop.Entry, error) {
+func owEntry(slug string) (*workshop.Index, *workshop.Entry, error) {
 	ix, err := workshop.FetchIndex()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	e := ix.Find(slug)
 	if e == nil {
-		return nil, fmt.Errorf("the Open Workshop has no %q", slug)
+		return nil, nil, fmt.Errorf("the Open Workshop has no %q", slug)
 	}
-	return e, nil
+	return ix, e, nil
+}
+
+// owWithdrawn says why the Open Workshop took down the version of an item
+// that is installed from it, or "".
+func owWithdrawn(inst *manager.Installed) string {
+	slug := strings.TrimPrefix(inst.Mirror, "openworkshop:")
+	if slug == inst.Mirror {
+		if !strings.HasPrefix(inst.Key, "ow:") {
+			return ""
+		}
+		slug = strings.TrimPrefix(inst.Key, "ow:")
+	}
+	ix, err := workshop.FetchIndex()
+	if err != nil {
+		return ""
+	}
+	e := ix.Find(slug)
+	switch {
+	case e == nil:
+		return ""
+	case e.Withdrawn:
+		return e.WithdrawnReason // the whole mod, whichever version is installed
+	case ix.Paused && ix.SuspectSince != nil && !inst.Revision.IsZero() && !inst.Revision.Before(*ix.SuspectSince):
+		// The installed version was published (Revision) in the suspect window.
+		return "published while a worm may have been spreading (" + ix.PausedReason + ")"
+	}
+	return ""
+}
+
+// owPaused is the refusal while the Open Workshop is paused.
+func owPaused(ix *workshop.Index) error {
+	return &manager.Rejection{Reasons: []string{"the Open Workshop is paused: " + ix.PausedReason + " (cannot be overridden; installs resume when the owner lifts the pause)"}}
 }
 
 // owForWorkshop returns the Open Workshop entry that replaces a deleted
 // Steam Workshop item, if any.
 func owForWorkshop(ws string) *workshop.Entry {
 	ix, err := workshop.FetchIndex()
-	if err != nil || ws == "" {
+	if err != nil || ws == "" || ix.Paused {
 		return nil
 	}
 	for i := range ix.Entries {
-		if e := &ix.Entries[i]; e.WorkshopID == ws && !e.Withdrawn {
+		if e := &ix.Entries[i]; e.WorkshopID == ws && ix.Blocked(e) == "" {
 			return e
 		}
 	}
@@ -134,12 +169,15 @@ func (a *App) owCandidate(e *workshop.Entry, path string) (*manager.Candidate, e
 // fetchOW downloads an Open Workshop mod. With UpdateOnly, a nil candidate
 // means prev is already the published file.
 func (a *App) fetchOW(slug string, prev *manager.Installed) (*manager.Candidate, error) {
-	e, err := owEntry(slug)
+	ix, e, err := owEntry(slug)
 	if err != nil {
 		return nil, err
 	}
-	if e.Withdrawn {
-		return nil, &manager.Rejection{Reasons: []string{"withdrawn from the Open Workshop: " + e.WithdrawnReason + " (cannot be overridden)"}}
+	if why := ix.Blocked(e); why != "" {
+		return nil, &manager.Rejection{Reasons: []string{"withdrawn from the Open Workshop: " + why + " (cannot be overridden)"}}
+	}
+	if ix.Paused {
+		return nil, owPaused(ix)
 	}
 	if a.Opt.UpdateOnly && prev != nil && prev.ArchiveSHA == e.SHA256 {
 		return nil, nil
@@ -159,12 +197,17 @@ func (a *App) owUpdate(inst *manager.Installed) (*manager.Candidate, error) {
 	var e *workshop.Entry
 	switch {
 	case strings.HasPrefix(inst.Key, "ow:"):
-		var err error
-		if e, err = owEntry(strings.TrimPrefix(inst.Key, "ow:")); err != nil {
+		ix, ent, err := owEntry(strings.TrimPrefix(inst.Key, "ow:"))
+		if err != nil {
 			return nil, err
 		}
-		if e.Withdrawn {
-			a.logf("%s was WITHDRAWN from the Open Workshop: %s. Consider removing it.", inst.Name, e.WithdrawnReason)
+		e = ent
+		if why := ix.Blocked(e); why != "" {
+			a.logf("%s was WITHDRAWN from the Open Workshop: %s. Consider removing it.", inst.Name, why)
+			return nil, nil
+		}
+		if ix.Paused {
+			a.logf("%s: the Open Workshop is paused (%s); not updating", inst.Name, ix.PausedReason)
 			return nil, nil
 		}
 		if e.SHA256 == inst.ArchiveSHA {

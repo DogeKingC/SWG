@@ -760,8 +760,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 			v := installedView{Installed: m, Link: m.Source, ItemKind: m.Kind}
 			v.Missing = paths.Mods != "" && mg.MissingFolders(m)
 			if ix := workshop.CachedIndex(); ix != nil && strings.HasPrefix(m.Mirror, "openworkshop:") {
-				if e := ix.Find(strings.TrimPrefix(m.Mirror, "openworkshop:")); e != nil && e.Withdrawn {
-					v.Withdrawn = e.WithdrawnReason
+				if e := ix.Find(strings.TrimPrefix(m.Mirror, "openworkshop:")); e != nil {
+					v.Withdrawn = ix.Blocked(e)
 				}
 			}
 			switch {
@@ -1421,8 +1421,10 @@ func (s *server) handleDetails(w http.ResponseWriter, r *http.Request) {
 		if e.License != "" {
 			desc += "\n\nLicense: " + e.License
 		}
-		if e.Withdrawn {
-			desc = "WITHDRAWN: " + e.WithdrawnReason + "\n\n" + desc
+		if why := ix.Blocked(e); why != "" {
+			desc = "WITHDRAWN: " + why + "\n\n" + desc
+		} else if ix.Paused {
+			desc = "THE OPEN WORKSHOP IS PAUSED: " + ix.PausedReason + "\n\n" + desc
 		}
 		v.Details = sources.Details{Description: desc, Downloads: e.Downloads}
 		if e.Image != "" {

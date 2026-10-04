@@ -7,6 +7,10 @@
 //	    everything in them is treated as data.
 //	workshop refresh -data <dir>
 //	    refreshes download counts (daily)
+//	workshop pause -data <dir> -reason <text> [-since <date or duration>]
+//	    freezes the Open Workshop (the owner's emergency switch)
+//	workshop resume -data <dir>
+//	    lifts the freeze
 //	workshop keygen
 //	    prints a new signing key pair
 package main
@@ -41,6 +45,10 @@ func main() {
 		err = issue(os.Args[2:])
 	case "refresh":
 		err = refresh(os.Args[2:])
+	case "pause":
+		err = pause(os.Args[2:], true)
+	case "resume":
+		err = pause(os.Args[2:], false)
 	case "keygen":
 		pub, priv, kerr := workshop.NewKey()
 		if kerr != nil {
@@ -127,11 +135,30 @@ func issue(args []string) error {
 	if err != nil {
 		return err
 	}
+	o := handle(ix, ev, *out)
+	if o == nil {
+		return nil // nothing to do
+	}
+	if err := saveIndex(*data, ix); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(o, "", "  ")
+	return os.WriteFile("outcome.json", b, 0o644) // read by the workflow
+}
+
+// handle decides what an issue event does to the index and the issue.
+func handle(ix *workshop.Index, ev event, out string) *outcome {
 	var o *outcome
 	byOwner := ev.sender != "" && strings.EqualFold(ev.sender, ev.repoOwner)
 	switch {
+	case ix.Paused && !isWithdrawal(ev):
+		// Frozen: nothing is published, approved or reviewed. Withdrawing
+		// still works (it only takes things down).
+		if ev.action == "opened" || ev.action == "edited" || ev.name == "issue_comment" && strings.HasPrefix(strings.TrimSpace(ev.commentBody), "/") {
+			o = &outcome{Reply: "**The Open Workshop is paused:** " + ix.PausedReason + "\n\nNothing is published until the owner resumes it. Your submission stays open; edit it after the pause is lifted to have it checked again."}
+		}
 	case ev.name == "issue_comment":
-		o = comment(ix, ev, *out)
+		o = comment(ix, ev, out)
 	case ev.action == "labeled" && byOwner && (ev.label == "reviewed" || ev.label == "approved"):
 		// A label names no file, and the author can change the file
 		// between the owner's look and the click: approvals are comments
@@ -141,16 +168,75 @@ func issue(args []string) error {
 	case ev.action == "labeled" && byOwner && ev.label == "withdrawn":
 		o = withdraw(ix, ev, "withdrawn by the Open Workshop's maintainers")
 	case ev.action == "opened" || ev.action == "edited":
-		o = submit(ix, ev, *out, "")
+		o = submit(ix, ev, out, "")
 	}
-	if o == nil {
-		return nil // nothing to do
+	return o
+}
+
+// isWithdrawal reports events that only take something down, which work
+// even while the Open Workshop is paused.
+func isWithdrawal(ev event) bool {
+	if ev.name == "issue_comment" {
+		return strings.HasPrefix(strings.TrimSpace(ev.commentBody), "/withdraw")
 	}
-	if err := saveIndex(*data, ix); err != nil {
+	return ev.action == "labeled" && ev.label == "withdrawn"
+}
+
+// pause freezes (or, with on false, unfreezes) the Open Workshop. since is
+// when the worm may have started: a date (2026-10-01, RFC 3339) or how long
+// ago (72h); versions published from then on are held back.
+func pause(args []string, on bool) error {
+	fs := flag.NewFlagSet("pause", flag.ExitOnError)
+	data := fs.String("data", "data", "checkout of the workshop-data branch")
+	reason := fs.String("reason", "", "why (shown to everyone)")
+	since := fs.String("since", "72h", "hold back versions published since this date or this long ago")
+	fs.Parse(args)
+	ix, err := loadIndex(*data)
+	if err != nil {
 		return err
 	}
-	b, _ := json.MarshalIndent(o, "", "  ")
-	return os.WriteFile("outcome.json", b, 0o644) // read by the workflow
+	if !on {
+		ix.Paused, ix.PausedReason, ix.PausedAt, ix.SuspectSince = false, "", nil, nil
+		fmt.Println("Open Workshop resumed")
+		return saveIndex(*data, ix)
+	}
+	why := strings.TrimSpace(*reason)
+	if why == "" {
+		return fmt.Errorf("pause needs a -reason")
+	}
+	if len(why) > 300 {
+		why = why[:300]
+	}
+	now := time.Now().UTC()
+	from, err := parseSince(*since, now)
+	if err != nil {
+		return err
+	}
+	ix.Paused, ix.PausedReason, ix.PausedAt, ix.SuspectSince = true, why, &now, &from
+	held := 0
+	for i := range ix.Entries {
+		if ix.Blocked(&ix.Entries[i]) != "" && !ix.Entries[i].Withdrawn {
+			held++
+		}
+	}
+	fmt.Printf("Open Workshop paused: %s (holding back %d version(s) published since %s)\n", why, held, from.Format(time.RFC3339))
+	return saveIndex(*data, ix)
+}
+
+func parseSince(s string, now time.Time) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if d, err := time.ParseDuration(s); err == nil && d >= 0 {
+		return now.Add(-d), nil
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			if t.After(now) {
+				return time.Time{}, fmt.Errorf("-since %s is in the future", s)
+			}
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("-since: a date like 2026-10-01 or a duration like 72h, not %q", s)
 }
 
 // entryForIssue is the entry published from this issue or, for an author

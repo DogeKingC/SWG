@@ -19,7 +19,23 @@ on:
     types: [created]
   schedule:
     - cron: "17 5 * * *"
+  # Run by hand (Actions > workshop > Run workflow; repository write access
+  # needed). "pause" is the emergency switch: nothing is published, and the
+  # app installs and updates nothing from the Open Workshop, until "resume".
   workflow_dispatch:
+    inputs:
+      action:
+        description: "refresh, pause (emergency freeze) or resume"
+        type: choice
+        options: [refresh, pause, resume]
+        default: refresh
+      reason:
+        description: "pause: why (shown to everyone)"
+        required: false
+      since:
+        description: "pause: hold back versions published since (date like 2026-10-01, or how long ago like 72h)"
+        required: false
+        default: "72h"
 
 permissions:
   contents: write
@@ -76,8 +92,16 @@ jobs:
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
           WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
+      - name: Pause or resume
+        if: github.event_name == 'workflow_dispatch' && (inputs.action == 'pause' || inputs.action == 'resume')
+        run: go run ./cmd/workshop "$ACTION" -data data -reason "$REASON" -since "$SINCE"
+        env:
+          ACTION: ${{ inputs.action }}
+          REASON: ${{ inputs.reason }}
+          SINCE: ${{ inputs.since }}
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
       - name: Refresh download counts
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' && inputs.action == 'refresh'
         run: go run ./cmd/workshop refresh -data data
         env:
           GITHUB_TOKEN: ${{ github.token }}

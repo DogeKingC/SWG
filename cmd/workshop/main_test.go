@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DogeKingC/SWG/internal/workshop"
 )
@@ -119,5 +120,56 @@ func TestApproveIsBoundToTheCheckedFile(t *testing.T) {
 	serve = modZip(t, "checked")
 	if o := comment(ix, ev, out); len(ix.Entries) != 1 || !strings.HasPrefix(ix.Entries[0].SHA256, approve) {
 		t.Fatalf("approval of the checked file did not publish it: %+v", o)
+	}
+}
+
+// The owner's emergency switch: while paused nothing is published or
+// approved, withdrawing still works, and resume lifts it.
+func TestPauseAndResume(t *testing.T) {
+	data := t.TempDir()
+	ix := &workshop.Index{Entries: []workshop.Entry{{Slug: "a-mod", Name: "A Mod", Owner: "alice", Issue: 1, Published: time.Now().Add(-time.Hour)}}}
+	if err := saveIndex(data, ix); err != nil {
+		t.Fatal(err)
+	}
+	if err := pause([]string{"-data", data}, true); err == nil {
+		t.Fatal("pause without a reason was accepted")
+	}
+	if err := pause([]string{"-data", data, "-reason", "worm in the wild", "-since", "48h"}, true); err != nil {
+		t.Fatal(err)
+	}
+	ix, _ = loadIndex(data)
+	if !ix.Paused || ix.SuspectSince == nil || ix.Blocked(&ix.Entries[0]) == "" {
+		t.Fatalf("not paused, or the recent version is not held back: %+v", ix)
+	}
+
+	// Submissions and approvals are refused while paused.
+	out := t.TempDir()
+	for _, ev := range []event{
+		{name: "issues", action: "opened", number: 5, author: "bob", body: form("B Mod")},
+		{name: "issue_comment", number: 5, author: "bob", body: form("B Mod"), commentBy: "owner", repoOwner: "owner", commentBody: "/approve 0123456789ab"},
+	} {
+		o := handle(ix, ev, out)
+		if o == nil || !strings.Contains(o.Reply, "paused") {
+			t.Errorf("%s/%s not refused while paused: %+v", ev.name, ev.action, o)
+		}
+	}
+	if len(ix.Entries) != 1 {
+		t.Fatal("something was published while paused")
+	}
+	// Withdrawing still works.
+	handle(ix, event{name: "issue_comment", number: 1, author: "alice", body: form("A Mod"), commentBy: "alice", commentBody: "/withdraw bad"}, out)
+	if !ix.Entries[0].Withdrawn {
+		t.Error("withdrawing did not work while paused")
+	}
+
+	if err := pause([]string{"-data", data}, false); err != nil {
+		t.Fatal(err)
+	}
+	ix, _ = loadIndex(data)
+	if ix.Paused || ix.SuspectSince != nil {
+		t.Fatal("resume did not lift the pause")
+	}
+	if _, err := parseSince("2999-01-01", time.Now()); err == nil {
+		t.Error("a future -since was accepted")
 	}
 }

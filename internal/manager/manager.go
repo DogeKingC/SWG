@@ -50,7 +50,10 @@ type Manager struct {
 	Policy          Policy
 	Blocklist       *Blocklist
 	Releases        func() *loaders.Index // official RE_PPG/BepInEx files (nil: offline)
-	Log             func(format string, a ...any)
+	// Withdrawn says why the source took an installed item's version down
+	// (the Open Workshop withdrew it, or holds it back while paused), or "".
+	Withdrawn func(inst *Installed) string
+	Log       func(format string, a ...any)
 }
 
 // Candidate is a downloaded archive or folder waiting to be installed.
@@ -603,6 +606,15 @@ type Problem struct {
 func (m *Manager) Verify() ([]Problem, error) {
 	var probs []Problem
 	for _, inst := range m.State.Sorted() {
+		if m.Withdrawn != nil {
+			if why := m.Withdrawn(inst); why != "" {
+				folder := inst.Key
+				if len(inst.Folders) > 0 {
+					folder = inst.Folders[0]
+				}
+				probs = append(probs, Problem{folder, "taken down by the Open Workshop: " + why + ". Remove it unless you have checked it yourself.", true, inst.Key})
+			}
+		}
 		now := map[string]string{}
 		for _, f := range inst.Folders {
 			if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err != nil {
