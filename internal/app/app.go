@@ -273,6 +273,7 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 			r.GameBanana = append(r.GameBanana, SearchResult{
 				Ref: fmt.Sprintf("gb:%d", m.ID), Source: "GameBanana", Name: m.Name, Author: m.Submitter.Name,
 				Category: m.Category.Name, Date: time.Unix(m.Modified, 0).Format("2006-01-02"), URL: m.URL, Image: m.Thumb(), Kind: opt.Kind,
+				Downloads: m.Views,
 			})
 		}
 	}()
@@ -325,6 +326,17 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 			}
 		}
 		tm = tmDetailsAll(urls)
+		byURL := map[string]int{}
+		for _, s := range list {
+			if s.Views > 0 {
+				byURL[s.URL] = s.Views
+			}
+		}
+		for _, it := range tm {
+			if it != nil && it.Views == 0 {
+				it.Views = byURL[it.URL]
+			}
+		}
 	}()
 	wg.Wait()
 
@@ -362,6 +374,9 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 		}
 		if e.Author == "" {
 			e.Author = mr.Author
+		}
+		if n := mirrorDownloads(mr); n > e.Downloads {
+			e.Downloads = n
 		}
 		ci := copyState(mr.ID)
 		v := bestVersion(mr.ID, mr.Title)
@@ -421,6 +436,9 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 						label += " (reviewed)"
 					}
 					e.Mirrors = append(e.Mirrors, label)
+					if t.Downloads > e.Downloads {
+						e.Downloads = t.Downloads
+					}
 					if v != "" && CompareVersions(v, e.bestVer) > 0 {
 						// The upload is a newer version than the mirrors: show it.
 						e.bestVer, e.Name, e.Date, e.Size = v, t.Name, t.Date, t.Size
@@ -460,6 +478,8 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	}
 	if opt.Sort == "updated" {
 		sort.SliceStable(r.Workshop, func(i, j int) bool { return r.Workshop[i].newest.After(r.Workshop[j].newest) })
+	} else if opt.Sort == "popular" {
+		sort.SliceStable(r.Workshop, func(i, j int) bool { return r.Workshop[i].Downloads > r.Workshop[j].Downloads })
 	}
 	if opt.Sort == "relevance" {
 		r.Workshop = rerank(r.Workshop, q, func(SearchResult) int { return 0 })
@@ -473,7 +493,7 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 func s01Result(m sources.S01Mod) SearchResult {
 	r := SearchResult{Ref: "sky:" + m.WorkshopID(), Source: "01 STUDIO", Name: m.Title, Author: "01 STUDIO",
 		Category: m.Category, Date: FmtTime(m.CreatedTime()), URL: m.Page(), Image: m.Image(), Kind: manager.KindMod,
-		Mirrors: []string{"01 STUDIO"}}
+		Mirrors: []string{"01 STUDIO"}, Downloads: m.Views}
 	if m.Version != "" {
 		r.Version = m.Version
 		r.Mirrors = []string{"01 STUDIO v" + m.Version}
@@ -742,7 +762,10 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 	}
 	conv := func(it popularity.Item) SearchResult {
 		res := SearchResult{Ref: it.Ref, Name: it.Name, Author: it.Author, Category: it.Category, Date: YMD(it.Date), URL: it.URL,
-			Image: it.Image, Reviewed: it.Reviewed, Kind: it.Kind}
+			Image: it.Image, Reviewed: it.Reviewed, Kind: it.Kind, Downloads: it.Gain(opt.Period)}
+		if res.Downloads == 0 {
+			res.Downloads = it.N
+		}
 		if g := it.Gain(opt.Period); g > 0 {
 			res.Trend = fmt.Sprintf("+%s %s %s", thousands(g), ix.Metric[it.Src], label)
 		} else {

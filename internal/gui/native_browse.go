@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -374,6 +375,9 @@ func (b *browseView) search(q string, page int) {
 			}
 			w.Image = orStr(w.Image, x.Image)
 			w.Author = orStr(w.Author, x.Author)
+			if x.Downloads > w.Downloads {
+				w.Downloads = x.Downloads
+			}
 		}
 		// A Nexus Mods upload of a mod already shown (same name) joins its card.
 		byTitle := map[string]*app.SearchResult{}
@@ -394,6 +398,9 @@ func (b *browseView) search(q string, page int) {
 				}
 				w.Mirrors = append(w.Mirrors, l)
 			}
+			if x.Downloads > w.Downloads {
+				w.Downloads = x.Downloads
+			}
 		}
 		var tw []*app.SearchResult
 		for _, x := range ptrs(lists["tw"]) {
@@ -401,7 +408,7 @@ func (b *browseView) search(q string, page int) {
 				tw = append(tw, x)
 			}
 		}
-		shown := interleave(ptrs(lists["ow"]), tw, ptrs(lists["gb"]), nx, ws, s01)
+		shown := mergeShown(sortV, ptrs(lists["ow"]), tw, ptrs(lists["gb"]), nx, ws, s01)
 		var waiting []string
 		for _, p := range parts {
 			if pending[p] {
@@ -534,6 +541,35 @@ func interleave(lists ...[]*app.SearchResult) []*app.SearchResult {
 		}
 	}
 	return out
+}
+
+func resultDate(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "unknown" {
+		return time.Time{}
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t
+	}
+	return sources.ParseTMVersion(s)
+}
+
+func mergeShown(sortV string, lists ...[]*app.SearchResult) []*app.SearchResult {
+	mixed := interleave(lists...)
+	switch sortV {
+	case "updated":
+		sort.SliceStable(mixed, func(i, j int) bool {
+			return resultDate(mixed[i].Date).After(resultDate(mixed[j].Date))
+		})
+	case "popular":
+		sort.SliceStable(mixed, func(i, j int) bool {
+			if mixed[i].Downloads != mixed[j].Downloads {
+				return mixed[i].Downloads > mixed[j].Downloads
+			}
+			return resultDate(mixed[i].Date).After(resultDate(mixed[j].Date))
+		})
+	}
+	return mixed
 }
 
 // sourceBadges labels where a result comes from.

@@ -478,6 +478,7 @@ async function search(q, p) {
       if (!(w.mirrors || []).some((l) => l.startsWith("01 STUDIO"))) w.mirrors = [...(w.mirrors || []), ...(x.mirrors || ["01 STUDIO"])];
       if (!w.image) w.image = x.image;
       if (!w.author) w.author = x.author;
+      if ((x.download_count || 0) > (w.download_count || 0)) w.download_count = x.download_count;
       return false;
     });
     // A Nexus Mods upload of a mod already shown (same name) joins its card.
@@ -486,9 +487,10 @@ async function search(q, p) {
       const w = byTitle.get(normTitle(x.name));
       if (!w) return true;
       if (!(w.mirrors || []).some((l) => l.startsWith("Nexus"))) w.mirrors = [...(w.mirrors || []), "Nexus Mods" + (x.version ? " v" + x.version : "")];
+      if ((x.download_count || 0) > (w.download_count || 0)) w.download_count = x.download_count;
       return false;
     });
-    const shown = interleave(lists.ow, lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, nx, lists.ws, s01);
+    const shown = mergeShown(browse.sort, lists.ow, lists.tw.filter((x) => !merged.has(x.ref)), lists.gb, nx, lists.ws, s01);
     [...grid.querySelectorAll(".mod")].slice(start).forEach((c) => c.remove());
     status.before(...shown.map(card));
     const waiting = [...pending].map((x) => ({ gb: "GameBanana", tw: "True Workshop", ws: "Workshop mirrors (Skymods can be slow)", s01: "01 STUDIO", nx: "Nexus Mods", ow: "Open Workshop" }[x]));
@@ -527,6 +529,28 @@ function interleave(...lists) {
   const n = Math.max(...lists.map((l) => l.length));
   for (let i = 0; i < n; i++) for (const l of lists) if (l[i]) out.push(l[i]);
   return out;
+}
+
+function dateKey(s) {
+  if (!s || s === "unknown") return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+// Popular and recently updated are one ranking across sites: most downloads
+// first, or newest date first. Relevance still mixes sources so one site
+// does not fill the page.
+function mergeShown(sort, ...lists) {
+  const mixed = interleave(...lists);
+  if (sort === "updated") {
+    return mixed.slice().sort((a, b) => dateKey(b.date) - dateKey(a.date));
+  }
+  if (sort === "popular") {
+    return mixed.slice().sort((a, b) => (b.download_count || 0) - (a.download_count || 0) || dateKey(b.date) - dateKey(a.date));
+  }
+  return mixed;
 }
 
 // sourceBadges labels where a result comes from (and, for True Workshop,

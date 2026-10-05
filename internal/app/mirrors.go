@@ -70,6 +70,26 @@ func tmMirror(it *sources.TMItem) Mirror {
 	}
 }
 
+func mirrorDownloads(mr Mirror) int {
+	n := 0
+	if mr.tm != nil && mr.tm.Views > n {
+		n = mr.tm.Views
+	}
+	if mr.s01 != nil && mr.s01.Views > n {
+		n = mr.s01.Views
+	}
+	if mr.nx != nil && mr.nx.Downloads > n {
+		n = mr.nx.Downloads
+	}
+	if mr.ow != nil && mr.ow.Downloads > n {
+		n = mr.ow.Downloads
+	}
+	if mr.tw != nil && mr.tw.Downloads > n {
+		n = mr.tw.Downloads
+	}
+	return n
+}
+
 // twMirror is a True Workshop upload of a Workshop item. Its date is the
 // upload date, not the Steam revision, so copies are compared by the
 // ModVersion in mod.json instead.
