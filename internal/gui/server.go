@@ -51,6 +51,7 @@ type Options struct {
 
 type server struct {
 	opt     app.Options
+	optMu   sync.RWMutex // guards opt (settings are saved while jobs and the folder watcher read it)
 	version string
 	token   string
 	host    string
@@ -133,6 +134,7 @@ func (s *server) stop(relaunch string) {
 func Run(opt app.Options, g Options) error {
 	selfupdate.Cleanup()
 	app.PruneCache(14 * 24 * time.Hour)
+	pruneUploads(14 * 24 * time.Hour)
 	if st, err := loadSettings(); err == nil {
 		st.apply(&opt)
 	}
@@ -178,6 +180,7 @@ func Run(opt app.Options, g Options) error {
 		}
 	}
 	s := &server{opt: opt, version: g.Version, token: token, host: ln.Addr().String(), quit: make(chan struct{})}
+	sources.Warn = s.logf // catalogue listings that a cap cut short
 	if native {
 		s.show = make(chan struct{}, 1)
 	}
@@ -722,7 +725,9 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func (s *server) newApp(over map[string]bool) *app.App {
+	s.optMu.RLock()
 	o := s.opt
+	s.optMu.RUnlock()
 	if over["allow_high"] {
 		o.Policy.AllowHigh = true
 	}
@@ -800,6 +805,9 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	s.optMu.RLock()
+	stateSettings := settingsFrom(s.opt)
+	s.optMu.RUnlock()
 	writeJSON(w, map[string]any{
 		"loader":                loader,
 		"scripts_need_compiler": noCompiler,
@@ -809,7 +817,7 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		"paths":                 paths,
 		"installed":             mods,
 		"job":                   j,
-		"settings":              settingsFrom(s.opt),
+		"settings":              stateSettings,
 		"cutoff":                manager.WormCutoff.Format("2006-01-02"),
 		"lastBackup":            lastBackup(paths.Data),
 		"desktop": map[string]any{
@@ -934,6 +942,15 @@ func (s *server) start(req actionReq) (*job, error) {
 	s.jobMu.Unlock()
 
 	go func() {
+		// One writer at a time across processes: a command-line ppgmods run
+		// takes the same lock, so a save here cannot overwrite its change
+		// (or the other way round).
+		lock, lerr := manager.LockState(10 * time.Minute)
+		if lerr != nil {
+			s.finish(j, lerr)
+			return
+		}
+		defer lock.Unlock()
 		defer func() {
 			if p := recover(); p != nil {
 				s.finish(j, fmt.Errorf("internal error: %v", p))
@@ -1192,6 +1209,10 @@ func uploadDir() string {
 	return filepath.Join(d, "uploads")
 }
 
+// maxUpload is the largest archive the window can hand over for import in
+// one request (a variable so tests can shrink it).
+var maxUpload int64 = 1 << 30
+
 // handleUpload stores a file chosen in the window so it can be imported.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1211,14 +1232,30 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, err = io.Copy(f, io.LimitReader(r.Body, 1<<30))
+	n, err := io.Copy(f, io.LimitReader(r.Body, maxUpload+1))
 	f.Close()
 	if err != nil {
 		os.Remove(f.Name())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if n > maxUpload {
+		os.Remove(f.Name())
+		http.Error(w, fmt.Sprintf("that archive is larger than %d MiB", maxUpload>>20), http.StatusRequestEntityTooLarge)
+		return
+	}
 	writeJSON(w, map[string]string{"path": f.Name()})
+}
+
+// pruneUploads removes files left in the import area (uploaded but never
+// imported) after maxAge.
+func pruneUploads(maxAge time.Duration) {
+	ents, _ := os.ReadDir(uploadDir())
+	for _, e := range ents {
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > maxAge {
+			os.Remove(filepath.Join(uploadDir(), e.Name()))
+		}
+	}
 }
 
 func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -1235,14 +1272,20 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		s.optMu.Lock()
 		st.apply(&s.opt)
-		if err := st.save(); err != nil {
+		err := st.save()
+		s.optMu.Unlock()
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		s.logf("settings saved")
 	}
-	writeJSON(w, settingsFrom(s.opt))
+	s.optMu.RLock()
+	current := settingsFrom(s.opt)
+	s.optMu.RUnlock()
+	writeJSON(w, current)
 }
 
 func (s *server) checkRelease(force bool) {

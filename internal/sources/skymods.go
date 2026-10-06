@@ -1,9 +1,11 @@
 package sources
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
@@ -115,6 +117,12 @@ func SkyByWorkshopID(id string) (*SkyItem, error) {
 	return nil, fmt.Errorf("workshop item %s not found on Skymods", id)
 }
 
+// ErrSkyChallenge means catalogue.smods.ru answered with a Cloudflare check
+// instead of the page: no plain HTTP client can get past it, so ppgmods does
+// not try. It usually clears on its own; installs can still come from the
+// other mirrors meanwhile.
+var ErrSkyChallenge = errors.New("smods.ru is showing a Cloudflare browser check right now; try again later")
+
 var (
 	skyCacheMu sync.Mutex
 	skyCache   = map[string]skyCached{}
@@ -123,28 +131,45 @@ var (
 type skyCached struct {
 	items []SkyItem
 	at    time.Time
+	err   error // a cached Cloudflare challenge: don't ask again for a while
 }
 
 // skyList fetches a catalogue page. Skymods can take 10-20 s to answer, so
-// pages are kept for 10 minutes.
+// pages are kept for 10 minutes; a challenge is kept just as long, so a
+// blocked catalogue is not asked again on every search.
 func skyList(u string) ([]SkyItem, error) {
 	skyCacheMu.Lock()
 	if c, ok := skyCache[u]; ok && time.Since(c.at) < 10*time.Minute {
 		skyCacheMu.Unlock()
-		return c.items, nil
+		return c.items, c.err
 	}
 	skyCacheMu.Unlock()
 	items, err := skyFetch(u)
-	if err == nil {
+	if err == nil || errors.Is(err, ErrSkyChallenge) {
 		skyCacheMu.Lock()
-		skyCache[u] = skyCached{items, time.Now()}
+		skyCache[u] = skyCached{items, time.Now(), err}
 		skyCacheMu.Unlock()
 	}
 	return items, err
 }
 
 func skyFetch(u string) ([]SkyItem, error) {
-	resp, err := get(u)
+	b, err := skyGet(u)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSkyPage(string(b)), nil
+}
+
+// skyGet fetches a Skymods page, telling a Cloudflare challenge from other
+// failures (get() would report both as a bare HTTP status).
+func skyGet(u string) ([]byte, error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	setHeaders(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +178,13 @@ func skyFetch(u string) ([]SkyItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ParseSkyPage(string(b)), nil
+	if isChallenge(resp, b) {
+		return nil, ErrSkyChallenge
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("GET %s: HTTP %d", u, resp.StatusCode)
+	}
+	return b, nil
 }
 
 // ParseSkyPage extracts catalogue entries from a Skymods listing page.

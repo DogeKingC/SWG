@@ -272,18 +272,23 @@ func GBAll() ([]GBMod, error) {
 		return gbAll, nil
 	}
 	var all []GBMod
-	for page := 1; page <= 40; page++ {
+	done := false
+	for page := 1; page <= 40 && !done; page++ {
 		mods, err := GBList("", 0, "Generic_LatestModified", page, 50)
 		if err != nil {
 			if all != nil {
+				done = true // a partial listing is not a cap hit
 				break
 			}
 			return nil, err
 		}
 		all = append(all, mods...)
 		if len(mods) < 50 {
-			break
+			done = true
 		}
+	}
+	if !done {
+		Warn("GameBanana lists more than %d uploads; the rest is not shown", len(all))
 	}
 	gbAll, gbAllAt = all, time.Now()
 	return all, nil

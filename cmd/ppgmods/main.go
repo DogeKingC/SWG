@@ -89,6 +89,7 @@ Flags (any command):
 
 func main() {
 	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/Trlydev/SWG)", version)
+	sources.Warn = logf
 	selfupdate.Current = version
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -245,6 +246,15 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 		return nil
 	}
 
+	if cmd != "list" && cmd != "verify" {
+		// These commands change state.json. If the window is running a task,
+		// wait for it rather than writing the mod list past each other.
+		lock, lerr := manager.LockState(10 * time.Minute)
+		if lerr != nil {
+			return lerr
+		}
+		defer lock.Unlock()
+	}
 	m, err := a.Manager(cmd != "list" && cmd != "pin" && cmd != "unpin")
 	if err != nil {
 		return err

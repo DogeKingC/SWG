@@ -3,7 +3,6 @@ package sources
 import (
 	"fmt"
 	"html"
-	"io"
 	"regexp"
 	"strings"
 )
@@ -58,12 +57,7 @@ func SkyDetails(pageURL string) (*Details, error) {
 	if !strings.HasPrefix(pageURL, skyBase+"/archives/") {
 		return nil, fmt.Errorf("not a Skymods item page: %s", pageURL)
 	}
-	resp, err := get(pageURL)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	b, err := skyGet(pageURL)
 	if err != nil {
 		return nil, err
 	}

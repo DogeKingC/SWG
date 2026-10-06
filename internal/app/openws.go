@@ -125,6 +125,9 @@ func owForWorkshop(ws string) *workshop.Entry {
 // downloadOW downloads an entry's file into the cache and checks it is
 // byte for byte the reviewed one.
 func downloadOW(e *workshop.Entry) (string, error) {
+	if sum, err := hex.DecodeString(strings.ToLower(e.SHA256)); err != nil || len(sum) != 32 {
+		return "", fmt.Errorf("Open Workshop entry %s has a malformed SHA-256", e.Slug)
+	}
 	dir, err := CacheDir("ow:" + e.Slug)
 	if err != nil {
 		return "", err

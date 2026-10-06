@@ -78,7 +78,8 @@ func S01All() ([]S01Mod, error) {
 		return s01All, nil
 	}
 	var all []S01Mod
-	for page := 1; page <= 50; page++ {
+	done := false
+	for page := 1; page <= 50 && !done; page++ {
 		var out struct {
 			Status struct {
 				Code  int    `json:"code"`
@@ -91,6 +92,7 @@ func S01All() ([]S01Mod, error) {
 		}
 		if err := s01Post("/v2/mods", map[string]any{"page": page, "category": ""}, &out); err != nil {
 			if all != nil {
+				done = true // a partial listing is not a cap hit
 				break
 			}
 			return nil, err
@@ -100,8 +102,11 @@ func S01All() ([]S01Mod, error) {
 		}
 		all = append(all, out.Result...)
 		if page >= out.Pager.TotalPages || len(out.Result) == 0 {
-			break
+			done = true
 		}
+	}
+	if !done {
+		Warn("01studio.dev lists more than %d mods; the rest is not shown", len(all))
 	}
 	s01All, s01At = all, time.Now()
 	return all, nil

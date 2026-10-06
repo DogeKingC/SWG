@@ -19,6 +19,11 @@ import (
 
 var UserAgent = "ppgmods/dev (+https://github.com/Trlydev/SWG)"
 
+// Warn receives one-line notes about what a source could not fully list
+// (catalogues larger than the pages ppgmods reads through). The GUI and the
+// command line set it to their log; the default discards.
+var Warn = func(format string, a ...any) {}
+
 // client keeps cookies between requests, as a browser does: modsbase.com's
 // "create download link" step can depend on cookies set by its file page.
 var client = func() *http.Client {

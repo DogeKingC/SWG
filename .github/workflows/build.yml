@@ -1,8 +1,11 @@
 name: build
 
-# Every push to main publishes a new release (v0.1.<run number>) so the
-# latest build is always on the Releases page and ppgmods' self-update can
-# find it. Pushing a tag like v1.2.3 publishes that exact version instead.
+# Every push to main publishes a new release so the latest build is always
+# on the Releases page and ppgmods' self-update can find it. Within a
+# version series (v0.2, v0.3, ...) the first build after the series begins
+# is .0 and every later push is the next patch, counted from the series'
+# tags on the repository. Pushing a tag like v1.2.3 publishes that exact
+# version instead.
 on:
   push:
     branches: [main]
@@ -41,11 +44,20 @@ jobs:
     steps:
       - name: Pick version
         id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${GITHUB_REF_TYPE}" = tag ]; then
             v="${GITHUB_REF_NAME}"
           elif [ "${GITHUB_REF}" = refs/heads/main ] && [ "${GITHUB_EVENT_NAME}" = push ]; then
-            v="v0.1.${GITHUB_RUN_NUMBER}"
+            # The 0.2 series begins with the Skymods Cloudflare fix. The
+            # patch number is one more than the newest v0.2.* tag, so this
+            # push becomes v0.2.0 and later pushes count up. Counting from
+            # tags (not the run number) keeps pull-request builds, which
+            # also advance that number, from skewing the version.
+            last=$(git ls-remote --tags "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" 'refs/tags/v0.2.*' \
+              | grep -oE 'v0\.2\.[0-9]+' | cut -d. -f3 | sort -n | tail -1)
+            v="v0.2.$(( ${last:--1} + 1 ))"
           else
             v="v0.0.0-dev.${GITHUB_RUN_NUMBER}"
           fi

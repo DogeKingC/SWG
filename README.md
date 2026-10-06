@@ -94,7 +94,9 @@ the window (see [Safety model](#safety-model)).
 ### Always the latest version
 
 Every push to `main` builds Windows and Linux binaries with GitHub Actions and
-publishes them as a new release, `v0.1.<build number>`. ppgmods checks for a
+publishes them as a new release, `v0.2.<patch>`: the first build of a series
+is `.0` and every later push counts up (the Skymods Cloudflare fix began the
+0.2 series). ppgmods checks for a
 newer release when it starts and every 6 hours, and shows an **Update now**
 banner. The update replaces the installed copy, so menu entries and shortcuts
 keep working. Updating

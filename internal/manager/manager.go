@@ -301,6 +301,11 @@ func (m *Manager) Install(c *Candidate) error {
 	for k := range rep.Keys() {
 		inst.Findings = append(inst.Findings, k)
 	}
+	// Pair every staged root with the folder it will be installed under, so
+	// a skipped duplicate cannot shift the pairing: two contraptions whose
+	// names match after sanitising would otherwise install the second one's
+	// files under the third one's folder.
+	units := make([]placement, 0, len(roots))
 	used := map[string]bool{}
 	for i, root := range roots {
 		var name string
@@ -308,27 +313,28 @@ func (m *Manager) Install(c *Candidate) error {
 			// The game expects Contraptions/<name>/<name>.jaap.
 			name = names[i]
 			if used[name] {
+				m.logf("  skipping duplicate contraption %q", name)
 				continue
 			}
 		} else {
 			name = folderName(root, c.Key)
-			for i := 2; used[name]; i++ {
-				name = fmt.Sprintf("%s %d", folderName(root, c.Key), i)
+			for j := 2; used[name]; j++ {
+				name = fmt.Sprintf("%s %d", folderName(root, c.Key), j)
 			}
 		}
 		used[name] = true
 		if owner := m.State.OwnerOf(kind, name); owner != nil && owner.Key != c.Key {
 			return fmt.Errorf("%s folder %q belongs to %s", kind, name, owner.Key)
 		}
+		units = append(units, placement{root, name})
 		inst.Folders = append(inst.Folders, name)
 	}
-	roots = roots[:len(inst.Folders)]
 	if prev != nil {
 		if err := m.backup(prev); err != nil {
 			return fmt.Errorf("backing up previous version: %w", err)
 		}
 	}
-	if placed, err := m.place(roots, inst); err != nil {
+	if placed, err := m.place(units, inst); err != nil {
 		for _, f := range inst.Folders[:placed] {
 			removeFolder(m.dirFor(inst), f)
 		}
@@ -365,14 +371,18 @@ func (m *Manager) Install(c *Candidate) error {
 	return m.State.Save()
 }
 
+// placement is one staged folder and the name of the game-folder folder it
+// becomes.
+type placement struct{ root, folder string }
+
 // place moves staged roots into Mods/ or Contraptions/ and returns how
 // many it placed.
-func (m *Manager) place(roots []string, inst *Installed) (int, error) {
+func (m *Manager) place(units []placement, inst *Installed) (int, error) {
 	base := m.dirFor(inst)
-	for i, root := range roots {
-		target := filepath.Join(base, inst.Folders[i])
+	for i, u := range units {
+		target := filepath.Join(base, u.folder)
 		if _, err := os.Stat(target); err == nil {
-			if m.State.OwnerOf(inst.Kind, inst.Folders[i]) == nil {
+			if m.State.OwnerOf(inst.Kind, u.folder) == nil {
 				return i, fmt.Errorf("%s already exists and was not installed by ppgmods; move it away first", target)
 			}
 			if err := os.RemoveAll(target); err != nil {
@@ -382,14 +392,14 @@ func (m *Manager) place(roots []string, inst *Installed) (int, error) {
 		if err := os.MkdirAll(base, 0o755); err != nil {
 			return i, err
 		}
-		if err := moveTree(root, target); err != nil {
+		if err := moveTree(u.root, target); err != nil {
 			return i + 1, err
 		}
-		if err := hashTree(target, inst.Folders[i], inst.Files); err != nil {
+		if err := hashTree(target, u.folder, inst.Files); err != nil {
 			return i + 1, err
 		}
 	}
-	return len(roots), nil
+	return len(units), nil
 }
 
 // backup moves an installed version's folders into the backups area and
@@ -798,7 +808,7 @@ func (m *Manager) verifyGameCode() []Problem {
 	if m.ModsDir == "" {
 		return nil
 	}
-	game := filepath.Dir(m.ModsDir)
+	gameDir := filepath.Dir(m.ModsDir)
 	var probs []Problem
 	// mods: compiled mods get the full worm check; the game's and the
 	// loaders' own files only the blocklist and worm-only strings, since
@@ -827,28 +837,28 @@ func (m *Manager) verifyGameCode() []Problem {
 		}
 	}
 	mods = true
-	check(filepath.Join(game, "CompiledMods"), "CompiledMods", "Delete the CompiledMods folder (the game rebuilds it), remove the mod it came from, and reset your Discord and Steam passwords.")
-	check(filepath.Join(game, "CompiledModAssemblies"), "CompiledModAssemblies", "Delete that folder (the game rebuilds it) and remove the mod it came from.")
+	check(filepath.Join(gameDir, "CompiledMods"), "CompiledMods", "Delete the CompiledMods folder (the game rebuilds it), remove the mod it came from, and reset your Discord and Steam passwords.")
+	check(filepath.Join(gameDir, "CompiledModAssemblies"), "CompiledModAssemblies", "Delete that folder (the game rebuilds it) and remove the mod it came from.")
 	mods = false
-	check(filepath.Join(game, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (in Steam: Properties, Installed Files, Verify integrity of game files) and reset your Discord and Steam passwords.")
+	check(filepath.Join(gameDir, "People Playground_Data", "Managed"), "People Playground_Data/Managed", "Reinstall People Playground (in Steam: Properties, Installed Files, Verify integrity of game files) and reset your Discord and Steam passwords.")
 	// BepInEx (used by RE_PPG) runs plugins before every mod and before the
 	// game's own checks: the most valuable place for malware to sit.
 	bepFix := "Delete that file, reinstall BepInEx and RE_PPG from their official releases, and reset your Discord and Steam passwords."
 	for _, sub := range []string{"plugins", "patchers", "core"} {
-		check(filepath.Join(game, "BepInEx", sub), "BepInEx/"+sub, bepFix)
+		check(filepath.Join(gameDir, "BepInEx", sub), "BepInEx/"+sub, bepFix)
 	}
-	check(filepath.Join(game, "RE_PPG"), "RE_PPG", bepFix)
+	check(filepath.Join(gameDir, "RE_PPG"), "RE_PPG", bepFix)
 	for _, f := range []string{"winhttp.dll", "version.dll", "doorstop.dll"} {
-		if _, err := os.Stat(filepath.Join(game, f)); err == nil {
-			checkFile(filepath.Join(game, f), f, bepFix)
+		if _, err := os.Stat(filepath.Join(gameDir, f)); err == nil {
+			checkFile(filepath.Join(gameDir, f), f, bepFix)
 		}
 	}
-	probs = append(probs, m.verifyLoaderFiles(game)...)
+	probs = append(probs, m.verifyLoaderFiles(gameDir)...)
 	flagged := map[string]bool{}
 	for _, p := range probs {
 		flagged[p.Folder] = true
 	}
-	l := gameDetect(game)
+	l := gameDetect(gameDir)
 	for _, kind := range []struct {
 		dir  string
 		list []string

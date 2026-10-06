@@ -78,9 +78,10 @@ func NXAll() ([]NXMod, error) {
 	const q = `query($offset: Int, $count: Int) { mods(filter: {gameDomainName: {value: "` + nxGame + `", op: EQUALS}}, offset: $offset, count: $count) {
 		totalCount nodes { modId name summary author uploader { name } version downloads endorsements createdAt updatedAt pictureUrl thumbnailUrl adultContent status } } }`
 	var all []NXMod
+	done := false
 	// The API returns at most 80 per page whatever count asks for: page by
 	// what actually arrived.
-	for offset := 0; offset < 5000; {
+	for offset := 0; offset < 5000 && !done; {
 		var out struct {
 			Data struct {
 				Mods struct {
@@ -99,6 +100,7 @@ func NXAll() ([]NXMod, error) {
 		}
 		if err := nxQuery(q, map[string]any{"offset": offset, "count": 100}, &out); err != nil {
 			if all != nil {
+				done = true // a partial listing is not a cap hit
 				break
 			}
 			return nil, err
@@ -115,8 +117,11 @@ func NXAll() ([]NXMod, error) {
 		}
 		offset += len(out.Data.Mods.Nodes)
 		if offset >= out.Data.Mods.Total || len(out.Data.Mods.Nodes) == 0 {
-			break
+			done = true
 		}
+	}
+	if !done {
+		Warn("Nexus Mods lists more than 5000 uploads; the rest is not shown")
 	}
 	nxAll, nxAt = all, time.Now()
 	return all, nil

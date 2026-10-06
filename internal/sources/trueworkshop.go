@@ -120,16 +120,24 @@ func TWAll() ([]TWItem, error) {
 		return twAll, nil
 	}
 	var all []TWItem
-	for off := 0; off < 5000; off += 100 {
+	done := false
+	for off := 0; off < 5000 && !done; off += 100 {
 		var page []TWItem
 		q := url.Values{"sort": {"newest"}, "limit": {"100"}, "offset": {strconv.Itoa(off)}}
 		if _, err := twGet(twBase+"/api/items?"+q.Encode(), &page); err != nil {
+			if all != nil {
+				done = true // a partial listing is not a cap hit
+				break
+			}
 			return nil, err
 		}
 		all = append(all, page...)
 		if len(page) < 100 {
-			break
+			done = true
 		}
+	}
+	if !done {
+		Warn("True Workshop lists more than %d items; the rest is not shown", len(all))
 	}
 	twAll, twAllAt = all, time.Now()
 	return all, nil
