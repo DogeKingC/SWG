@@ -3,3 +3,4 @@
 /dist/
 ppg-workshop-backup-*/
 cmd/ppgmods/*.syso
+.zcodeignore
