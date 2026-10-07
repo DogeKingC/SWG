@@ -387,6 +387,9 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 		if strings.HasPrefix(p.Browser.Mirror, "01studio:") {
 			box = append(box, muted("No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."))
 		}
+		if strings.HasPrefix(p.Browser.Mirror, "nexus:") {
+			box = append(box, nexusAccountBox(u))
+		}
 	}
 	if len(p.Reasons) > 0 && p.Verdict != "browser" {
 		var rs []string
@@ -1264,4 +1267,14 @@ func (v *settingsView) renderNexus(n nexusView) {
 		container.NewHBox(unlink),
 	}
 	v.nexus.Refresh()
+}
+
+// nexusAccountURL is Nexus Mods' account page: sign in, or create a free
+// account (Nexus only lets signed-in users download, free accounts too).
+const nexusAccountURL = "https://users.nexusmods.com/"
+
+func nexusAccountBox(u *ui) fyne.CanvasObject {
+	b := widget.NewButton("Sign in / create a free account", func() { u.openURL(nexusAccountURL) })
+	b.Importance = widget.LowImportance
+	return tight(muted("Nexus Mods only lets signed-in users download (a free account works; free downloads are slower). Not signed in on nexusmods.com yet?"), container.NewHBox(b))
 }

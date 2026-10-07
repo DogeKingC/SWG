@@ -363,6 +363,7 @@ function jobDone(j) {
       (j.browser.mirror || "").startsWith("01studio:")
         ? el("p", { class: "small" }, "No 01studio.dev account (or it says supporters only)? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead.")
         : null,
+      (j.browser.mirror || "").startsWith("nexus:") ? nexusAccountBox() : null,
       el("p", {}, "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
     dialog("Download in your browser", body, { label: "Open download page", run: () => run(j.retry, "Waiting for the browser download") });
     $("#dlgExtra").className = "btn btn-primary";
@@ -862,6 +863,7 @@ function showCheck(m, p) {
   } else if (p.verdict === "browser") {
     box.push(el("p", { class: "small" }, "Reason: " + (p.browser?.reason || "unknown") + ". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."));
     if ((p.browser?.mirror || "").startsWith("01studio:")) box.push(el("p", { class: "small" }, "No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."));
+    if ((p.browser?.mirror || "").startsWith("nexus:")) box.push(nexusAccountBox());
   }
   if (p.reasons && p.reasons.length && p.verdict !== "browser") {
     box.push(el("ul", { class: "small" }, p.reasons.map((r) => el("li", {}, r.replace(/ \(override: [^)]*\)/, "")))));
@@ -1229,3 +1231,10 @@ function showNXMOffer(o) {
   setInterval(ping, 20000);
   setInterval(() => checkRelease(false), 30 * 60 * 1000);
 })();
+
+// nexusAccountBox: Nexus Mods only lets signed-in users download (a free
+// account works), so offer its sign-in / sign-up page.
+function nexusAccountBox() {
+  return el("p", { class: "small" }, "Nexus Mods only lets signed-in users download (a free account works; free downloads are slower). Not signed in on nexusmods.com yet? ",
+    el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent("https://users.nexusmods.com/")) }, "Sign in / create a free account"));
+}

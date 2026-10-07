@@ -624,6 +624,9 @@ func (u *ui) jobDone(j *job) {
 		if strings.HasPrefix(j.Browser.Mirror, "01studio:") {
 			b.Add(small("No 01studio.dev account (or it says supporters only)? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead."))
 		}
+		if strings.HasPrefix(j.Browser.Mirror, "nexus:") {
+			b.Add(nexusAccountBox(u))
+		}
 		b.Add(text("Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."))
 		u.confirm("Download in your browser", b, "Open download page", false, func() { u.run(j.Retry, "Waiting for the browser download") })
 		return
