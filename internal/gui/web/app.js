@@ -135,6 +135,7 @@ async function refreshState() {
     $("#setCooldown").value = Math.round(state.settings.cooldown_hours);
     $("#setOffline").checked = state.settings.offline;
     $("#setBgThumbs").checked = !state.settings.no_bg_thumbs;
+    $("#setSkymodsCheck").checked = !state.settings.no_skymods_check;
   }
   $("#gameHint").textContent = p.game ? "Using: " + p.game : (p.game_error || "");
   $("#pathsInfo").textContent = [
@@ -156,6 +157,7 @@ async function refreshState() {
   }
   renderDesktop(state.desktop);
   renderNexus(state.nexus);
+  renderSkymods(state.skymods);
   showNXMOffer(state.nxm_offer);
   if (state.job && state.job.running && !state.job.background && !lastJobId) lastJobId = state.job.id;
   if (!lastJobId) setJob(state.job);
@@ -967,12 +969,89 @@ $("#settingsForm").onsubmit = async (e) => {
       cooldown_hours: Math.max(0, Number($("#setCooldown").value) || 0),
       offline: $("#setOffline").checked,
       no_bg_thumbs: !$("#setBgThumbs").checked,
+      no_skymods_check: !$("#setSkymodsCheck").checked,
     } });
     toast("Settings saved");
     document.activeElement.blur();
     refreshState();
   } catch (err) { toast(err.message); }
 };
+
+// ---------- Skymods Cloudflare check ----------
+// When smods.ru serves its browser check, ppgmods passes it by itself with a
+// background browser and retries - no interaction needed. The banner below
+// only appears if the automatic attempt failed; the Settings panel shows
+// what is going on and offers a manual retry.
+let skyCheckPoll = null;
+let skyDismissed = false;
+
+function renderSkymods(sm) {
+  if (!sm) return;
+  const off = state.settings && state.settings.no_skymods_check;
+  if (!sm.challenge) skyDismissed = false;
+  const st = sm.check || {};
+  const banner = $("#skyBanner");
+  const stuck = sm.challenge && !sm.clearance && !st.running && (st.error || (st.at && !st.ok));
+  banner.hidden = !(stuck && !skyDismissed);
+  if (!banner.hidden) {
+    $("#skyText").textContent = "smods.ru is blocking Skymods for now and the background browser check did not get through. It usually clears on its own; other sites keep working. You can retry from Settings.";
+    $("#skyCheckBtn").disabled = st.running;
+    $("#skyCheckBtn").textContent = st.running ? "Retry running…" : "Retry the check";
+  }
+  const box = $("#skymodsBox");
+  if (!box) return;
+  const lines = [
+    el("p", { class: "small" },
+      sm.challenge
+        ? "smods.ru is showing its browser check right now. ppgmods passes it with a background browser and retries on its own - nothing for you to do."
+        : "smods.ru is not asking for a browser check."),
+    el("p", { class: "small" },
+      sm.clearance
+        ? "A clearance from the check is saved (earned " + (sm.clearance_age || "recently") + "). It is attached to Skymods requests when Cloudflare asks, and only ever sent to smods.ru."
+        : "No clearance saved."),
+  ];
+  if (st.running) lines.push(el("p", { class: "small" }, "A background browser is passing the check right now…"));
+  if (st.error) lines.push(el("p", { class: "small", style: "color:#ff8484" }, "Last check failed: " + st.error));
+  else if (st.at && st.ok) lines.push(el("p", { class: "small muted" }, "Last check passed " + new Date(st.at).toLocaleTimeString() + "."));
+  lines.push(el("div", { class: "toolbar" },
+    el("button", { class: "btn btn-primary btn-sm", onclick: runSkyCheck, disabled: st.running === true }, st.running ? "Check running…" : "Run the check now"),
+    sm.clearance ? el("button", { class: "btn btn-ghost btn-sm", onclick: clearSkyCheck }, "Clear saved check") : null,
+  ));
+  box.replaceChildren(...lines);
+}
+
+async function runSkyCheck() {
+  skyDismissed = false;
+  try {
+    await api("/api/skymods", { method: "POST" });
+    if (!skyCheckPoll) pollSkyCheck();
+  } catch (e) { toast(e.message); }
+}
+
+function pollSkyCheck() {
+  skyCheckPoll = setInterval(async () => {
+    let sm;
+    try { sm = await api("/api/skymods"); } catch { return; }
+    state.skymods = sm;
+    renderSkymods(sm);
+    if (!sm.check || !sm.check.running) {
+      clearInterval(skyCheckPoll);
+      skyCheckPoll = null;
+      if (sm.ok || (sm.check && sm.check.ok)) toast("Skymods browser check passed");
+    }
+  }, 1500);
+}
+
+async function clearSkyCheck() {
+  try {
+    await api("/api/skymods", { method: "DELETE" });
+    toast("Cleared the saved Skymods check");
+    refreshState();
+  } catch (e) { toast(e.message); }
+}
+
+$("#skyCheckBtn").onclick = runSkyCheck;
+$("#skyDismiss").onclick = () => { skyDismissed = true; $("#skyBanner").hidden = true; };
 
 // ---------- desktop install ----------
 function renderDesktop(d) {

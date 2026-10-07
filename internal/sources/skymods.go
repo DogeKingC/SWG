@@ -120,8 +120,59 @@ func SkyByWorkshopID(id string) (*SkyItem, error) {
 // ErrSkyChallenge means catalogue.smods.ru answered with a Cloudflare check
 // instead of the page: no plain HTTP client can get past it, so ppgmods does
 // not try. It usually clears on its own; installs can still come from the
-// other mirrors meanwhile.
+// other mirrors meanwhile. A clearance the person's browser earned (see the
+// cfclear package) is attached automatically when one is stored.
 var ErrSkyChallenge = errors.New("smods.ru is showing a Cloudflare browser check right now; try again later")
+
+// SkyClearance, if set, returns the cf_clearance cookie the person's browser
+// earned from smods.ru and the User-Agent it was issued to (Cloudflare binds
+// the cookie to both). Empty strings mean none is stored.
+// Set by the cfclear package; only ever sent to smods.ru hosts.
+var SkyClearance func() (cookie, userAgent string)
+
+// SkyClearanceExpired, if set, is called when Cloudflare challenges even
+// with a stored clearance attached: the cookie no longer works and the
+// check has to be passed again.
+var SkyClearanceExpired func()
+
+// SkyAutoCheck, if set, passes the check automatically with a background
+// browser (the cfclear package) and stores a fresh clearance. It reports
+// whether the site is usable now; callers retry their request when it is.
+var SkyAutoCheck func() bool
+
+var (
+	skyChallengeMu sync.Mutex
+	skyChallengeAt time.Time // the last time a check was served
+)
+
+// SkyChallengeUp reports whether a Cloudflare check was seen recently,
+// i.e. the catalogue is blocked for ppgmods right now.
+func SkyChallengeUp() bool {
+	skyChallengeMu.Lock()
+	defer skyChallengeMu.Unlock()
+	return time.Since(skyChallengeAt) < 15*time.Minute
+}
+
+func markSkyChallenge() {
+	skyChallengeMu.Lock()
+	skyChallengeAt = time.Now()
+	skyChallengeMu.Unlock()
+}
+
+func clearSkyChallenge() {
+	skyChallengeMu.Lock()
+	skyChallengeAt = time.Time{}
+	skyChallengeMu.Unlock()
+}
+
+// InvalidateSkyCache drops cached Skymods pages and the challenge marker,
+// so the next request goes out fresh (used when a clearance is saved).
+func InvalidateSkyCache() {
+	skyCacheMu.Lock()
+	skyCache = map[string]skyCached{}
+	skyCacheMu.Unlock()
+	clearSkyChallenge()
+}
 
 var (
 	skyCacheMu sync.Mutex
@@ -162,29 +213,82 @@ func skyFetch(u string) ([]SkyItem, error) {
 }
 
 // skyGet fetches a Skymods page, telling a Cloudflare challenge from other
-// failures (get() would report both as a bare HTTP status).
+// failures (get() would report both as a bare HTTP status). When a check is
+// served it heals on its own: a stored clearance (the person's browser or a
+// background browser passed the check earlier) is attached and the request
+// retried; if none is stored, a background browser passes the check by
+// itself. Every caller here serves catalogue.smods.ru, so the clearance
+// never goes anywhere else.
 func skyGet(u string) ([]byte, error) {
-	req, err := http.NewRequest("GET", u, nil)
+	b, challenge, err := skyGetOnce(u, "", "")
 	if err != nil {
 		return nil, err
 	}
-	setHeaders(req)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, err
-	}
-	if isChallenge(resp, b) {
-		return nil, ErrSkyChallenge
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("GET %s: HTTP %d", u, resp.StatusCode)
+	for challenge {
+		if SkyClearance != nil {
+			if cookie, userAgent := SkyClearance(); cookie != "" {
+				b, challenge, err = skyGetOnce(u, cookie, userAgent)
+				if err != nil {
+					return nil, err
+				}
+				if challenge && SkyClearanceExpired != nil {
+					SkyClearanceExpired() // this clearance no longer works
+				}
+			}
+		}
+		if !challenge {
+			break
+		}
+		// Nothing stored (or it was rejected): pass the check with a
+		// background browser, then try the page again with what it stored.
+		if SkyAutoCheck == nil || !SkyAutoCheck() {
+			return nil, ErrSkyChallenge
+		}
+		cookie, userAgent := "", ""
+		if SkyClearance != nil {
+			cookie, userAgent = SkyClearance()
+		}
+		b, challenge, err = skyGetOnce(u, cookie, userAgent)
+		if err != nil {
+			return nil, err
+		}
+		if challenge && SkyClearanceExpired != nil {
+			SkyClearanceExpired()
+		}
 	}
 	return b, nil
+}
+
+func skyGetOnce(u, clearance, userAgent string) (b []byte, challenge bool, err error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	setHeaders(req)
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent) // the clearance is bound to this UA
+	}
+	if clearance != "" {
+		req.Header.Add("Cookie", "cf_clearance="+clearance)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer resp.Body.Close()
+	b, err = io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, false, err
+	}
+	if isChallenge(resp, b) {
+		markSkyChallenge()
+		return nil, true, nil
+	}
+	if resp.StatusCode != 200 {
+		return nil, false, fmt.Errorf("GET %s: HTTP %d", u, resp.StatusCode)
+	}
+	clearSkyChallenge()
+	return b, false, nil
 }
 
 // ParseSkyPage extracts catalogue entries from a Skymods listing page.

@@ -34,6 +34,12 @@
   <button id="installLater" class="btn btn-ghost btn-sm">Not now</button>
 </div>
 
+<div id="skyBanner" class="banner banner-info" hidden>
+  <span id="skyText"></span>
+  <button id="skyCheckBtn" class="btn btn-primary btn-sm">Retry the check</button>
+  <button id="skyDismiss" class="btn btn-ghost btn-sm">Dismiss</button>
+</div>
+
 <div class="layout">
   <nav class="sidebar" aria-label="Sections">
     <button class="nav active" data-view="browse"><span class="nav-ico">⌕</span>Browse</button>
@@ -193,8 +199,12 @@
         <label class="check"><input id="setOffline" type="checkbox"> Don't download the latest blocklist</label>
         <label class="check"><input id="setBgThumbs" type="checkbox"> Load missing Workshop thumbnails in the background
           <span class="hint">Valve deleted the preview images of the removed mods. ppgmods can fetch small mods (under 3 MB) one at a time to show their own thumbnail; this also pre-scans them so installing is instant.</span></label>
+        <label class="check"><input id="setSkymodsCheck" type="checkbox"> Pass the Skymods browser check automatically
+          <span class="hint">smods.ru sometimes asks browsers to prove they are real. ppgmods then runs the check with a background browser and retries on its own - nothing for you to do. The clearance it earns stays on this PC and is only sent to smods.ru.</span></label>
         <div><button class="btn btn-primary" type="submit">Save</button></div>
       </form>
+      <h2>Skymods (Workshop mirror)</h2>
+      <div id="skymodsBox" class="panel"></div>
       <h2>Nexus Mods</h2>
       <div id="nexusBox" class="panel"></div>
       <h2>Folders</h2>

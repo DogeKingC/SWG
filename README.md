@@ -25,7 +25,7 @@ Not affiliated with Studio Minus, Valve, GameBanana or Skymods.
 | Local Steam cache | `steamapps/workshop/content/1118200` on your PC | `backup-workshop` | **Best source, and it won't last.** Steam deletes removed items when it syncs. Back the cache up before launching Steam online. |
 | [True Workshop](https://ppgworkshop.onrender.com/) | Community archive of uploaded PPG mods (~140). Uploads pass the site's scanner and most are **reviewed by its maintainers** | Automatic | Files are on a public Hugging Face dataset; each item lists its SHA-256, which ppgmods checks. Reviewed items show "✓ reviewed" and skip the cooldown; unreviewed ones are marked "not reviewed" and wait out the cooldown. Updates are detected when an item's file changes. |
 | [GameBanana](https://gamebanana.com/games/7715) | Live mod site, ~560 PPG submissions, authors still uploading | Automatic | Public API, MD5 checksums and server-side antivirus results. This is the only source `update` follows. |
-| [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
+| [Skymods](https://catalogue.smods.ru/game/people-playground/) (smods.ru) | Third-party mirror of Steam Workshop items, ~9,000 PPG entries mirrored up to 20–21 Sep 2026. **The biggest surviving copy.** | Automatic | Files live on modsbase.com. ppgmods waits out the page's countdown, presses "Create download link" the way the site's own button does, and downloads the file (about 10 s per mod). If modsbase shows a Cloudflare check or a captcha, ppgmods does not try to get past it: it opens the page in your browser and imports the file when it lands in Downloads. Copies revised on or after 21 Sep 2026 are refused. Since October 2026 the catalogue itself is also behind a Cloudflare browser check that comes and goes: when it is up, ppgmods passes it by itself. A background browser - your installed Edge or Chrome, in a throwaway profile - opens the page and runs the check exactly as your browser would, and the clearance cookie it earns is kept on this PC and only ever sent to smods.ru. The affected search just takes a few seconds longer; installs still come from top-mods meanwhile. Beware look-alike sites: the real one is **smods.ru**, not "skymods.it.com". |
 | [top-mods](https://top-mods.com/mods/people-playground) | Second Workshop mirror, ~11,000 PPG entries. It often has a **newer revision** than Skymods, mods Skymods never copied, and its own copies of the preview images | Automatic | Files are on modsfire.com, with a modsbase.com alternate link. Both are downloaded the way their own buttons do it. |
 | [Nexus Mods](https://www.nexusmods.com/peopleplayground) | People Playground section, ~120 mods and contraptions with versions, download counts and endorsements | In your browser | Listed through Nexus's public API. Nexus files every People Playground upload under one category, so ppgmods reads Nexus's content preview of each file to tell mods from contraptions, and to find the Workshop ID when the folder is named after it. Files are given to signed-in users. **Settings → Nexus Mods** links your account with your personal API key (kept only on your PC, in a file only you can read, and only sent to Nexus Mods): premium accounts then install directly. Otherwise Install opens the Files tab: click **Manual download** (People Playground files on Nexus have no "Mod manager download" button) and ppgmods picks the archive up from Downloads. It only takes a file named after that mod (Nexus names downloads `<name>-<mod id>-...`), and with a linked account it also asks Nexus whether the file's checksum belongs to that mod. ppgmods can also handle nxm:// links (off by default); any website can open such a link, so it always asks before installing what one sends, then scans it like any mod. Nexus uploads of Workshop mods also appear in that mod's mirror list. |
 | [01 STUDIO](https://01studio.dev/mods) | The studio's own site, ~120 People Playground mods (Jujutsu Playground, Bleach Playground…), updated there | In your browser | The catalogue is public and every entry names its Steam Workshop ID, so 01 STUDIO mods appear as Workshop cards and install automatically from the mirrors. The site gives its own files only to signed-in users (some versions only to supporters), and ppgmods doesn't sign in for you: pick the **01 STUDIO** copy in a mod's mirror list, download it on the page in your browser, and ppgmods picks the new archive up from Downloads, scans it and installs it. |
@@ -135,6 +135,9 @@ ppgmods list | pin | unpin | remove
 
 # Check anything without installing it
 ppgmods scan some_mod.zip
+
+# Pass smods.ru's browser check in a background browser (when Skymods is blocked)
+ppgmods skymods-check
 ```
 
 ### Automatic updates
@@ -387,6 +390,11 @@ achievement/stats cheat that uses split strings
   session; requests without the token or with a foreign `Host` (DNS
   rebinding) are refused, and the page only renders text, never HTML from
   the sites.
+- **The Skymods browser check** runs in the background in your installed
+  Edge or Chrome, with a throwaway profile - never your personal browser
+  profile - and only when smods.ru asks for a check. The clearance cookie
+  it earns is stored in the config folder, readable only by you, and is
+  sent only to smods.ru.
 - **Links** are opened in the browser only if they are `https` links to the
   mod sites or GitHub.
 - **Archives** can't write outside their folder (no `..`, absolute paths,

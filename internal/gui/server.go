@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/DogeKingC/SWG/internal/cfclear"
 	"github.com/DogeKingC/SWG/internal/desktop"
 	"github.com/DogeKingC/SWG/internal/game"
 	"github.com/DogeKingC/SWG/internal/manager"
@@ -104,6 +105,31 @@ type job struct {
 }
 
 const maxLogLines = 5000
+
+// skymodsView is what the window shows about the Cloudflare check: whether
+// one is being served right now, what the stored clearance can do, and how
+// the last automatic check went. The check itself runs automatically in the
+// background; nothing here needs the person to act.
+func (s *server) skymodsView() map[string]any {
+	clearance, _ := cfclear.Load(cfclear.SkymodsSite)
+	return map[string]any{
+		"challenge":     sources.SkyChallengeUp(),
+		"clearance":     clearance != nil,
+		"clearance_age": clearanceAge(clearance),
+		"check":         cfclear.Status(cfclear.SkymodsSite),
+	}
+}
+
+func clearanceAge(c *cfclear.Clearance) string {
+	if c == nil {
+		return ""
+	}
+	d := time.Since(c.At).Round(24 * time.Hour)
+	if d <= 0 {
+		return "today"
+	}
+	return d.String() + " ago"
+}
 
 func (s *server) logf(format string, a ...any) {
 	line := time.Now().Format("15:04:05 ") + fmt.Sprintf(format, a...)
@@ -180,7 +206,8 @@ func Run(opt app.Options, g Options) error {
 		}
 	}
 	s := &server{opt: opt, version: g.Version, token: token, host: ln.Addr().String(), quit: make(chan struct{})}
-	sources.Warn = s.logf // catalogue listings that a cap cut short
+	sources.Warn = s.logf       // catalogue listings that a cap cut short
+	cfclear.WireSkymods(s.logf) // Skymods passes Cloudflare's check by itself in the background
 	if native {
 		s.show = make(chan struct{}, 1)
 	}
@@ -643,6 +670,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/api/preview", s.handlePreview)
 	mux.HandleFunc("/api/thumb", s.handleThumb)
 	mux.HandleFunc("/api/nexus", s.handleNexus)
+	mux.HandleFunc("/api/skymods", s.handleSkymods)
 	mux.HandleFunc("/api/nxm-offer", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			URL string `json:"url"`
@@ -716,6 +744,36 @@ func (s *server) guard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleSkymods reports (GET), triggers (POST) or clears (DELETE) the
+// Skymods browser check. The check normally runs by itself in the
+// background when Cloudflare intercepts; POST repeats it on demand. It
+// touches no mod state, so it never queues behind installs.
+func (s *server) handleSkymods(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, s.skymodsView())
+		return
+	case http.MethodPost:
+		if cfclear.CheckRunning() {
+			http.Error(w, "the check is already running", http.StatusConflict)
+			return
+		}
+		go cfclear.RunSkymodsCheck(true, s.logf)
+		writeJSON(w, map[string]bool{"ok": true})
+		return
+	case http.MethodDelete:
+		if err := cfclear.Clear(cfclear.SkymodsSite); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sources.InvalidateSkyCache()
+		s.logf("cleared the saved Skymods browser check")
+		writeJSON(w, map[string]bool{"ok": true})
+		return
+	}
+	http.Error(w, "GET, POST or DELETE", http.StatusMethodNotAllowed)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
@@ -818,6 +876,7 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		"installed":             mods,
 		"job":                   j,
 		"settings":              stateSettings,
+		"skymods":               s.skymodsView(),
 		"cutoff":                manager.WormCutoff.Format("2006-01-02"),
 		"lastBackup":            lastBackup(paths.Data),
 		"desktop": map[string]any{

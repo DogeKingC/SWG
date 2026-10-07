@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/DogeKingC/SWG/internal/cfclear"
 	"github.com/DogeKingC/SWG/internal/desktop"
 	"github.com/DogeKingC/SWG/internal/gui"
 	"github.com/DogeKingC/SWG/internal/manager"
@@ -58,9 +59,11 @@ Keep up to date:
                              (your mods and settings stay)
 
 Safety and recovery:
-  scan <path>                scan an archive or folder without installing
+	scan <path>                scan an archive or folder without installing
   verify                     detect tampered/injected files in installed mods
                              and scan Mods folders ppgmods did not install
+  skymods-check              pass smods.ru's Cloudflare check with a browser
+                             window (clears "Skymods is showing a browser check")
   backup-workshop            copy the Steam Workshop cache before Steam deletes it
   restore-workshop <dir>     import every item from a backup-workshop folder
   ow-pack <dir> [out]        pack a folder of Workshop-ID folders for an Open
@@ -90,6 +93,7 @@ Flags (any command):
 func main() {
 	sources.UserAgent = fmt.Sprintf("ppgmods/%s (+https://github.com/Trlydev/SWG)", version)
 	sources.Warn = logf
+	cfclear.WireSkymods(logf) // Skymods passes Cloudflare's check by itself in the background
 	selfupdate.Current = version
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -220,6 +224,8 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 			return err
 		}
 		return cmdScan(args[0], a)
+	case "skymods-check":
+		return cmdSkymodsCheck()
 	case "backup-workshop":
 		dest, err := a.Backup()
 		if err == nil {
@@ -401,6 +407,31 @@ func cmdScan(p string, a *app.App) error {
 	if rep.Max() >= scan.High {
 		os.Exit(3)
 	}
+	return nil
+}
+
+// cmdSkymodsCheck passes smods.ru's Cloudflare check with a real browser
+// window and saves the clearance it earns, so Skymods works again for
+// installs and searches.
+func cmdSkymodsCheck() error {
+	res, err := cfclear.Run("https://catalogue.smods.ru/", cfclear.Options{Logf: logf})
+	if err != nil {
+		return err
+	}
+	if res.Cookie("cf_clearance") == "" {
+		logf("no Cloudflare check was served; Skymods works without a clearance")
+		return nil
+	}
+	if err := cfclear.Save(&cfclear.Clearance{
+		Site:      cfclear.SkymodsSite,
+		Cookie:    res.Cookie("cf_clearance"),
+		UserAgent: res.UserAgent,
+		At:        time.Now().UTC(),
+	}); err != nil {
+		return err
+	}
+	sources.InvalidateSkyCache()
+	logf("clearance saved; Skymods should work again")
 	return nil
 }
 

@@ -10,15 +10,19 @@ import (
 	"github.com/DogeKingC/SWG/internal/manager"
 )
 
-var bgThumbsOff bool
+var (
+	bgThumbsOff    bool
+	skymodsCheckOn bool = true // offer/run the Skymods browser check when Cloudflare asks
+)
 
 // settings are the GUI preferences saved between runs. Safety overrides are
 // deliberately not persisted: they apply to one install at a time.
 type settings struct {
-	Game          string  `json:"game"`
-	CooldownHours float64 `json:"cooldown_hours"`
-	Offline       bool    `json:"offline"`
-	NoBgThumbs    bool    `json:"no_bg_thumbs"` // don't fetch missing Workshop thumbnails in the background
+	Game           string  `json:"game"`
+	CooldownHours  float64 `json:"cooldown_hours"`
+	Offline        bool    `json:"offline"`
+	NoBgThumbs     bool    `json:"no_bg_thumbs"`     // don't fetch missing Workshop thumbnails in the background
+	NoSkymodsCheck bool    `json:"no_skymods_check"` // never run the Skymods browser check
 }
 
 func settingsPath() (string, error) {
@@ -50,6 +54,7 @@ func (st *settings) save() error {
 
 func (st *settings) apply(o *app.Options) {
 	bgThumbsOff = st.NoBgThumbs
+	skymodsCheckOn = !st.NoSkymodsCheck
 	o.Game = st.Game
 	o.Offline = st.Offline
 	if st.CooldownHours >= 0 {
@@ -58,5 +63,6 @@ func (st *settings) apply(o *app.Options) {
 }
 
 func settingsFrom(o app.Options) settings {
-	return settings{Game: o.Game, CooldownHours: o.Policy.Cooldown.Hours(), Offline: o.Offline, NoBgThumbs: bgThumbsOff}
+	return settings{Game: o.Game, CooldownHours: o.Policy.Cooldown.Hours(), Offline: o.Offline,
+		NoBgThumbs: bgThumbsOff, NoSkymodsCheck: !skymodsCheckOn}
 }
