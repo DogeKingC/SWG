@@ -265,8 +265,9 @@ var (
 )
 
 type nxFileEntry struct {
-	uri string
-	at  time.Time
+	uri    string
+	fileID int
+	at     time.Time
 }
 
 func nxMainFiles(mods []NXMod) map[int]string {
@@ -286,23 +287,46 @@ func nxMainFiles(mods []NXMod) map[int]string {
 	fresh := nxAskFiles(ask)
 	nxFilesMu.Lock()
 	for _, m := range ask {
-		if u, ok := fresh[m.ID]; ok {
-			nxFiles[m.ID] = nxFileEntry{u, time.Now()}
-			out[m.ID] = u
+		if f, ok := fresh[m.ID]; ok {
+			nxFiles[m.ID] = nxFileEntry{f.uri, f.fileID, time.Now()}
+			out[m.ID] = f.uri
 		}
 	}
 	nxFilesMu.Unlock()
 	return out
 }
 
-func nxAskFiles(mods []NXMod) map[int]string {
-	out := map[int]string{}
+// NXMainFileID returns the file ID of a mod's newest main file, or 0.
+func NXMainFileID(modID int) int {
+	nxMainFiles([]NXMod{{ID: modID}})
+	nxFilesMu.Lock()
+	defer nxFilesMu.Unlock()
+	return nxFiles[modID].fileID
+}
+
+// NXDownloadPage is the download page of a mod's newest main file (where a
+// signed-in person clicks Manual download), or its Files tab if the file
+// isn't known.
+func NXDownloadPage(m NXMod) string {
+	if id := NXMainFileID(m.ID); id > 0 {
+		return fmt.Sprintf("%s?tab=files&file_id=%d", m.Page(), id)
+	}
+	return m.FilesPage()
+}
+
+type nxMainFile struct {
+	uri    string
+	fileID int
+}
+
+func nxAskFiles(mods []NXMod) map[int]nxMainFile {
+	out := map[int]nxMainFile{}
 	for start := 0; start < len(mods); start += 25 {
 		chunk := mods[start:min(start+25, len(mods))]
 		var q strings.Builder
 		q.WriteString("{")
 		for _, m := range chunk {
-			fmt.Fprintf(&q, " m%d: modFiles(modId: %d, gameId: %d) { uri category date }", m.ID, m.ID, nxGameID)
+			fmt.Fprintf(&q, " m%d: modFiles(modId: %d, gameId: %d) { uri category date fileId }", m.ID, m.ID, nxGameID)
 		}
 		q.WriteString(" }")
 		var res struct {
@@ -310,6 +334,7 @@ func nxAskFiles(mods []NXMod) map[int]string {
 				URI      string `json:"uri"`
 				Category string `json:"category"`
 				Date     int64  `json:"date"`
+				FileID   int    `json:"fileId"`
 			} `json:"data"`
 		}
 		if err := nxQuery(q.String(), nil, &res); err != nil {
@@ -320,18 +345,18 @@ func nxAskFiles(mods []NXMod) map[int]string {
 			if _, err := fmt.Sscanf(key, "m%d", &id); err != nil {
 				continue
 			}
-			best, bestRank, bestDate := "", -1, int64(-1)
+			best, bestID, bestRank, bestDate := "", 0, -1, int64(-1)
 			for _, f := range fs {
 				rank := map[string]int{"MAIN": 3, "UPDATE": 2, "OPTIONAL": 1, "MISCELLANEOUS": 1}[f.Category]
 				if f.Category == "ARCHIVED" || f.Category == "DELETED" {
 					continue
 				}
 				if rank > bestRank || rank == bestRank && f.Date > bestDate {
-					best, bestRank, bestDate = f.URI, rank, f.Date
+					best, bestID, bestRank, bestDate = f.URI, f.FileID, rank, f.Date
 				}
 			}
 			if best != "" {
-				out[id] = best
+				out[id] = nxMainFile{best, bestID}
 			}
 		}
 	}

@@ -890,8 +890,8 @@ func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
 	// button, only "Manual download", so the file always comes through the
 	// Downloads folder (checked by name, and with Nexus' MD5 lookup when an
 	// account is linked), even when ppgmods handles nxm:// links.
-	return &NeedsBrowser{URL: it.FilesPage(), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
-		Reason: "Nexus Mods gives its files to signed-in users: click Manual download on the mod's Files tab"}
+	return &NeedsBrowser{URL: sources.NXDownloadPage(it), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
+		Reason: "Nexus Mods gives its files to signed-in users: click Manual download on the page that opens"}
 }
 
 func (e *NeedsBrowser) Error() string {
