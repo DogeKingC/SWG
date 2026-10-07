@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
@@ -113,6 +114,12 @@ func Run(u string, opt Options) (*Result, error) {
 	defer cancelTimeout()
 
 	open := chromedp.ActionFunc(func(ctx context.Context) error {
+		// This browser only passes a check. A page or an ad must not be able
+		// to drop a file into Downloads, where ppgmods' browser fallback
+		// picks up new archives to install.
+		if err := browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDeny).Do(ctx); err != nil {
+			return err
+		}
 		var ua string
 		if err := chromedp.Evaluate(`navigator.userAgent`, &ua).Do(ctx); err != nil {
 			return err
