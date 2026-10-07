@@ -166,7 +166,7 @@ func TestNexusInstallUsesManualDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	nb := nexusBrowser(sources.NXMod{ID: 77, Name: "Nexus Test"}, "nx:77")
-	if nb.NXM || nb.Match != "-77-" || !strings.Contains(nb.Reason, "Manual download") {
+	if nb.NXM || nb.Match != "-77-" || !strings.Contains(nb.Reason, "Slow download") {
 		t.Fatalf("Nexus install does not wait for the manual download: %+v", nb)
 	}
 }
