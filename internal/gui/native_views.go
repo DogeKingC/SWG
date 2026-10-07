@@ -40,6 +40,20 @@ type detailsWin struct {
 	install  *widget.Button
 	page     string
 	scroll   *container.Scroll
+	body     *fyne.Container
+}
+
+// relayout lays the sheet out again after a part of it filled in (facts,
+// safety check, mirrors, required mods): a list positions each part by the
+// height it had at the last layout, so without this a part that grew is
+// drawn over by the parts below it.
+func (d *detailsWin) relayout() {
+	if d.body != nil {
+		d.body.Refresh()
+	}
+	if d.scroll != nil {
+		d.scroll.Refresh()
+	}
 }
 
 func (d *detailsWin) close() {
@@ -82,12 +96,12 @@ func (u *ui) openDetails(m app.SearchResult, mirror string) {
 		title.Wrapping = fyne.TextWrapWord
 		hero := u.thumbs.box(m.Ref, m.Name, m.Image, 0, 300, nil, false)
 		section := func(name string, c fyne.CanvasObject) fyne.CanvasObject { return tight(sectionTitle(name), c) }
-		body := container.New(&vlist{gap: 14},
+		d.body = container.New(&vlist{gap: 14},
 			tight(title, d.sub), d.facts, d.mirrors,
 			section("Safety check", d.check), d.required,
 			section("Description", d.desc))
 		d.scroll = container.NewVScroll(container.NewBorder(hero, nil, nil, nil,
-			container.New(layout.NewCustomPaddedLayout(16, 16, 22, 22), body)))
+			container.New(layout.NewCustomPaddedLayout(16, 16, 22, 22), d.body)))
 		actBg := canvas.NewRectangle(p.surface)
 		actions := container.NewStack(actBg, container.NewBorder(hline(), nil, nil, nil,
 			container.New(layout.NewCustomPaddedLayout(10, 10, 22, 22),
@@ -107,6 +121,7 @@ func (u *ui) openDetails(m app.SearchResult, mirror string) {
 		a.Start()
 	}
 	d.check.Refresh()
+	d.relayout()
 	u.setDetailActions(d, nil)
 	go u.previewDetails(d, m, mirror)
 }
@@ -164,6 +179,7 @@ func (u *ui) loadDetails(d *detailsWin, m app.SearchResult) {
 		if v.AfterCutoff {
 			d.sub.Add(pill("revised after the worm cutoff", pBad))
 		}
+		d.relayout()
 		if len(v.Required) > 0 {
 			reqs := flowBox(6)
 			var refs []string
@@ -179,6 +195,7 @@ func (u *ui) loadDetails(d *detailsWin, m app.SearchResult) {
 			})
 			d.required.Objects = []fyne.CanvasObject{sectionTitle("Needs these mods too"), reqs, container.NewHBox(all)}
 			d.required.Refresh()
+			d.relayout()
 		}
 		if len(v.Mirrors) > 0 && len(d.mirrors.Objects) == 0 {
 			u.renderMirrors(d, v.Mirrors, "")
@@ -213,6 +230,7 @@ func (u *ui) previewDetails(d *detailsWin, m app.SearchResult, mirror string) {
 			pl := pal()
 			d.check.Objects = []fyne.CanvasObject{tinted("Could not check this mod: "+err.Error(), pl.bad, pl.badBg, true)}
 			d.check.Refresh()
+			d.relayout()
 			u.setDetailActions(d, &app.Preview{Verdict: "error"})
 			return
 		}
@@ -337,6 +355,7 @@ func (u *ui) renderMirrors(d *detailsWin, mirrors []app.Mirror, chosen string) {
 	}
 	d.mirrors.Objects = []fyne.CanvasObject{sectionTitle(title), container.New(&vlist{gap: 6}, rows...)}
 	d.mirrors.Refresh()
+	d.relayout()
 }
 
 func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
@@ -413,6 +432,7 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	}
 	d.check.Objects = []fyne.CanvasObject{container.New(&vlist{gap: 6}, box...)}
 	d.check.Refresh()
+	d.relayout()
 	u.setDetailActions(d, p)
 }
 
@@ -616,6 +636,9 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	if m.Pinned {
 		pills = append(pills, pill("pinned", pNeutral))
 	}
+	if m.Quarantined != "" {
+		pills = append(pills, pill("quarantined", pBad))
+	}
 	meta := ""
 	if m.Author != "" {
 		meta = "by " + m.Author + " · "
@@ -628,31 +651,54 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	if m.Withdrawn != "" {
 		meta += "\nWithdrawn from the Open Workshop: " + m.Withdrawn
 	}
+	if m.Quarantined != "" {
+		meta += "\nIn quarantine (" + m.Quarantined + "): moved out of the game folder, so the game can't load it."
+	}
 	actions := container.NewHBox()
-	if m.Link != "" {
+	if m.Quarantined != "" {
+		// Only putting it back or deleting it make sense while it's out.
+		release := widget.NewButton("Release", func() {
+			u.confirm("Put "+m.Name+" back?", text("It goes back into your game folder and the game loads it again. Only do this if you have checked it."), "Release", false, func() {
+				u.run(map[string]any{"action": "release", "key": m.Key}, "Releasing "+m.Name)
+			})
+		})
+		actions.Add(release)
+		actions.Add(widget.NewButton("Remove", func() {
+			u.confirm("Remove "+m.Name+"?", text("This deletes its quarantined copy."), "Remove", true, func() {
+				u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
+			})
+		}))
+	} else if m.Link != "" {
 		link := m.Link
 		b := widget.NewButton("Open page", func() { u.openURL(link) })
 		b.Importance = widget.LowImportance
 		actions.Add(b)
 	}
-	if strings.HasPrefix(m.Key, "gb:") {
-		l := "Pin"
-		if m.Pinned {
-			l = "Unpin"
+	if m.Quarantined == "" {
+		if strings.HasPrefix(m.Key, "gb:") {
+			l := "Pin"
+			if m.Pinned {
+				l = "Unpin"
+			}
+			actions.Add(widget.NewButton(l, func() {
+				u.run(map[string]any{"action": "pin", "key": m.Key, "pinned": !m.Pinned}, map[bool]string{true: "Resuming updates", false: "Pinning"}[m.Pinned])
+			}))
 		}
-		actions.Add(widget.NewButton(l, func() {
-			u.run(map[string]any{"action": "pin", "key": m.Key, "pinned": !m.Pinned}, map[bool]string{true: "Resuming updates", false: "Pinning"}[m.Pinned])
+		actions.Add(widget.NewButton("Rollback", func() { u.run(map[string]any{"action": "rollback", "key": m.Key}, "Rolling back "+m.Name) }))
+		share := widget.NewButton("Share", func() { u.run(map[string]any{"action": "ow-share", "key": m.Key}, "Packing "+m.Name) })
+		share.Importance = widget.LowImportance
+		actions.Add(share)
+		actions.Add(widget.NewButton("Quarantine", func() {
+			u.confirm("Quarantine "+m.Name+"?", text("Its folder is moved out of the game folder, so the game can't load it. Nothing is deleted: Release puts it back."), "Quarantine", false, func() {
+				u.run(map[string]any{"action": "quarantine", "key": m.Key}, "Quarantining "+m.Name)
+			})
+		}))
+		actions.Add(widget.NewButton("Remove", func() {
+			u.confirm("Remove "+m.Name+"?", text("This deletes "+strings.Join(m.Folders, ", ")+" from your game folder."), "Remove", true, func() {
+				u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
+			})
 		}))
 	}
-	actions.Add(widget.NewButton("Rollback", func() { u.run(map[string]any{"action": "rollback", "key": m.Key}, "Rolling back "+m.Name) }))
-	share := widget.NewButton("Share", func() { u.run(map[string]any{"action": "ow-share", "key": m.Key}, "Packing "+m.Name) })
-	share.Importance = widget.LowImportance
-	actions.Add(share)
-	actions.Add(widget.NewButton("Remove", func() {
-		u.confirm("Remove "+m.Name+"?", text("This deletes "+strings.Join(m.Folders, ", ")+" from your game folder."), "Remove", true, func() {
-			u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
-		})
-	}))
 	thumb := fixed(u.thumbs.box(m.Key, m.Name, "", 96, 54, nil, true), 96, 54)
 	main := container.New(&vlist{gap: -6}, flowBox(6, append([]fyne.CanvasObject{name}, pills...)...), muted(meta))
 	vcenter := func(o fyne.CanvasObject) fyne.CanvasObject {

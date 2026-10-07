@@ -191,13 +191,22 @@ function renderInstalled() {
   }
   list.replaceChildren(...mods.map((m) => {
     const kindBadge = m.kind === "GameBanana" ? "badge badge-gb" : m.kind === "Steam Workshop" ? "badge badge-sky" : "badge";
-    const actions = el("div", { class: "item-actions" },
-      m.link ? el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent(m.link)) }, "Open page") : null,
-      m.key.startsWith("gb:") ? el("button", { class: "btn btn-sm", onclick: () => run({ action: "pin", key: m.key, pinned: !m.pinned }, m.pinned ? "Resuming updates" : "Pinning") }, m.pinned ? "Unpin" : "Pin") : null,
-      el("button", { class: "btn btn-sm", title: "Restore the version installed before the last update", onclick: () => run({ action: "rollback", key: m.key }, "Rolling back " + m.name) }, "Rollback"),
-      el("button", { class: "btn btn-ghost btn-sm", title: "Share this on the Open Workshop", onclick: () => run({ action: "ow-share", key: m.key }, "Packing " + m.name) }, "Share"),
-      el("button", { class: "btn btn-sm", onclick: () => confirmRemove(m) }, "Remove"),
-    );
+    const actions = m.quarantined
+      ? el("div", { class: "item-actions" },
+        el("button", { class: "btn btn-sm", onclick: () => dialog("Put " + m.name + " back?", [el("p", {}, "It goes back into your game folder and the game loads it again. Only do this if you have checked it.")],
+          { label: "Release", run: () => run({ action: "release", key: m.key }, "Releasing " + m.name) }) }, "Release"),
+        el("button", { class: "btn btn-sm", onclick: () => dialog("Remove " + m.name + "?", [el("p", {}, "This deletes its quarantined copy.")],
+          { label: "Remove", run: () => run({ action: "remove", key: m.key }, "Removing " + m.name) }) }, "Remove"))
+      : el("div", { class: "item-actions" },
+        m.link ? el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent(m.link)) }, "Open page") : null,
+        m.key.startsWith("gb:") ? el("button", { class: "btn btn-sm", onclick: () => run({ action: "pin", key: m.key, pinned: !m.pinned }, m.pinned ? "Resuming updates" : "Pinning") }, m.pinned ? "Unpin" : "Pin") : null,
+        el("button", { class: "btn btn-sm", title: "Restore the version installed before the last update", onclick: () => run({ action: "rollback", key: m.key }, "Rolling back " + m.name) }, "Rollback"),
+        el("button", { class: "btn btn-ghost btn-sm", title: "Share this on the Open Workshop", onclick: () => run({ action: "ow-share", key: m.key }, "Packing " + m.name) }, "Share"),
+        el("button", { class: "btn btn-sm", title: "Move it out of the game folder so the game can't load it; nothing is deleted", onclick: () => dialog("Quarantine " + m.name + "?",
+          [el("p", {}, "Its folder is moved out of the game folder, so the game can't load it. Nothing is deleted: Release puts it back.")],
+          { label: "Quarantine", run: () => run({ action: "quarantine", key: m.key }, "Quarantining " + m.name) }) }, "Quarantine"),
+        el("button", { class: "btn btn-sm", onclick: () => confirmRemove(m) }, "Remove"),
+      );
     return el("div", { class: "item" },
       thumbImg({ ref: m.key, name: m.name, image: "" }, "item-thumb"),
       el("div", { class: "item-main" },
@@ -207,7 +216,8 @@ function renderInstalled() {
           m.missing ? el("span", { class: "badge badge-bad", title: "Its folder is gone from the game folder" }, "missing") : null,
           m.withdrawn ? el("span", { class: "badge badge-bad", title: "Withdrawn from the Open Workshop: " + m.withdrawn }, "withdrawn") : null,
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
-          m.pinned ? el("span", { class: "badge" }, " pinned") : null),
+          m.pinned ? el("span", { class: "badge" }, " pinned") : null,
+          m.quarantined ? el("span", { class: "badge badge-bad", title: "In quarantine: " + m.quarantined + ". The game can't load it." }, "quarantined") : null),
         el("div", { class: "item-meta" },
           m.author ? "by " + m.author + " · " : "", m.key, " · installed ", (m.installed_at || "").slice(0, 10),
           m.revision && !m.revision.startsWith("0001") ? " · source date " + m.revision.slice(0, 10) : "",
