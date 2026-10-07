@@ -1195,7 +1195,7 @@ function renderNexus(n) {
     el("p", {}, "Linked as ", el("b", {}, n.user), n.premium ? el("span", { class: "badge badge-ok" }, "premium") : el("span", { class: "badge" }, "free")),
     el("p", { class: "small" }, n.premium
       ? "Install downloads from Nexus Mods directly."
-      : "Free accounts download through the site: Install opens the mod's Files tab; click Manual download and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."),
+      : "Free accounts download through the site: Install opens the mod's download page; click Manual, then Slow download, and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."),
     el("label", { class: "check" }, handler, " Handle \"Mod Manager Download\" links",
       el("span", { class: "hint" }, "While this is on, Vortex or Mod Organizer don't get Nexus links, for other games either; turning it off gives them back.")),
     el("div", {}, el("button", { class: "btn btn-ghost btn-sm", onclick: () => dialog("Unlink Nexus Mods?", [el("p", {}, "ppgmods forgets your API key and gives Nexus links back to the previous handler.")],

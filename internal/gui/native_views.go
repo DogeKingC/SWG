@@ -1240,7 +1240,7 @@ func (v *settingsView) renderNexus(n nexusView) {
 		return
 	}
 	acct, kind := "free", pNeutral
-	how := "Free accounts download through the site: Install opens the mod's Files tab; click Manual download and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."
+	how := "Free accounts download through the site: Install opens the mod's download page; click Manual, then Slow download, and ppgmods picks the file up from your Downloads folder, checks it with Nexus Mods and installs it."
 	if n.Premium {
 		acct, kind, how = "premium", pOK, "Install downloads from Nexus Mods directly."
 	}
