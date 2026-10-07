@@ -35,6 +35,7 @@ var (
 	dataDir   = flag.String("data", "archive-data", "checkout of the archive-data branch")
 	optoutF   = flag.String("optout", "archive/optout.txt", "opt-out list")
 	skyPages  = flag.Int("sky-pages", 30, "Skymods catalogue pages to read per run")
+	skyDelay  = flag.Duration("sky-delay", 5*time.Second, "pause between Skymods catalogue pages (rapid pages from this IP trip Cloudflare's browser check, which then blocks the site for every ppgmods user for hours)")
 	tmItems   = flag.Int("tm-items", 150, "top-mods items to read per run")
 	maxDL     = flag.Int("max-downloads", 300, "most files to download per run")
 	maxMinute = flag.Int("max-minutes", 300, "stop starting downloads after this long")
@@ -83,6 +84,9 @@ func run() error {
 	// Skymods: catalogue pages, continuing where the last run stopped.
 	for i := 0; i < *skyPages; i++ {
 		page := arc.Cursor.SkyPage + 1
+		if i > 0 {
+			time.Sleep(*skyDelay)
+		}
 		items, err := sources.SkyLatest(page)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Skymods page %d: %v\n", page, err)
