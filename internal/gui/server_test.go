@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/app"
 )
 
 func TestHandleUploadLimit(t *testing.T) {

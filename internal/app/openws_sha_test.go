@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 func TestDownloadOWRejectsMalformedChecksum(t *testing.T) {

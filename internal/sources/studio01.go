@@ -12,11 +12,11 @@ import (
 )
 
 // 01 STUDIO (https://01studio.dev/mods) publishes its People Playground mods
-// on its own site. The catalogue is public; files are given to signed-in
-// users only (some to supporters only), so ppgmods lists the mods, links
-// each to its Steam Workshop ID (every entry has one, so the Workshop
-// mirrors can provide a copy), and for the site's own newest version opens
-// the page in the browser, where the person is signed in.
+// on its own site. The catalogue is public. Free mods are free as their
+// Steam Workshop item, which the Workshop mirrors provide; files on the site
+// itself are mostly Early Access for paying subscribers. ppgmods lists only
+// the free mods, links each to its Workshop ID, and offers the site's own
+// file (in the browser, where the person is signed in) only when it is free.
 
 const (
 	s01API  = "https://api.01studio.dev"
@@ -25,18 +25,38 @@ const (
 
 // S01Mod is one catalogue entry.
 type S01Mod struct {
-	ID          string `json:"_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Category    string `json:"category"` // "Free" or "Early Access"
-	Cover       string `json:"cover"`
-	Slug        string `json:"slug"`
-	Version     string `json:"currentVersion"`
-	Views       int    `json:"viewsCount"`
-	Likes       int    `json:"likesCount"`
-	Versions    int    `json:"versionsCount"`
-	Created     string `json:"createdAt"`
-	Steam       int64  `json:"steam"`
+	ID          string   `json:"_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Category    string   `json:"category"` // "Free" or "Early Access"
+	Cover       string   `json:"cover"`
+	Slug        string   `json:"slug"`
+	Version     string   `json:"currentVersion"`
+	Views       int      `json:"viewsCount"`
+	Likes       int      `json:"likesCount"`
+	Versions    int      `json:"versionsCount"`
+	Created     string   `json:"createdAt"`
+	Steam       int64    `json:"steam"`
+	Tags        []string `json:"tags"`     // the current version's, e.g. "Early Access"
+	MinLevel    int      `json:"minLevel"` // subscription tier the files need (0: none)
+}
+
+// Free reports whether the mod is free: its catalogue category is "Free".
+func (m S01Mod) Free() bool { return m.Category == "Free" }
+
+// SiteFileFree reports whether the newest file on 01studio.dev itself is
+// free: a free mod whose current version isn't Early Access or for a
+// subscription tier.
+func (m S01Mod) SiteFileFree() bool {
+	if !m.Free() || m.Version == "" || m.MinLevel > 0 {
+		return false
+	}
+	for _, t := range m.Tags {
+		if strings.EqualFold(t, "Early Access") {
+			return false
+		}
+	}
+	return true
 }
 
 // Page is the mod's page on 01studio.dev.

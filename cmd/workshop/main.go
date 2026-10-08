@@ -36,8 +36,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/version"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/version"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 func main() {

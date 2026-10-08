@@ -15,9 +15,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/sources"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // The Open Workshop (see package workshop): mods checked automatically

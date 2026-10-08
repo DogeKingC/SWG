@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/loaders"
 )
 
 func TestIndexZip(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // A folder of old Workshop items, packed on the owner's PC and published by

@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/archive"
-	"github.com/DogeKingC/SWG/internal/scan"
-	"github.com/DogeKingC/SWG/internal/version"
+	"github.com/Trlydev/SWG/internal/archive"
+	"github.com/Trlydev/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/version"
 )
 
 const (

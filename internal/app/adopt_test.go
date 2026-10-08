@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 func TestFindExisting(t *testing.T) {

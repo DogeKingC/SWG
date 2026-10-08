@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/loaders"
 )
 
 type release struct {

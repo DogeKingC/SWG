@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 func TestAcceptRisk(t *testing.T) {

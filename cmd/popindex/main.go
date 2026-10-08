@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/popularity"
-	"github.com/DogeKingC/SWG/internal/sources"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/popularity"
+	"github.com/Trlydev/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 var (
@@ -200,7 +200,7 @@ func collect01(add func(popularity.Item)) error {
 		return err
 	}
 	for _, m := range all {
-		if ws := m.WorkshopID(); ws != "" {
+		if ws := m.WorkshopID(); ws != "" && m.Free() {
 			// Ref "s01:" keeps its counter apart from top-mods' views of the
 			// same Workshop item; the window turns it back into sky:<id>.
 			add(popularity.Item{Ref: "s01:" + ws, Src: "s01", Name: m.Title, Author: "01 STUDIO", Image: m.Image(),

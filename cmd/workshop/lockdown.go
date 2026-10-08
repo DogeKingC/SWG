@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/manager"
 )
 
 // blocklistFile is blocklist/blocklist.json, in the order it is written.

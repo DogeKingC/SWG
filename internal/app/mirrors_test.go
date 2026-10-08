@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/preserve"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/preserve"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 func writeModZip(t *testing.T, path, script string) {

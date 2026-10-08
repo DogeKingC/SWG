@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/blocklist"
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/blocklist"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 // Entry blocks one artifact. Exactly one of the ID fields is normally set.

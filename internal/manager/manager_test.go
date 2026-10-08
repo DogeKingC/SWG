@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/blocklist"
-	"github.com/DogeKingC/SWG/internal/loaders"
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/blocklist"
+	"github.com/Trlydev/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 func rejected(err error) bool {

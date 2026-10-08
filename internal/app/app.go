@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/game"
-	"github.com/DogeKingC/SWG/internal/loaders"
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/popularity"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/game"
+	"github.com/Trlydev/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/popularity"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 type Options struct {
@@ -488,13 +488,14 @@ func SearchParts(q string, page int, parts map[string]bool, opt SearchOpts) Sear
 	return r
 }
 
-// s01Result is a search card for a 01 STUDIO mod. Its ref is the Workshop
-// item, so installing uses every copy (and 01 STUDIO's own via the browser).
+// s01Result is a search card for a free 01 STUDIO mod. Its ref is the
+// Workshop item, so installing uses every copy (and 01 STUDIO's own via the
+// browser when that file is free too).
 func s01Result(m sources.S01Mod) SearchResult {
 	r := SearchResult{Ref: "sky:" + m.WorkshopID(), Source: "01 STUDIO", Name: m.Title, Author: "01 STUDIO",
 		Category: m.Category, Date: FmtTime(m.CreatedTime()), URL: m.Page(), Image: m.Image(), Kind: manager.KindMod,
 		Mirrors: []string{"01 STUDIO"}, Downloads: m.Views}
-	if m.Version != "" {
+	if m.SiteFileFree() {
 		r.Version = m.Version
 		r.Mirrors = []string{"01 STUDIO v" + m.Version}
 	}
@@ -515,7 +516,9 @@ func search01(r *SearchResults, q string, page int, opt SearchOpts) {
 	}
 	var list []sources.S01Mod
 	for _, m := range all {
-		if m.WorkshopID() != "" {
+		// Paid mods (Early Access, supporters) are left out; free ones
+		// install from their Workshop copy.
+		if m.WorkshopID() != "" && m.Free() {
 			list = append(list, m)
 		}
 	}
@@ -803,6 +806,9 @@ func searchTrending(q string, page int, parts map[string]bool, opt SearchOpts) S
 				res.Source, res.Reviewed = "Open Workshop", true
 				r.OpenWS = append(r.OpenWS, res)
 			case "s01":
+				if it.Category != "" && it.Category != "Free" {
+					continue // paid: left out like in search01
+				}
 				res.Ref = "sky:" + strings.TrimPrefix(it.Ref, "s01:")
 				res.Source, res.Mirrors = "01 STUDIO", []string{"01 STUDIO"}
 				r.Studio01 = append(r.Studio01, res)

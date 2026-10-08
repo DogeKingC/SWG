@@ -17,7 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 // Bulk publishing: the owner uploads a folder of old Steam Workshop items

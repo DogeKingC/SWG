@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 const skymodsURL = "https://catalogue.smods.ru/"

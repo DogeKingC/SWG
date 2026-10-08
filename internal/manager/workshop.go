@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 type BackupItem struct {

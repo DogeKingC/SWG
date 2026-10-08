@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // While the Open Workshop is paused nothing installs or updates from it,

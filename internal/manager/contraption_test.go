@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/archive"
+	"github.com/Trlydev/SWG/internal/archive"
 )
 
 func zipOf(t *testing.T, files map[string]string) string {

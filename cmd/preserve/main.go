@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/archive"
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/preserve"
-	"github.com/DogeKingC/SWG/internal/scan"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/archive"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/preserve"
+	"github.com/Trlydev/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 var (

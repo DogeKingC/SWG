@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 // NexusAccount is the person's linked Nexus Mods account. The API key is

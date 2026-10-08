@@ -18,9 +18,9 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/desktop"
-	"github.com/DogeKingC/SWG/internal/game"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/desktop"
+	"github.com/Trlydev/SWG/internal/game"
 )
 
 // The native window (Fyne). It shows the same things as the web page in
@@ -622,7 +622,7 @@ func (u *ui) jobDone(j *job) {
 	if j.Browser != nil && j.Retry != nil {
 		b := container.NewVBox(text("This copy has to be downloaded in your browser: " + j.Browser.Reason + "."))
 		if strings.HasPrefix(j.Browser.Mirror, "01studio:") {
-			b.Add(small("No 01studio.dev account (or it says supporters only)? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead."))
+			b.Add(small("No 01studio.dev account? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead."))
 		}
 		if strings.HasPrefix(j.Browser.Mirror, "nexus:") {
 			b.Add(nexusAccountBox(u))

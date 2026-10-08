@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // bulk publishes the items of a bulk.json (see workshop.PackBulk) whose

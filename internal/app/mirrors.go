@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/loaders"
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/popularity"
-	"github.com/DogeKingC/SWG/internal/preserve"
-	"github.com/DogeKingC/SWG/internal/scan"
-	"github.com/DogeKingC/SWG/internal/sources"
-	"github.com/DogeKingC/SWG/internal/version"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/popularity"
+	"github.com/Trlydev/SWG/internal/preserve"
+	"github.com/Trlydev/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/version"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // Mirror is one copy of a deleted Steam Workshop item on a mirror site.
@@ -233,7 +233,8 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 		}
 	}
 	// 01 STUDIO's own site lists its mods with their Workshop IDs.
-	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil {
+	// Only a free file: Early Access versions are for paying subscribers.
+	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil && it.SiteFileFree() {
 		list = append(list, s01Mirror(*it))
 		if titleHint == "" {
 			titleHint = it.Title
@@ -639,7 +640,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		nexusDirect := mr.nx != nil && nexusPremium()
 		if (mr.s01 != nil || mr.nx != nil) && !nexusDirect {
 			nb := &NeedsBrowser{URL: mr.Page, WorkshopID: ws, AnyFile: true, Mirror: mr.ID,
-				Reason: "01 STUDIO only gives its files to signed-in users, some only to supporters"}
+				Reason: "01 STUDIO gives its files to signed-in users (a free account)"}
 			if mr.nx != nil {
 				nb = nexusBrowser(*mr.nx, "")
 				nb.WorkshopID = ws
@@ -817,7 +818,7 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 
 // easierBrowser picks the browser download that is easiest for the person:
 // a mirror's page (no account), then Nexus Mods (a free account), then
-// 01 STUDIO (an account, some files for supporters only).
+// 01 STUDIO (a free account).
 func easierBrowser(have, nb *NeedsBrowser) *NeedsBrowser {
 	rank := func(b *NeedsBrowser) int {
 		switch {

@@ -1,4 +1,4 @@
-module github.com/DogeKingC/SWG
+module github.com/Trlydev/SWG
 
 go 1.25.0
 

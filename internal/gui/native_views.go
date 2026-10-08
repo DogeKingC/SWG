@@ -18,8 +18,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/manager"
 )
 
 // ---------- details ----------
@@ -385,7 +385,7 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	} else if p.Verdict == "browser" && p.Browser != nil {
 		box = append(box, muted("Reason: "+p.Browser.Reason+". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."))
 		if strings.HasPrefix(p.Browser.Mirror, "01studio:") {
-			box = append(box, muted("No 01studio.dev account, or supporters only? Pick the Nexus Mods or a mirror copy in the list above instead."))
+			box = append(box, muted("No 01studio.dev account? Pick the Nexus Mods or a mirror copy in the list above instead."))
 		}
 		if strings.HasPrefix(p.Browser.Mirror, "nexus:") {
 			box = append(box, nexusAccountBox(u))

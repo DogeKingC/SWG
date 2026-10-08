@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/archive"
-	"github.com/DogeKingC/SWG/internal/game"
-	"github.com/DogeKingC/SWG/internal/loaders"
-	"github.com/DogeKingC/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/archive"
+	"github.com/Trlydev/SWG/internal/game"
+	"github.com/Trlydev/SWG/internal/loaders"
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 // WormCutoff is the start of the September 2026 Workshop worm. Steam-origin

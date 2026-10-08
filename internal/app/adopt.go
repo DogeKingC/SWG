@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/scan"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/scan"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 // Found is a mod or contraption that was already in the game folders.

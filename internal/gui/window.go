@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/manager"
 )
 
 // browserCandidates lists Chromium-based browsers that support --app windows.

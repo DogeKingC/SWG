@@ -28,8 +28,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 	_ "golang.org/x/image/webp"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/sources"
 )
 
 func urlQuery(s string) string { return url.QueryEscape(s) }

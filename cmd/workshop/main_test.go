@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 const (

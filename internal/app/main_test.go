@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DogeKingC/SWG/internal/preserve"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/preserve"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 // Tests never reach the real Open Workshop or pre-worm archive.

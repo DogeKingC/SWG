@@ -30,14 +30,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DogeKingC/SWG/internal/app"
-	"github.com/DogeKingC/SWG/internal/cfclear"
-	"github.com/DogeKingC/SWG/internal/desktop"
-	"github.com/DogeKingC/SWG/internal/game"
-	"github.com/DogeKingC/SWG/internal/manager"
-	"github.com/DogeKingC/SWG/internal/selfupdate"
-	"github.com/DogeKingC/SWG/internal/sources"
-	"github.com/DogeKingC/SWG/internal/workshop"
+	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/cfclear"
+	"github.com/Trlydev/SWG/internal/desktop"
+	"github.com/Trlydev/SWG/internal/game"
+	"github.com/Trlydev/SWG/internal/manager"
+	"github.com/Trlydev/SWG/internal/selfupdate"
+	"github.com/Trlydev/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/workshop"
 )
 
 //go:embed web
