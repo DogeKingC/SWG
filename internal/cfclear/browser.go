@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+// sysRoot prefixes the fixed system-wide install paths (/opt, /usr/lib,
+// /snap, /var/lib/flatpak); tests point it at an empty folder so browsers
+// installed on the machine running them don't interfere.
+var sysRoot = ""
+
+func sys(p string) string { return filepath.Join(sysRoot, p) }
+
 // ErrNoBrowser means no usable browser is installed.
 var ErrNoBrowser = errors.New("no browser found for the check: install Chrome, Edge, Brave, Vivaldi, Chromium, " +
 	"Firefox or Zen (it doesn't have to be your default browser), or set its path with PPGMODS_BROWSER")
@@ -70,9 +77,9 @@ func firefoxBrowsers() []string {
 		}
 		for _, p := range []string{"/opt/zen-browser/zen", "/opt/zen/zen", "/opt/firefox/firefox", "/usr/lib/firefox/firefox",
 			"/usr/lib/librewolf/librewolf", "/snap/bin/firefox"} {
-			add(p)
+			add(sys(p))
 		}
-		for _, dir := range []string{"/var/lib/flatpak/exports/bin", filepath.Join(home, ".local", "share", "flatpak", "exports", "bin")} {
+		for _, dir := range []string{sys("/var/lib/flatpak/exports/bin"), filepath.Join(home, ".local", "share", "flatpak", "exports", "bin")} {
 			for _, id := range []string{"app.zen_browser.zen", "io.github.zen_browser.zen", "org.mozilla.firefox", "io.gitlab.librewolf-community", "one.ablaze.floorp"} {
 				add(filepath.Join(dir, id))
 			}
@@ -159,11 +166,11 @@ func FindBrowsers() []string {
 			"/opt/vivaldi/vivaldi", "/usr/lib/chromium/chromium", "/usr/lib/chromium-browser/chromium-browser",
 			"/snap/bin/chromium", "/snap/bin/brave",
 		} {
-			add(p)
+			add(sys(p))
 		}
 		// Flatpak installs, last: their sandbox may keep the check from
 		// working, but trying beats giving up.
-		for _, dir := range []string{"/var/lib/flatpak/exports/bin", filepath.Join(home, ".local", "share", "flatpak", "exports", "bin")} {
+		for _, dir := range []string{sys("/var/lib/flatpak/exports/bin"), filepath.Join(home, ".local", "share", "flatpak", "exports", "bin")} {
 			for _, id := range []string{"com.microsoft.Edge", "com.google.Chrome", "com.brave.Browser",
 				"com.vivaldi.Vivaldi", "org.chromium.Chromium", "io.github.ungoogled_software.ungoogled_chromium"} {
 				add(filepath.Join(dir, id))

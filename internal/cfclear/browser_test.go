@@ -15,6 +15,8 @@ func TestFindBrowsers(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("PATH lookup test for Linux")
 	}
+	sysRoot = t.TempDir() // ignore browsers installed on this machine
+	defer func() { sysRoot = "" }()
 	dir := t.TempDir()
 	viv := filepath.Join(dir, "vivaldi")
 	os.WriteFile(viv, []byte("#!/bin/sh\n"), 0o755)
