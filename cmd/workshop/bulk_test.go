@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -105,8 +106,9 @@ func TestBulkPackLeavesOutDevFiles(t *testing.T) {
 	}
 	unity := "MZ\x90\x00 unity engine"
 	write(managed, "UnityEngine.CoreModule.dll", unity)
-	write(src, "6666666/mod.json", "// my mod\n{\n  \"Name\": \"Loose\", /* old */ \"Author\": \"Old Timer\",\n  \"Scripts\": [\"s.cs\",],\n}\n")
 	write(src, "6666666/s.cs", "class S {}")
+	write(src, "6666666/mod.json", "// my mod\n{\n  \"Name\": \"Loose\", /* old */ \"Author\": \"Old Timer\",\n  \"Scripts\": [\"s.cs\", \"Scripts\\\\obj\\\\Gun.cs\",],\n}\n")
+	write(src, "6666666/scripts/obj/Gun.cs", "class Gun {}")
 	for _, f := range []string{"Loose.csproj", "Loose.sln", "s.pdb", "Loose.csproj.user", ".gitattributes",
 		"packages.config", "art/gun.aseprite", "art/gun.pdn", "obj/Debug/x.dll", "bin/s.dll"} {
 		write(src, "6666666/"+f, "dev")
@@ -124,7 +126,7 @@ func TestBulkPackLeavesOutDevFiles(t *testing.T) {
 	if len(m.Items) != 2 {
 		t.Fatalf("packed %d items, want 2", len(m.Items))
 	}
-	if it := m.Items[0]; it.Name != "Loose" || it.Author != "Old Timer" || len(it.Removed) != 11 {
+	if it := m.Items[0]; it.Name != "Loose" || it.Author != "Old Timer" || len(it.Removed) != 11 || slices.Contains(it.Removed, "scripts/obj/") {
 		t.Fatalf("loose item: %+v", it)
 	}
 	if it := m.Items[1]; len(it.Removed) != 0 {

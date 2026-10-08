@@ -250,13 +250,15 @@ func ManifestScripts(raw []byte) (scripts []string, ok bool) {
 	if s, err := manifestScripts(b); err == nil {
 		return s, true
 	}
-	if s, err := manifestScripts(LooseJSON(raw)); err == nil {
-		return s, true
-	}
+	// Loose JSON: every list the loose reading or the pattern finds counts,
+	// so a reader that disagrees with the game's can't hide one.
+	scripts, err := manifestScripts(LooseJSON(raw))
+	ok = err == nil
 	m := reLooseScripts.FindAllSubmatch(b, -1)
 	if m == nil {
-		return nil, false
+		return scripts, ok
 	}
+	ok = true
 	for _, list := range m {
 		for _, q := range reJSONString.FindAll(list[1], -1) {
 			if s, err := strconv.Unquote(string(q)); err == nil {

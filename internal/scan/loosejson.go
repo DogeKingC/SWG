@@ -25,16 +25,20 @@ func LooseJSON(raw []byte) []byte {
 			out = append(out, b[i:j+1]...)
 			i = j
 		case c == '/' && i+1 < len(b) && b[i+1] == '/':
-			for i < len(b) && b[i] != '\n' {
+			// Newtonsoft ends a line comment at \r or \n; stopping only at
+			// \n would hide what the game reads after a bare \r.
+			for i < len(b) && b[i] != '\n' && b[i] != '\r' {
 				i++
 			}
 			if i < len(b) {
-				out = append(out, '\n')
+				out = append(out, b[i])
 			}
 		case c == '/' && i+1 < len(b) && b[i+1] == '*':
 			end := bytes.Index(b[i+2:], []byte("*/"))
 			if end < 0 {
-				return out
+				// Unterminated: keep it, so the result stays invalid as
+				// it is for the game.
+				return append(out, b[i:]...)
 			}
 			i += end + 3
 			out = append(out, ' ')

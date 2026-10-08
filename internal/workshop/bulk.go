@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -115,22 +116,24 @@ func packItem(dir, id, out, gameManaged string) (*BulkItem, error) {
 	it := &BulkItem{WorkshopID: id, Version: "1.0"}
 	var modJSON, jaap string
 	var keep []string
+	listed := listedScripts(dir)
 	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, p)
+		key := strings.ToLower(filepath.ToSlash(rel))
 		if d.IsDir() {
-			if p != dir && devDirs[strings.ToLower(d.Name())] {
+			if p != dir && devDirs[strings.ToLower(d.Name())] && !listed.under(key) {
 				it.Removed = append(it.Removed, filepath.ToSlash(rel)+"/")
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if d.Type()&fs.ModeSymlink != 0 {
-			return nil
+		if !d.Type().IsRegular() {
+			return nil // symlinks, Windows junctions
 		}
-		if devOnly(p, gameManaged) {
+		if !listed[key] && devOnly(p, gameManaged) {
 			it.Removed = append(it.Removed, filepath.ToSlash(rel))
 			return nil
 		}
@@ -196,6 +199,43 @@ func packItem(dir, id, out, gameManaged string) (*BulkItem, error) {
 	}
 	it.SHA256 = sum
 	return it, nil
+}
+
+// scriptSet holds the scripts mod.json files list, as lower-case paths
+// relative to the item folder with forward slashes.
+type scriptSet map[string]bool
+
+// under reports whether a listed script lies inside folder dir.
+func (s scriptSet) under(dir string) bool {
+	for k := range s {
+		if strings.HasPrefix(k, dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// listedScripts reads every mod.json under dir: the files they list are
+// never left out, whatever their folder or extension.
+func listedScripts(dir string) scriptSet {
+	set := scriptSet{}
+	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.EqualFold(d.Name(), "mod.json") {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil
+		}
+		names, _ := scan.ManifestScripts(b)
+		base, _ := filepath.Rel(dir, filepath.Dir(p))
+		for _, n := range names {
+			rel := path.Clean(path.Join(filepath.ToSlash(base), strings.ReplaceAll(n, `\`, "/")))
+			set[strings.ToLower(rel)] = true
+		}
+		return nil
+	})
+	return set
 }
 
 // zipFiles writes the files rels of dir (as top folder top) into a zip,

@@ -1,8 +1,10 @@
 package scan
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"unicode/utf16"
 )
@@ -126,5 +128,19 @@ func TestLooseJSON(t *testing.T) {
 		if got := string(LooseJSON([]byte(in))); got != want {
 			t.Errorf("LooseJSON(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// The game's JSON reader ends a // comment at a bare \r too: whatever
+// follows it on the "same line" is read by the game, so its script list
+// must be read here as well. An unterminated /* stays invalid.
+func TestManifestScriptsCommentLineEnds(t *testing.T) {
+	raw := []byte("{\"Name\":\"x\",\"Scripts\":[\"ok.cs\"] // c\r,\"Scripts\":[\"../../evil.dll\"]\n}")
+	got, ok := ManifestScripts(raw)
+	if !ok || !slices.Contains(got, "../../evil.dll") {
+		t.Fatalf("ManifestScripts = %q, %v; the list after the bare \\r is missing", got, ok)
+	}
+	if err := json.Unmarshal(LooseJSON([]byte(`{"Scripts":["ok.cs"]} /* c`)), new(any)); err == nil {
+		t.Fatal("an unterminated comment became valid JSON")
 	}
 }
