@@ -12,16 +12,25 @@ import (
 )
 
 // 01 STUDIO (https://01studio.dev/mods) publishes its People Playground mods
-// on its own site. The catalogue is public. Free mods are free as their
-// Steam Workshop item, which the Workshop mirrors provide; files on the site
-// itself are mostly Early Access for paying subscribers. ppgmods lists only
-// the free mods, links each to its Workshop ID, and offers the site's own
-// file (in the browser, where the person is signed in) only when it is free.
+// on its own site. The catalogue is public. Free mods can be downloaded by
+// anyone from the site's CDN, by Workshop ID (S01DownloadURL); paid
+// versions (Early Access, for subscribers) are left out. ppgmods lists only
+// the free mods and links each to its Workshop ID.
 
 const (
 	s01API  = "https://api.01studio.dev"
 	s01Site = "https://01studio.dev"
+	s01CDN  = "https://cdn.01studio.dev/files/download/"
 )
+
+// S01DownloadURL is where 01 STUDIO serves the free file of a mod, by the
+// mod's Steam Workshop ID; "" for anything that isn't one.
+func S01DownloadURL(ws string) string {
+	if len(ws) < 6 || len(ws) > 12 || strings.Trim(ws, "0123456789") != "" {
+		return ""
+	}
+	return s01CDN + ws + ".zip"
+}
 
 // S01Mod is one catalogue entry.
 type S01Mod struct {

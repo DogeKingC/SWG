@@ -102,7 +102,7 @@ func s01Mirror(it sources.S01Mod) Mirror {
 	}
 	return Mirror{
 		ID: "01studio:" + it.Slug, Source: "01 STUDIO", Title: it.Title, Author: "01 STUDIO",
-		Version: v, VersionTime: it.CreatedTime(), Page: it.Page(), Image: it.Image(), Browser: true, s01: &it,
+		Version: v, VersionTime: it.CreatedTime(), Page: it.Page(), Image: it.Image(), s01: &it,
 	}
 }
 
@@ -234,7 +234,7 @@ func WorkshopMirrors(ws, titleHint string) ([]Mirror, error) {
 	}
 	// 01 STUDIO's own site lists its mods with their Workshop IDs.
 	// Only a free file: Early Access versions are for paying subscribers.
-	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil && it.SiteFileFree() {
+	if it, err := sources.S01ByWorkshopID(ws); err == nil && it != nil && it.Free() {
 		list = append(list, s01Mirror(*it))
 		if titleHint == "" {
 			titleHint = it.Title
@@ -638,13 +638,9 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			break
 		}
 		nexusDirect := mr.nx != nil && nexusPremium()
-		if (mr.s01 != nil || mr.nx != nil) && !nexusDirect {
-			nb := &NeedsBrowser{URL: mr.Page, WorkshopID: ws, AnyFile: true, Mirror: mr.ID,
-				Reason: "01 STUDIO gives its files to signed-in users (a free account)"}
-			if mr.nx != nil {
-				nb = nexusBrowser(*mr.nx, "")
-				nb.WorkshopID = ws
-			}
+		if mr.nx != nil && !nexusDirect {
+			nb := nexusBrowser(*mr.nx, "")
+			nb.WorkshopID = ws
 			if a.Opt.Mirror == mr.ID {
 				return nil, nb // picked: download it in the browser
 			}
@@ -731,6 +727,11 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 			// applies (Nexus uploads aren't reviewed).
 			c.SteamOrig, c.Revision = false, mr.VersionTime
 		}
+		if mr.s01 != nil {
+			// The authors' own file, not a Steam download: no worm-cutoff
+			// date check (the scanner and the rest of the policy apply).
+			c.SteamOrig, c.Revision = false, time.Time{}
+		}
 		if mr.ow != nil {
 			// Checked automatically: the cooldown applies unless the owner
 			// reviewed this version.
@@ -802,6 +803,21 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 		}
 		return copies[i].mr.Reviewed && !copies[j].mr.Reviewed
 	})
+	// 01 STUDIO's own copy of its mod comes first, unless another copy is
+	// newer or only it is flagged: it is the authors' file. When every
+	// copy is flagged, it is still the one offered (to accept the risk of).
+	anyClean := false
+	for _, cc := range copies {
+		anyClean = anyClean || cc.clean
+	}
+	for _, cc := range copies {
+		if cc.mr.s01 != nil && (cc.clean || !anyClean) && CompareVersions(effective(cc), effective(copies[0])) >= 0 {
+			if len(copies) > 1 {
+				a.logf("using 01 STUDIO's own copy (version %s)", orUnknown(cc.version))
+			}
+			return cc.c, nil
+		}
+	}
 	for i, cc := range copies {
 		if cc.clean {
 			if i > 0 {
@@ -943,6 +959,18 @@ func (a *App) downloadMirror(mr Mirror, ws string) (string, error) {
 	}
 	var links []string
 	switch {
+	case mr.s01 != nil:
+		u := sources.S01DownloadURL(ws)
+		if u == "" {
+			return "", fmt.Errorf("%w: no 01 STUDIO download for %q", sources.ErrGone, ws)
+		}
+		path := filepath.Join(dir, prefix+ws+".zip")
+		a.logf("  downloading from 01 STUDIO (cdn.01studio.dev)...")
+		if _, _, err := sources.Download(u, path+".part", 1<<30); err != nil {
+			os.Remove(path + ".part")
+			return "", err
+		}
+		return path, os.Rename(path+".part", path)
 	case mr.sky != nil:
 		if mr.sky.DownloadURL == "" {
 			return "", fmt.Errorf("%w: Skymods has no download for this copy", sources.ErrGone)

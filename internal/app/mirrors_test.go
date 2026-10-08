@@ -2,6 +2,7 @@ package app
 
 import (
 	"archive/zip"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,5 +283,58 @@ func TestArchiveRecordChecksCopies(t *testing.T) {
 	}
 	if ci := copyState("topmods:71"); ci.invalid == "" {
 		t.Fatal("changed copy not marked")
+	}
+}
+
+// 01 STUDIO's own copy of its mod (from its CDN) is used unless another
+// copy is newer or it is flagged by the scanner.
+func TestFetchWorkshopPrefers01Studio(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	zipVer := func(path, ver, script string) {
+		f, _ := os.Create(path)
+		zw := zip.NewWriter(f)
+		w, _ := zw.Create("Mod/mod.json")
+		w.Write([]byte(`{"Name":"Test","Author":"01 STUDIO","ModVersion":"` + ver + `","Scripts":["s.cs"]}`))
+		w, _ = zw.Create("Mod/s.cs")
+		w.Write([]byte(script))
+		zw.Close()
+		f.Close()
+	}
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
+	a := &App{Opt: DefaultOptions()}
+	for i, c := range []struct {
+		s01Ver, s01Script, skyVer, want string
+	}{
+		{"2.0", "class S {}", "2.0", "01studio:"},
+		{"2.0", "class S {}", "3.0", "skymods:"},
+		{"3.0", `class S { void A() { System.Diagnostics.Process.Start("cmd.exe"); } }`, "2.0", "skymods:"},
+		{"2.0", `class S { void A() { System.Diagnostics.Process.Start("cmd.exe"); } }`, "2.0", "01studio:"}, // both flagged: 01 STUDIO's
+	} {
+		ws := fmt.Sprintf("12345679%02d", i)
+		dir, _ := CacheDir("sky:" + ws)
+		zipVer(filepath.Join(dir, "01studio-t"+ws+"-"+ws+".zip"), c.s01Ver, c.s01Script)
+		skyScript := "class S {}"
+		if i == 3 {
+			skyScript = c.s01Script
+		}
+		zipVer(filepath.Join(dir, "skymods-9"+ws+"-old.zip"), c.skyVer, skyScript)
+		mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: []Mirror{
+			{ID: "skymods:9" + ws, Source: "Skymods", Title: "Test", Version: "2024-01-01", VersionTime: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), sky: &sources.SkyItem{}},
+			s01Mirror(sources.S01Mod{Slug: "t" + ws, Title: "Test", Category: "Free", Steam: 1}),
+		}}
+		got, err := a.fetchWorkshop(m, ws)
+		delete(mirrorMemo, ws)
+		if err != nil || got == nil || !strings.HasPrefix(got.Mirror, c.want) {
+			t.Errorf("case %d: %v %v, want a %s copy", i, got, err, c.want)
+		} else if c.want == "01studio:" && got.SteamOrig {
+			t.Errorf("case %d: 01 STUDIO's own file treated as a Steam copy", i)
+		}
+	}
+	if u := sources.S01DownloadURL("3704779343"); u != "https://cdn.01studio.dev/files/download/3704779343.zip" {
+		t.Errorf("download URL %q", u)
+	}
+	if sources.S01DownloadURL("../x") != "" || sources.S01DownloadURL("") != "" {
+		t.Error("a download URL for something that isn't a Workshop ID")
 	}
 }

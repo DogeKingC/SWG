@@ -1498,9 +1498,6 @@ func (a *App) Repair(m *manager.Manager, keys []string) Summary {
 			continue
 		}
 		b := a.with(func(o *Options) { o.Mirror, o.FileID = inst.Mirror, inst.FileID })
-		if strings.HasPrefix(inst.Mirror, "01studio:") {
-			b.Opt.Mirror = "" // needs the browser; any mirror copy will do
-		}
 		a.tally(&s, k, "REFUSED", b.Install(m, k))
 	}
 	a.logf("restore finished: %d restored, %d refused, %d failed", s.OK, s.Refused, s.Failed)
