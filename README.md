@@ -284,9 +284,10 @@ revoke-approvals`) makes RE_PPG ask again.
 ### Turning mods off, and profiles
 
 **Turn off** (in Installed, or `ppgmods off <key>`) moves a mod out of the
-game folder so the game doesn't load it; **Turn on** puts it back. Nothing is
+Mods folder into `ppgmods-off` next to it, so the game doesn't load it; **Turn on** puts it back. Nothing is
 deleted, updates skip it while it's off, and Verify notices if something
-puts a folder back under its name. A **profile** is a saved list of the mods
+puts a folder back under its name. Turning it on checks it first: one that
+was withdrawn, blocklisted or changed while it was off stays off. A **profile** is a saved list of the mods
 that are on: **Save as…** saves the current set under a name, **Use**
 switches to one (turning the others off and these on). Quarantined mods and
 contraptions are left alone. `ppgmods profile list | save <name> | use

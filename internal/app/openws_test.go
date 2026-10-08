@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -201,6 +203,17 @@ func TestArchiveCopyUpdatesToAuthorRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// An author's release older than the archived copy is no update.
+	older := modZip("0.9")
+	eold := entryFor("ow-test-by-me", "0.9", older)
+	eold.WorkshopID = "2222222"
+	uold, _ := url.Parse(eold.File)
+	f.files[uold.Path] = older
+	f.publish(t, priv, ea, eold)
+	if s := a.with(func(o *Options) { o.Yes = true }).Update(m); s.OK != 0 || m.State.Mods["ow:ow-test-2222222"].Version != "1.0" {
+		t.Fatalf("downgraded to the author's older release: %+v", s)
+	}
+
 	own := modZip("1.0.1")
 	eo := entryFor("ow-test-by-me", "1.0.1", own)
 	eo.WorkshopID = "2222222"
@@ -220,6 +233,14 @@ func TestArchiveCopyUpdatesToAuthorRelease(t *testing.T) {
 	}
 	if s := b.Update(m); s.OK != 0 || s.Current != 1 {
 		t.Fatalf("second update changed it again: %+v", s)
+	}
+	if m.State.Find("ow:ow-test-by-me") != in {
+		t.Error("the author's entry doesn't find the installed copy")
+	}
+	// Repairing it fetches the author's release, not the archived copy.
+	os.RemoveAll(filepath.Join(m.ModsDir, in.Folders[0]))
+	if s := b.Repair(m, []string{"ow:ow-test-2222222"}); s.OK != 1 || m.State.Mods["ow:ow-test-2222222"].Version != "1.0.1" {
+		t.Fatalf("repair: %+v %+v", s, m.State.Mods["ow:ow-test-2222222"])
 	}
 }
 

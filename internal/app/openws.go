@@ -231,7 +231,7 @@ func (a *App) owUpdate(inst *manager.Installed) (*manager.Candidate, error) {
 		e = ent
 		// An archived copy is superseded by its author's own release.
 		if isArchive(e) && !ix.Paused {
-			if b := bestForWorkshop(ix, e.WorkshopID); b != nil && b.Slug != e.Slug && !isArchive(b) {
+			if b := bestForWorkshop(ix, e.WorkshopID); b != nil && b.Slug != e.Slug && !isArchive(b) && CompareVersions(b.Version, inst.Version) >= 0 {
 				a.logf("%s: its author published it on the Open Workshop themselves (version %s); updating from their release", inst.Name, b.Version)
 				e = b
 			}
@@ -265,7 +265,9 @@ func (a *App) owUpdate(inst *manager.Installed) (*manager.Candidate, error) {
 		return nil, err
 	}
 	c.Key = inst.Key // update in place
-	if strings.HasPrefix(inst.Key, "sky:") {
+	if inst.Key != "ow:"+e.Slug {
+		// Under its own entry too (the author's release of an archived
+		// copy, or a Workshop item's release), so its card shows installed.
 		c.Aliases = append(c.Aliases, "ow:"+e.Slug)
 	}
 	return c, nil

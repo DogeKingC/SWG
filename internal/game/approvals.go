@@ -63,11 +63,14 @@ func localAppData(gameDir string) []string {
 	return []string{filepath.Join(steamapps, "compatdata", AppID, "pfx", "drive_c", "users", "steamuser", "AppData", "Local")}
 }
 
+// reppgConfigName is RE_PPG's BepInEx config file (its plugin GUID).
+const reppgConfigName = "community.re_ppg.mods.cfg"
+
 // reppgConfiguredData reads a DataDirectory set in RE_PPG's BepInEx config
 // (a relative path is under the game folder; under Proton, Z:\ is /).
+// Other plugins' configs are never read.
 func reppgConfiguredData(gameDir string) string {
-	cfgs, _ := filepath.Glob(filepath.Join(gameDir, "BepInEx", "config", "*.cfg"))
-	for _, cfg := range cfgs {
+	for _, cfg := range []string{filepath.Join(gameDir, "BepInEx", "config", reppgConfigName)} {
 		f, err := os.Open(cfg)
 		if err != nil {
 			continue

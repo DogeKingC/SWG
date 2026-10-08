@@ -3,27 +3,42 @@ package manager
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Trlydev/SWG/internal/scan"
 )
 
 // Turning mods off, and profiles. A mod that is off has its folders moved
-// out of Mods/ into ppgmods' "off" area, where the game can't load them;
+// out of Mods/ into the "ppgmods-off" folder next to it in the game folder
+// (same drive, so the move is a rename that can't half-finish), where the
+// game doesn't look;
 // turning it on moves them back. Nothing is deleted. A profile is a saved
 // list of the mods that are on; using it turns mods on and off to match.
 // Quarantined mods and contraptions are left alone.
 
 func (m *Manager) offDir(inst *Installed) (string, error) {
-	base, err := m.workDir("off")
-	if err != nil {
-		return "", err
+	if m.ModsDir == "" {
+		return "", fmt.Errorf("the game folder is unknown")
 	}
-	return filepath.Join(base, strings.ReplaceAll(inst.Key, ":", "-")), nil
+	return filepath.Join(filepath.Dir(m.ModsDir), "ppgmods-off", strings.ReplaceAll(inst.Key, ":", "-")), nil
 }
 
-// moveFolders moves inst's folders from one base folder to another; on a
-// failure it puts back what it moved.
+// legacyOffDir is where 0.3.0 kept turned-off mods (ppgmods' config
+// folder, maybe on another drive); turning them on still finds them there.
+func (m *Manager) legacyOffDir(inst *Installed) string {
+	base, err := ConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(base, "off", strings.ReplaceAll(inst.Key, ":", "-"))
+}
+
+// moveFolders moves inst's folders from one base folder to another by
+// renaming (both are in the game folder, on one drive): a folder moves
+// whole or not at all. On a failure it puts back what it moved.
 func moveFolders(inst *Installed, from, to string) error {
 	for _, f := range inst.Folders {
 		if err := plainFolder(from, f); err != nil {
@@ -39,9 +54,14 @@ func moveFolders(inst *Installed, from, to string) error {
 		if _, err := os.Stat(src); err != nil {
 			continue // already gone
 		}
-		if err := moveTree(src, filepath.Join(to, f)); err != nil {
+		if err := os.MkdirAll(to, 0o755); err != nil {
+			return err
+		}
+		// A rename, never copy-then-delete: that could leave a half-deleted
+		// folder in Mods if a file is locked.
+		if err := os.Rename(src, filepath.Join(to, f)); err != nil {
 			for _, back := range moved {
-				moveTree(filepath.Join(to, back), filepath.Join(from, back))
+				os.Rename(filepath.Join(to, back), filepath.Join(from, back))
 			}
 			return fmt.Errorf("moving %s: %w (is the game running?)", f, err)
 		}
@@ -50,7 +70,7 @@ func moveFolders(inst *Installed, from, to string) error {
 	return nil
 }
 
-// TurnOff moves an installed mod out of the game folder, so the game
+// TurnOff moves an installed mod out of Mods/ (see offDir), so the game
 // doesn't load it, until TurnOn.
 func (m *Manager) TurnOff(key string) error {
 	if err := m.turnOff(key); err != nil {
@@ -104,6 +124,39 @@ func (m *Manager) turnOn(key string) error {
 	if err != nil {
 		return err
 	}
+	if _, err := os.Stat(src); err != nil {
+		if old := m.legacyOffDir(inst); old != "" {
+			if _, err := os.Stat(old); err == nil {
+				if err := m.checkBeforeOn(inst, old); err != nil {
+					return err
+				}
+				// Turned off by 0.3.0: copied back across drives if need be.
+				for _, f := range inst.Folders {
+					if err := plainFolder(old, f); err != nil {
+						return err
+					}
+					if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err == nil {
+						return fmt.Errorf("turning on %s: %s already exists; move it away first", key, filepath.Join(m.dirFor(inst), f))
+					}
+				}
+				for _, f := range inst.Folders {
+					if _, err := os.Stat(filepath.Join(old, f)); err != nil {
+						continue
+					}
+					if err := moveTree(filepath.Join(old, f), filepath.Join(m.dirFor(inst), f)); err != nil {
+						return fmt.Errorf("turning on %s: %w", key, err)
+					}
+				}
+				os.Remove(old)
+				inst.Off = false
+				m.logf("turned on %s; Verify checks it against what was installed", key)
+				return nil
+			}
+		}
+	}
+	if err := m.checkBeforeOn(inst, src); err != nil {
+		return err
+	}
 	if err := moveFolders(inst, src, m.dirFor(inst)); err != nil {
 		return fmt.Errorf("turning on %s: %w", key, err)
 	}
@@ -113,8 +166,52 @@ func (m *Manager) turnOn(key string) error {
 	return nil
 }
 
+// checkBeforeOn refuses to put a mod back that was taken down, blocklisted
+// or changed while it was off (base holds its folders): the checks Verify
+// would make once it's back, made before the game can load it.
+func (m *Manager) checkBeforeOn(inst *Installed, base string) error {
+	refuse := func(why string) error {
+		return &Rejection{[]string{fmt.Sprintf("%s stays off: %s. Remove it, or install it again", inst.Key, why)}}
+	}
+	if m.Withdrawn != nil {
+		if why := m.Withdrawn(inst); why != "" {
+			return refuse("the Open Workshop took it down (" + why + ")")
+		}
+	}
+	if m.Blocklist != nil {
+		rep := &scan.Report{}
+		m.Blocklist.Check(&Candidate{Key: inst.Key, Aliases: inst.Aliases, FileID: inst.FileID, ArchiveSHA: inst.ArchiveSHA}, base, rep)
+		for _, f := range rep.Findings {
+			if f.Rule == "blocklisted" && !strings.Contains(f.Detail, "paused") {
+				return refuse(f.Detail)
+			}
+		}
+	}
+	now := map[string]string{}
+	for _, f := range inst.Folders {
+		if _, err := os.Stat(filepath.Join(base, f)); err != nil {
+			continue
+		}
+		if err := hashTree(filepath.Join(base, f), f, now); err != nil {
+			return err
+		}
+	}
+	for p, h := range now {
+		if want, ok := inst.Files[p]; !ok || want != h {
+			if path.Base(p) == "mod.json" && ok && manifestOnlyToggled(base, p, inst.Files, now) {
+				continue
+			}
+			return refuse("its files changed while it was off (" + p + ")")
+		}
+	}
+	return nil
+}
+
 // deleteOff deletes the folders of a mod that is off, for good.
 func (m *Manager) deleteOff(inst *Installed) error {
+	if old := m.legacyOffDir(inst); old != "" {
+		os.RemoveAll(old)
+	}
 	d, err := m.offDir(inst)
 	if err != nil {
 		return err

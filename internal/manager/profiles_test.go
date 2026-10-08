@@ -136,3 +136,48 @@ func TestProfiles(t *testing.T) {
 		t.Fatal("saved a profile without a name")
 	}
 }
+
+// Review fixes: a turned-off mod is kept next to Mods in the game folder
+// (one drive, moved by rename); one changed while off stays off; one turned
+// off by 0.3.0 (kept in the config folder) still turns on; quarantine and
+// forget refuse a turned-off mod instead of orphaning its folders.
+func TestTurnOffReviewFixes(t *testing.T) {
+	m := newTestManager(t)
+	alpha := installTestMod(t, m, "gb:1", "Alpha")
+	if err := m.TurnOff("gb:1"); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := m.offDir(m.State.Mods["gb:1"])
+	if filepath.Dir(filepath.Dir(d)) != filepath.Dir(m.ModsDir) {
+		t.Fatalf("off folder %s is not next to Mods", d)
+	}
+	if err := m.Quarantine("gb:1", "x"); err == nil {
+		t.Error("quarantined a turned-off mod")
+	}
+	if err := m.Forget("gb:1"); err == nil {
+		t.Error("forgot a turned-off mod, orphaning its folders")
+	}
+	// Tampered with while off: stays off.
+	s := filepath.Join(d, filepath.Base(alpha), "s.cs")
+	os.WriteFile(s, []byte("class S { /* injected */ }"), 0o644)
+	var rej *Rejection
+	if err := m.TurnOn("gb:1"); !errors.As(err, &rej) || exists(alpha) {
+		t.Fatalf("a mod changed while off was turned on: %v", err)
+	}
+	os.WriteFile(s, []byte("class S {}"), 0o644)
+	if err := m.TurnOn("gb:1"); err != nil || !exists(alpha) {
+		t.Fatalf("turn on: %v", err)
+	}
+
+	// Turned off by 0.3.0: its folders are in the config folder.
+	inst := m.State.Mods["gb:1"]
+	old := m.legacyOffDir(inst)
+	os.MkdirAll(old, 0o755)
+	if err := os.Rename(alpha, filepath.Join(old, filepath.Base(alpha))); err != nil {
+		t.Fatal(err)
+	}
+	inst.Off = true
+	if err := m.TurnOn("gb:1"); err != nil || !exists(filepath.Join(alpha, "s.cs")) || exists(old) {
+		t.Fatalf("a mod turned off by 0.3.0 didn't come back: %v", err)
+	}
+}

@@ -29,6 +29,9 @@ func (m *Manager) Quarantine(key, reason string) error {
 	if inst.Quarantined != "" {
 		return fmt.Errorf("%s is already in quarantine", key)
 	}
+	if inst.Off {
+		return fmt.Errorf("%s is turned off (the game doesn't load it); remove it, or turn it on first", key)
+	}
 	q, err := m.quarantineDir(inst)
 	if err != nil {
 		return err

@@ -214,6 +214,23 @@ func publishHeld(ix *workshop.Index, h *heldList, id, owner, out string) string 
 		// A different file, or one that now does what the worm did: never.
 		return fmt.Sprintf("%s %s: NOT published: %s", id, it.Name, strings.Join(res.Problems, "; "))
 	}
+	// Only what the owner saw in the review is approved: a newer scanner
+	// may find more in the same file.
+	reviewed := map[string]bool{}
+	for _, r := range it.Reasons {
+		reviewed[r] = true
+	}
+	var unseen []string
+	for _, h := range res.Holds {
+		if !approvable(h) && !reviewed[h] {
+			unseen = append(unseen, h)
+		}
+	}
+	if len(unseen) > 0 {
+		it.Reasons = append(it.Reasons, unseen...)
+		it.Findings = res.Findings
+		return fmt.Sprintf("%s %s: NOT published: the check now finds more than you reviewed (%s); run review again", id, it.Name, strings.Join(unseen, "; "))
+	}
 	if err := publishChecked(ix, s, res, slug, owner, out); err != nil {
 		return fmt.Sprintf("%s %s: internal error: %v", id, it.Name, err)
 	}

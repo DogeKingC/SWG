@@ -590,7 +590,7 @@ func (p *installedPane) profileBar() {
 		name := widget.NewEntry()
 		name.SetPlaceHolder("e.g. Gore pack")
 		name.SetText(p.profSel.Selected)
-		body := container.New(&vlist{gap: 8}, text("Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the game folder, nothing deleted) and these back on."), name)
+		body := container.New(&vlist{gap: 8}, text("Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the Mods folder, nothing deleted) and these back on."), name)
 		u.confirm("Save profile", body, "Save", false, func() {
 			if n := strings.TrimSpace(name.Text); n != "" {
 				u.run(map[string]any{"action": "profile-save", "name": n}, "Saving profile "+n)
@@ -741,7 +741,7 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 		meta += "\nIn quarantine (" + m.Quarantined + "): moved out of the game folder, so the game can't load it."
 	}
 	if m.Off {
-		meta += "\nTurned off: moved out of the game folder, so the game doesn't load it."
+		meta += "\nTurned off: moved out of the Mods folder (into ppgmods-off), so the game doesn't load it."
 	}
 	actions := container.NewHBox()
 	if m.Quarantined != "" {
@@ -762,7 +762,7 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 		on.Importance = widget.HighImportance
 		actions.Add(on)
 		actions.Add(widget.NewButton("Remove", func() {
-			u.confirm("Remove "+m.Name+"?", text("This deletes its folders (kept outside the game folder while it's off)."), "Remove", true, func() {
+			u.confirm("Remove "+m.Name+"?", text("This deletes its folders (kept in ppgmods-off while it's off)."), "Remove", true, func() {
 				u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
 			})
 		}))

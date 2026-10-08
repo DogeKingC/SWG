@@ -979,7 +979,17 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 		}
 		return a.fetchTW(id, prev)
 	case strings.HasPrefix(ref, "ow:"):
-		return a.fetchOW(strings.TrimPrefix(ref, "ow:"), prev)
+		slug := strings.TrimPrefix(ref, "ow:")
+		// Installed from another entry (an archived copy since replaced by
+		// its author's release): fetch that one, keep the key.
+		if other, ok := strings.CutPrefix(a.Opt.Mirror, "openworkshop:"); ok && other != slug {
+			c, err := a.fetchOW(other, prev)
+			if c != nil {
+				c.Key, c.Aliases = ref, append(c.Aliases, "ow:"+other)
+			}
+			return c, err
+		}
+		return a.fetchOW(slug, prev)
 	case strings.HasPrefix(ref, "nx:"):
 		id, err := strconv.Atoi(strings.TrimPrefix(ref, "nx:"))
 		if err != nil {

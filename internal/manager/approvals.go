@@ -96,15 +96,21 @@ func listApprovals(gameDir string) []approval {
 // with their time), forged ones, and how many versions run unchecked.
 func (m *Manager) verifyApprovals(gameDir string) []Problem {
 	all := listApprovals(gameDir)
+	seen, known := loadSeenApprovals()
 	if len(all) == 0 {
+		if !known {
+			seen.save() // the baseline: no approvals, so any later one is new
+		}
 		return nil
 	}
-	seen, known := loadSeenApprovals()
 	const label = "RE_PPG approvals"
 	var probs []Problem
 	unsafe := 0
 	for _, a := range all {
-		key := a.path
+		// By file name: the fingerprint names the mod version, wherever
+		// RE_PPG's folder is found (a moved library or a config change
+		// must not make every approval look new).
+		key := filepath.Base(a.path)
 		_, wasSeen := seen.Seen[key]
 		if a.forged {
 			probs = append(probs, Problem{label, fmt.Sprintf("an approval file RE_PPG didn't write (%s, %s): something approved a mod in its place. Revoke the Trust and run approvals in Settings → Game setup, and run Verify again", filepath.Base(a.path), a.at.Format("2006-01-02 15:04")), true, ""})
@@ -119,12 +125,12 @@ func (m *Manager) verifyApprovals(gameDir string) []Problem {
 		}
 	}
 	if unsafe > 0 {
-		probs = append(probs, Problem{label, fmt.Sprintf("%d mod version(s) run without RE_PPG's security checks because you clicked \"Trust and run\". Revoke them in Settings → Game setup if you're not sure about one.", unsafe), false, ""})
+		probs = append(probs, Problem{label, fmt.Sprintf("%d mod version(s) run without RE_PPG's security checks (approved with \"Trust and run\"). Revoke them in Settings → Game setup if you're not sure about one.", unsafe), false, ""})
 	}
 	// Forget files that are gone.
 	present := map[string]bool{}
 	for _, a := range all {
-		present[a.path] = true
+		present[filepath.Base(a.path)] = true
 	}
 	for k := range seen.Seen {
 		if !present[k] {

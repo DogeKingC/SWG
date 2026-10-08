@@ -199,7 +199,7 @@ function renderInstalled() {
     const actions = m.off
       ? el("div", { class: "item-actions" },
         el("button", { class: "btn btn-primary btn-sm", onclick: () => run({ action: "turn-on", key: m.key }, "Turning on " + m.name) }, "Turn on"),
-        el("button", { class: "btn btn-sm", onclick: () => dialog("Remove " + m.name + "?", [el("p", {}, "This deletes its folders (kept outside the game folder while it's off).")],
+        el("button", { class: "btn btn-sm", onclick: () => dialog("Remove " + m.name + "?", [el("p", {}, "This deletes its folders (kept in ppgmods-off while it's off).")],
           { label: "Remove", run: () => run({ action: "remove", key: m.key }, "Removing " + m.name) }) }, "Remove"))
       : m.quarantined
       ? el("div", { class: "item-actions" },
@@ -209,7 +209,7 @@ function renderInstalled() {
           { label: "Remove", run: () => run({ action: "remove", key: m.key }, "Removing " + m.name) }) }, "Remove"))
       : el("div", { class: "item-actions" },
         m.link ? el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent(m.link)) }, "Open page") : null,
-        m.item_kind !== "contraption" ? el("button", { class: "btn btn-sm", title: "Move it out of the game folder so the game doesn't load it; Turn on puts it back", onclick: () => run({ action: "turn-off", key: m.key }, "Turning off " + m.name) }, "Turn off") : null,
+        m.item_kind !== "contraption" ? el("button", { class: "btn btn-sm", title: "Move it out of the Mods folder so the game doesn't load it; Turn on puts it back", onclick: () => run({ action: "turn-off", key: m.key }, "Turning off " + m.name) }, "Turn off") : null,
         m.key.startsWith("gb:") ? el("button", { class: "btn btn-sm", onclick: () => run({ action: "pin", key: m.key, pinned: !m.pinned }, m.pinned ? "Resuming updates" : "Pinning") }, m.pinned ? "Unpin" : "Pin") : null,
         el("button", { class: "btn btn-sm", title: "Restore the version installed before the last update", onclick: () => run({ action: "rollback", key: m.key }, "Rolling back " + m.name) }, "Rollback"),
         el("button", { class: "btn btn-ghost btn-sm", title: "Share this on the Open Workshop", onclick: () => run({ action: "ow-share", key: m.key }, "Packing " + m.name) }, "Share"),
@@ -229,7 +229,7 @@ function renderInstalled() {
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null,
           m.quarantined ? el("span", { class: "badge badge-bad", title: "In quarantine: " + m.quarantined + ". The game can't load it." }, "quarantined") : null,
-          m.off ? el("span", { class: "badge", title: "Turned off: moved out of the game folder, so the game doesn't load it" }, "off") : null),
+          m.off ? el("span", { class: "badge", title: "Turned off: moved out of the Mods folder (into ppgmods-off), so the game doesn't load it" }, "off") : null),
         el("div", { class: "item-meta" },
           m.author ? "by " + m.author + " · " : "", m.key, " · installed ", (m.installed_at || "").slice(0, 10),
           m.revision && !m.revision.startsWith("0001") ? " · source date " + m.revision.slice(0, 10) : "",
@@ -271,7 +271,7 @@ $("#profileUse").onclick = () => {
 };
 $("#profileSave").onclick = () => {
   const input = el("input", { placeholder: "e.g. Gore pack", value: $("#profileSel").value || "" });
-  dialog("Save profile", [el("p", {}, "Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the game folder, nothing deleted) and these back on."), input],
+  dialog("Save profile", [el("p", {}, "Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the Mods folder, nothing deleted) and these back on."), input],
     { label: "Save", run: () => { const n = input.value.trim(); if (n) run({ action: "profile-save", name: n }, "Saving profile " + n); } });
   input.focus();
 };

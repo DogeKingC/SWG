@@ -626,8 +626,12 @@ func (m *Manager) MissingFolders(inst *Installed) bool {
 // Forget stops tracking an item without touching the game folders (for
 // items whose folders are already gone).
 func (m *Manager) Forget(key string) error {
-	if m.State.Mods[key] == nil {
+	inst := m.State.Mods[key]
+	if inst == nil {
 		return fmt.Errorf("%s is not installed", key)
+	}
+	if inst.Off {
+		return fmt.Errorf("%s is turned off and its folders are kept by ppgmods; remove it instead", key)
 	}
 	delete(m.State.Mods, key)
 	m.logf("stopped tracking %s", key)

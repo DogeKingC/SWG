@@ -390,7 +390,11 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 		if err != nil {
 			return err
 		}
-		sum := a.ImportList(m, l)
+		// A shared list must not open a browser page for each item: mods
+		// that need a browser download are reported instead.
+		imp := *a
+		imp.Opt.BrowserFallback = false
+		sum := imp.ImportList(m, l)
 		if sum.Refused+sum.Failed > 0 {
 			return fmt.Errorf("%d not installed; see above for reasons", sum.Refused+sum.Failed)
 		}

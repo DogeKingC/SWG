@@ -195,6 +195,13 @@ func TestReviewQueue(t *testing.T) {
 	}
 
 	files := t.TempDir()
+	// A newer scanner finds more than the owner reviewed: not published.
+	saved := back.Items[0].Reasons
+	back.Items[0].Reasons = []string{"File type: something else"}
+	if line := publishHeld(ix, back, "4444444", "owner", files); !strings.Contains(line, "finds more than you reviewed") || len(ix.Entries) != 0 {
+		t.Fatalf("published with findings the owner never saw: %s", line)
+	}
+	back.Items[0].Reasons = saved
 	if line := publishHeld(ix, back, "5555555", "owner", files); !strings.Contains(line, "not in the review queue") {
 		t.Errorf("an item with a hard problem was publishable: %s", line)
 	}

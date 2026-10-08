@@ -71,10 +71,36 @@ func TestVerifyApprovals(t *testing.T) {
 func TestApprovalDirsFromConfig(t *testing.T) {
 	gameDir := t.TempDir()
 	os.MkdirAll(filepath.Join(gameDir, "BepInEx", "config"), 0o755)
-	os.WriteFile(filepath.Join(gameDir, "BepInEx", "config", "re_ppg.cfg"), []byte("[General]\nDataDirectory = nope\n\n[Paths]\n# Compiler and updater working files.\nDataDirectory = rp-data\n"), 0o644)
+	os.WriteFile(filepath.Join(gameDir, "BepInEx", "config", "community.re_ppg.mods.cfg"), []byte("[General]\nDataDirectory = nope\n\n[Paths]\n# Compiler and updater working files.\nDataDirectory = rp-data\n"), 0o644)
 	os.MkdirAll(filepath.Join(gameDir, "rp-data", "launch-approvals"), 0o755)
 	got := game.ApprovalDirs(gameDir)
 	if len(got) != 1 || got[0] != filepath.Join(gameDir, "rp-data", "launch-approvals") {
 		t.Fatalf("got %v", got)
+	}
+}
+
+// The first Verify with no approvals at all still records that, so an
+// approval planted afterwards is flagged.
+func TestVerifyApprovalsBaselineWhenEmpty(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("lays out a Proton prefix")
+	}
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	lib := t.TempDir()
+	gameDir := filepath.Join(lib, "steamapps", "common", "People Playground")
+	os.MkdirAll(filepath.Join(gameDir, "Mods"), 0o755)
+	dir := filepath.Join(lib, "steamapps", "compatdata", game.AppID, "pfx", "drive_c", "users", "steamuser", "AppData", "Local", "RE_PPG", "local-mods", "AB", "launch-approvals")
+	os.MkdirAll(dir, 0o755)
+	m := &Manager{State: &State{Mods: map[string]*Installed{}}, ModsDir: filepath.Join(gameDir, "Mods")}
+	if probs := m.verifyApprovals(gameDir); len(probs) != 0 {
+		t.Fatalf("%+v", probs)
+	}
+	os.WriteFile(filepath.Join(dir, strings.Repeat("e", 64)+".unsafe"), []byte(game.UnsafeApprovalText), 0o644)
+	flagged := false
+	for _, p := range m.verifyApprovals(gameDir) {
+		flagged = flagged || p.Bad
+	}
+	if !flagged {
+		t.Fatal("an approval planted after an empty first Verify was not flagged")
 	}
 }
