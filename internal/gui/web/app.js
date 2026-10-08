@@ -372,7 +372,9 @@ function jobDone(j) {
       return;
     }
     if (sum && j.name === "update") {
-      toast(`${sum.Current} up to date, ${sum.OK} ${$("#applyUpdates").dataset.last === "apply" ? "updated" : "can update"}, ${sum.Refused} held back`, 6000);
+      toast(`${sum.Current} up to date, ${sum.OK} ${$("#applyUpdates").dataset.last === "apply" ? "updated" : "can update"}, ${sum.Refused} held back`
+        + (sum.Manual ? `, ${sum.Manual} to update by hand on Nexus Mods` : "")
+        + (sum.NotChecked ? `, ${sum.NotChecked} with nothing to check (the log says why)` : ""), 8000);
       return;
     }
     if (sum && j.name === "repair") { toast(`${sum.OK} restored, ${sum.Refused} refused, ${sum.Failed} could not be restored (see the log)`, 8000); refreshState(); return; }

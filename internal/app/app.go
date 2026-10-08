@@ -1478,6 +1478,9 @@ func (a *App) candidate(p string) (*manager.Candidate, error) {
 
 type Summary struct {
 	OK, Refused, Failed, Current int
+	// Update only: updates that need the person (a Nexus file without a
+	// premium account), and items with nothing to check against.
+	Manual, NotChecked int
 }
 
 // Repair reinstalls installed items whose folders are missing or whose files
@@ -1512,26 +1515,65 @@ func (a *App) Update(m *manager.Manager) Summary {
 		m.Policy.DryRun = true
 		a.logf("dry run: checking only")
 	}
+	// Every item is counted: checked, or why it couldn't be.
+	notChecked := map[string]int{}
+	skip := func(why string) {
+		s.NotChecked++
+		notChecked[why]++
+	}
+	defer func() {
+		var whys []string
+		for w := range notChecked {
+			whys = append(whys, w)
+		}
+		sort.Strings(whys)
+		for _, w := range whys {
+			a.logf("not checked: %d %s", notChecked[w], w)
+		}
+	}()
 	for _, inst := range m.State.Sorted() {
 		if inst.Quarantined != "" {
-			a.logf("%s is in quarantine, skipped", inst.Key)
+			skip("in quarantine")
 			continue
 		}
 		if inst.Off {
-			a.logf("%s is turned off, skipped", inst.Key)
+			skip("turned off")
+			continue
+		}
+		if inst.Pinned {
+			skip("pinned (Unpin to get updates)")
+			continue
+		}
+		if strings.HasPrefix(inst.Key, "nx:") {
+			c, err := a.nexusUpdate(inst)
+			switch {
+			case errors.Is(err, errNexusByHand):
+				s.Manual++
+			case err == nil && c == nil:
+				s.Current++
+			default:
+				if err == nil {
+					err = m.Install(c)
+				}
+				a.tally(&s, inst.Key, "HELD", err)
+			}
 			continue
 		}
 		if strings.HasPrefix(inst.Key, "ow:") || strings.HasPrefix(inst.Key, "sky:") {
-			if inst.Pinned {
-				a.logf("%s pinned, skipped", inst.Key)
-				continue
-			}
 			c, err := a.owUpdate(inst)
-			if err == nil && c == nil {
-				if strings.HasPrefix(inst.Key, "ow:") {
-					s.Current++
+			if err == nil && c == nil && strings.HasPrefix(inst.Key, "sky:") {
+				// 01 STUDIO keeps its mods on its own site: a newer file can
+				// come from there.
+				var mine bool
+				c, mine, err = a.s01Update(m, inst)
+				if !mine {
+					skip("Steam Workshop copies (Steam deleted the originals: nothing newer exists unless the author republishes it)")
+					continue
 				}
-				continue // Workshop copies are frozen unless republished on the Open Workshop
+			}
+			if err == nil && c == nil {
+				s.Current++
+				continue
 			}
 			if err == nil {
 				err = m.Install(c)
@@ -1568,10 +1610,11 @@ func (a *App) Update(m *manager.Manager) Summary {
 			continue
 		}
 		if !strings.HasPrefix(inst.Key, "gb:") {
-			continue // Workshop copies are frozen: Steam no longer hosts them
-		}
-		if inst.Pinned {
-			a.logf("%s pinned, skipped", inst.Key)
+			if strings.HasPrefix(inst.Key, "local:") {
+				skip("found on this PC without a site to update from")
+			} else {
+				skip("from a source without updates")
+			}
 			continue
 		}
 		id, _ := strconv.Atoi(strings.TrimPrefix(inst.Key, "gb:"))
@@ -1596,8 +1639,70 @@ func (a *App) Update(m *manager.Manager) Summary {
 	if m.Policy.DryRun {
 		verb = "can update"
 	}
-	a.logf("%d up to date, %d %s, %d held back, %d errors", s.Current, s.OK, verb, s.Refused, s.Failed)
+	a.logf("%d up to date, %d %s, %d held back, %d to update by hand, %d not checked, %d errors", s.Current, s.OK, verb, s.Refused, s.Manual, s.NotChecked, s.Failed)
 	return s
+}
+
+// errNexusByHand: a newer Nexus file is waiting, and only the person can
+// get it (no premium account).
+var errNexusByHand = errors.New("update on Nexus Mods, to install by hand")
+
+// nexusUpdate checks a Nexus Mods item: nil when it is current, the new
+// file with a premium account, else errNexusByHand.
+func (a *App) nexusUpdate(inst *manager.Installed) (*manager.Candidate, error) {
+	id, err := strconv.Atoi(strings.TrimPrefix(inst.Key, "nx:"))
+	if err != nil {
+		return nil, fmt.Errorf("bad Nexus Mods id %q", inst.Key)
+	}
+	it, err := sources.NXGet(id)
+	if err != nil {
+		return nil, err
+	}
+	if CompareVersions(it.Version, inst.Version) <= 0 {
+		return nil, nil
+	}
+	if acct := LoadNexus(); acct != nil && acct.Premium {
+		c, err := a.fetchNexus(id, nil)
+		if c != nil {
+			c.Key = inst.Key
+		}
+		return c, err
+	}
+	a.logf("%s: version %s is on Nexus Mods (you have %s); press Install on it to update (Nexus gives files to free accounts through its page)", inst.Name, it.Version, orUnknown(inst.Version))
+	return nil, errNexusByHand
+}
+
+// s01Update checks 01 STUDIO's site for a newer file of an installed
+// 01 STUDIO mod; mine is false for anyone else's mod. A copy installed
+// from 01 STUDIO updates when its file changed; one from a mirror only
+// for a higher version.
+func (a *App) s01Update(m *manager.Manager, inst *manager.Installed) (c *manager.Candidate, mine bool, err error) {
+	ws := strings.TrimPrefix(inst.Key, "sky:")
+	it, err := sources.S01ByWorkshopID(ws)
+	if err != nil || it == nil || !it.Free() {
+		return nil, false, nil
+	}
+	mirror := "01studio:" + it.Slug
+	// The cached download is what's installed; fetch the site's current one.
+	if dir, err := CacheDir("sky:" + ws); err == nil {
+		old, _ := filepath.Glob(filepath.Join(dir, strings.ReplaceAll(mirror, ":", "-")+"-*"))
+		for _, p := range old {
+			os.Remove(p)
+		}
+	}
+	c, err = a.with(func(o *Options) { o.Mirror = mirror }).fetchWorkshop(m, ws)
+	if err != nil || c == nil {
+		return nil, true, err
+	}
+	switch v := CompareVersions(c.Version, inst.Version); {
+	case v < 0, c.ArchiveSHA == inst.ArchiveSHA:
+		return nil, true, nil
+	case v == 0 && inst.Mirror != mirror:
+		return nil, true, nil // the same version, from another copy
+	}
+	a.logf("%s: 01 STUDIO has a newer file (version %s, you have %s)", inst.Name, orUnknown(c.Version), orUnknown(inst.Version))
+	c.Key = inst.Key
+	return c, true, nil
 }
 
 func (a *App) tally(s *Summary, ref, word string, err error) {

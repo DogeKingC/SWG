@@ -185,3 +185,16 @@ func S01Matches(m S01Mod, q string) bool {
 	}
 	return true
 }
+
+// SetS01ForTest replaces the catalogue (tests); the returned func restores it.
+func SetS01ForTest(list []S01Mod) func() {
+	s01Mu.Lock()
+	old, oldAt := s01All, s01At
+	s01All, s01At = list, time.Now().Add(100*365*24*time.Hour)
+	s01Mu.Unlock()
+	return func() {
+		s01Mu.Lock()
+		s01All, s01At = old, oldAt
+		s01Mu.Unlock()
+	}
+}

@@ -578,7 +578,14 @@ func (u *ui) jobDone(j *job) {
 			if u.installed.lastApply {
 				verb = "updated"
 			}
-			u.toast(fmt.Sprintf("%d up to date, %d %s, %d held back", sum.Current, sum.OK, verb, sum.Refused))
+			msg := fmt.Sprintf("%d up to date, %d %s, %d held back", sum.Current, sum.OK, verb, sum.Refused)
+			if sum.Manual > 0 {
+				msg += fmt.Sprintf(", %d to update by hand on Nexus Mods", sum.Manual)
+			}
+			if sum.NotChecked > 0 {
+				msg += fmt.Sprintf(", %d with nothing to check (Show log says why)", sum.NotChecked)
+			}
+			u.toast(msg)
 		case sum != nil && j.Name == "repair":
 			u.toast(fmt.Sprintf("%d restored, %d refused, %d could not be restored (see the log)", sum.OK, sum.Refused, sum.Failed))
 		case sum != nil:

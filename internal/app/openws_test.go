@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -257,5 +258,80 @@ func TestBestForWorkshop(t *testing.T) {
 	}
 	if e := bestForWorkshop(ix, ""); e != nil {
 		t.Fatalf("matched an empty Workshop ID: %+v", e)
+	}
+}
+
+// Check for updates counts every installed item: checked, or why not.
+// A Workshop copy with no newer source, an item found on the PC, a pinned
+// one and one turned off are "not checked", not silently left out.
+func TestUpdateCountsEverything(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	defer workshop.SetIndexForTest(&workshop.Index{})()
+	defer sources.SetS01ForTest([]sources.S01Mod{})()
+	st, _ := manager.LoadState()
+	for _, inst := range []*manager.Installed{
+		{Key: "sky:1111111", Name: "Workshop copy"},
+		{Key: "sky:2222222", Name: "Workshop contraption", Kind: manager.KindContraption},
+		{Key: "local:abcdef123456", Name: "Found here"},
+		{Key: "gb:5", Name: "Pinned", Pinned: true},
+		{Key: "sky:3333333", Name: "Off", Off: true},
+	} {
+		st.Mods[inst.Key] = inst
+	}
+	m := &manager.Manager{State: st, ModsDir: t.TempDir(), ContraptionsDir: t.TempDir()}
+	var log []string
+	a := &App{Opt: DefaultOptions(), Logf: func(f string, v ...any) { log = append(log, fmt.Sprintf(f, v...)) }}
+	s := a.Update(m)
+	if total := s.Current + s.OK + s.Refused + s.Failed + s.Manual + s.NotChecked; total != 5 || s.NotChecked != 5 {
+		t.Fatalf("summary %+v covers %d of 5 items", s, total)
+	}
+	joined := strings.Join(log, "\n")
+	for _, want := range []string{"2 Steam Workshop copies", "1 found on this PC", "1 pinned", "1 turned off"} {
+		if !strings.Contains(joined, "not checked: "+want) {
+			t.Errorf("log lacks %q:\n%s", want, joined)
+		}
+	}
+}
+
+// A 01 STUDIO mod installed from 01 STUDIO updates when the site's file
+// changed; one installed from a mirror only for a higher version.
+func TestS01Update(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	const ws = "3704779343"
+	body := modZip("1.1")
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/files/download/"+ws+".zip" {
+			w.Write(body)
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	rt := rewrite{strings.TrimPrefix(srv.URL, "https://"), srv.Client().Transport}
+	defer sources.UseTestServer(rt, srv.URL)()
+	mod := sources.S01Mod{Slug: "pennywise-mod", Title: "OW Test", Category: "Free", Steam: 3704779343}
+	defer sources.SetS01ForTest([]sources.S01Mod{mod})()
+	mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: []Mirror{s01Mirror(mod)}}
+	defer delete(mirrorMemo, ws)
+	st, _ := manager.LoadState()
+	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
+	a := &App{Opt: DefaultOptions()}
+
+	from01 := &manager.Installed{Key: "sky:" + ws, Name: "OW Test", Version: "1.1", Mirror: "01studio:pennywise-mod", ArchiveSHA: "old"}
+	c, mine, err := a.s01Update(m, from01)
+	if !mine || err != nil || c == nil || c.Key != from01.Key {
+		t.Fatalf("changed file on 01 STUDIO: %v %v %v", c, mine, err)
+	}
+	fromMirror := &manager.Installed{Key: "sky:" + ws, Name: "OW Test", Version: "1.1", Mirror: "skymods:1", ArchiveSHA: "other"}
+	if c, mine, err := a.s01Update(m, fromMirror); !mine || err != nil || c != nil {
+		t.Fatalf("same version from a mirror counted as an update: %v %v", c, err)
+	}
+	fromMirror.Version = "1.0"
+	if c, _, err := a.s01Update(m, fromMirror); err != nil || c == nil {
+		t.Fatalf("higher version on 01 STUDIO missed: %v", err)
+	}
+	other := &manager.Installed{Key: "sky:999999", Name: "Not theirs"}
+	if _, mine, _ := a.s01Update(m, other); mine {
+		t.Fatal("someone else's mod treated as 01 STUDIO's")
 	}
 }
