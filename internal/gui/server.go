@@ -415,6 +415,11 @@ func (s *server) offerNXM(raw string) error {
 	if err != nil {
 		return err
 	}
+	// The install that opened this file's page is waiting for it.
+	if app.DeliverNXM(raw) {
+		s.logf("Nexus Mods handed over the file the install is waiting for")
+		return nil
+	}
 	o := &nxmOffer{URL: raw, ModID: link.ModID, Name: fmt.Sprintf("Nexus Mods mod %d", link.ModID),
 		Page: fmt.Sprintf("https://www.nexusmods.com/peopleplayground/mods/%d", link.ModID), At: time.Now()}
 	if it, err := sources.NXGet(link.ModID); err == nil {
@@ -799,6 +804,7 @@ func (s *server) newApp(over map[string]bool) *app.App {
 		o.Policy.AllowNewFindings = true
 	}
 	o.BrowserFallback = over["browser"]
+	o.NXMHandoff = true // offerNXM passes Nexus links to installs waiting for them
 	return &app.App{Opt: o, Logf: s.logf}
 }
 

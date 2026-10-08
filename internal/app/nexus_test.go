@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -126,7 +127,7 @@ func TestNexusBrowserDownloadIsChecked(t *testing.T) {
 	since := time.Now()
 	os.WriteFile(filepath.Join(dl, "Free Stuff-12-1-0-1700000000.zip"), []byte("other"), 0o644)
 	os.WriteFile(filepath.Join(dl, "setup.zip"), []byte("other"), 0o644)
-	if _, err := waitForDownload(dl, "", "-77-", since, 3*time.Second); err == nil {
+	if _, err := waitForDownload(dl, "", "-77-", since, 3*time.Second, nil); err == nil {
 		t.Fatal("an unrelated archive in Downloads was taken")
 	}
 
@@ -168,5 +169,39 @@ func TestNexusInstallUsesManualDownload(t *testing.T) {
 	nb := nexusBrowser(sources.NXMod{ID: 77, Name: "Nexus Test"}, "nx:77")
 	if nb.NXM || nb.Match != "-77-" || !strings.Contains(nb.Reason, "Slow download") {
 		t.Fatalf("Nexus install does not wait for the manual download: %+v", nb)
+	}
+}
+
+// An install that opened a Nexus file's page as a mod manager download
+// takes that file's nxm:// link without a confirmation; a link for another
+// file, or one nobody is waiting for, is left for the person to confirm.
+func TestDeliverNXM(t *testing.T) {
+	link := func(mod, file int) string {
+		return fmt.Sprintf("nxm://peopleplayground/mods/%d/files/%d?key=abc&expires=123&user_id=1", mod, file)
+	}
+	if DeliverNXM(link(77, 500)) {
+		t.Fatal("a link nobody waits for was taken")
+	}
+	ch, done := expectNXM(77, 500)
+	if DeliverNXM(link(77, 501)) {
+		t.Fatal("a link for another file of the mod was taken")
+	}
+	if DeliverNXM("nxm://skyrim/mods/77/files/500?key=a&expires=1") {
+		t.Fatal("a link for another game was taken")
+	}
+	if !DeliverNXM(link(77, 500)) {
+		t.Fatal("the waited-for link was not taken")
+	}
+	if got := <-ch; got != link(77, 500) {
+		t.Fatalf("got %q", got)
+	}
+	if DeliverNXM(link(77, 500)) {
+		t.Fatal("a second copy of the link was taken")
+	}
+	done()
+	_, done2 := expectNXM(78, 1)
+	done2()
+	if DeliverNXM(link(78, 1)) {
+		t.Fatal("a link was taken after the install stopped waiting")
 	}
 }

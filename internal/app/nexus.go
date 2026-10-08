@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Trlydev/SWG/internal/manager"
@@ -176,6 +177,58 @@ func (a *App) downloadNexus(modID int, link *sources.NXMLink) (string, *sources.
 }
 
 // InstallNXM installs the file a Nexus "Mod Manager Download" link names.
+// Installs waiting for the nxm:// link of the Nexus file whose page they
+// opened, by mod ID.
+var (
+	nxmMu      sync.Mutex
+	nxmWaiting = map[int]nxmWait{}
+)
+
+type nxmWait struct {
+	fileID int
+	ch     chan string
+}
+
+// expectNXM registers an install waiting for the link of file fileID of
+// mod modID; done unregisters it.
+func expectNXM(modID, fileID int) (<-chan string, func()) {
+	ch := make(chan string, 1)
+	nxmMu.Lock()
+	nxmWaiting[modID] = nxmWait{fileID, ch}
+	nxmMu.Unlock()
+	return ch, func() {
+		nxmMu.Lock()
+		if nxmWaiting[modID].ch == ch {
+			delete(nxmWaiting, modID)
+		}
+		nxmMu.Unlock()
+	}
+}
+
+// DeliverNXM hands an nxm:// link to the install that opened exactly that
+// file's page, and reports whether one took it. Any other link (another
+// file, or nobody waiting) is left for the person to confirm: any website
+// can open an nxm:// link.
+func DeliverNXM(raw string) bool {
+	link, err := sources.ParseNXM(raw)
+	if err != nil {
+		return false
+	}
+	nxmMu.Lock()
+	defer nxmMu.Unlock()
+	w, ok := nxmWaiting[link.ModID]
+	if !ok || w.fileID != link.FileID {
+		return false
+	}
+	select {
+	case w.ch <- raw:
+		delete(nxmWaiting, link.ModID)
+		return true
+	default:
+		return false
+	}
+}
+
 func (a *App) InstallNXM(m *manager.Manager, raw string) error {
 	link, err := sources.ParseNXM(raw)
 	if err != nil {

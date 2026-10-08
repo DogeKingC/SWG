@@ -35,6 +35,7 @@ type Options struct {
 	Mirror                       string        // Workshop items: use this mirror copy ("skymods:<id>", "topmods:<id>") instead of choosing
 	NoWatch, Yes, Offline        bool
 	BrowserFallback              bool // on a modsbase refusal, open the browser and watch Downloads
+	NXMHandoff                   bool // the window is running and receives nxm:// links (see expectNXM)
 	UpdateOnly                   bool // fetch: skip when the installed file is already the newest
 	FileID                       int
 	Revision                     time.Time // known revision date (from a backup manifest)
@@ -881,8 +882,9 @@ type NeedsBrowser struct {
 	AnyFile    bool   `json:"any_file,omitempty"` // the file's name doesn't start with the Workshop ID (01 STUDIO, Nexus)
 	Match      string `json:"match,omitempty"`    // with AnyFile: text the file's name must contain (Nexus: "-<mod id>-")
 	Mirror     string `json:"mirror,omitempty"`
-	Key        string `json:"key,omitempty"` // install under this ref instead of sky:<WorkshopID> (nx:<id>)
-	NXM        bool   `json:"nxm,omitempty"` // a linked Nexus account handles "Mod Manager Download": just open the page
+	Key        string `json:"key,omitempty"`     // install under this ref instead of sky:<WorkshopID> (nx:<id>)
+	NXM        bool   `json:"nxm,omitempty"`     // a linked Nexus account handles "Mod Manager Download": just open the page
+	FileID     int    `json:"file_id,omitempty"` // Nexus: the file the page opens on
 	Name       string `json:"name,omitempty"`
 	Version    string `json:"version,omitempty"`
 }
@@ -893,11 +895,16 @@ func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
 	// Nexus names its downloads <name>-<mod id>-<version>-<time>.zip:
 	// only such a file is taken, not any archive that lands in Downloads.
 	// People Playground files on Nexus have no "Mod manager download"
-	// button, only "Manual download", so the file always comes through the
-	// Downloads folder (checked by name, and with Nexus' MD5 lookup when an
-	// account is linked), even when ppgmods handles nxm:// links.
+	// button, only "Manual download": the file comes through the Downloads
+	// folder (checked by name, and with Nexus' MD5 lookup when an account
+	// is linked). When ppgmods handles nxm:// links, viaBrowser opens the
+	// page as a mod manager download instead, and Nexus hands the file over.
+	reason := "Nexus Mods gives its files to signed-in users: on the page that opens, click Manual, then Slow download"
+	if acct := LoadNexus(); acct != nil && acct.Handler {
+		reason = "Nexus Mods gives its files to signed-in users: on the page that opens, click Slow download"
+	}
 	return &NeedsBrowser{URL: sources.NXDownloadPage(it), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
-		Reason: "Nexus Mods gives its files to signed-in users: on the page that opens, click Manual, then Slow download"}
+		FileID: sources.NXMainFileID(it.ID), Reason: reason}
 }
 
 func (e *NeedsBrowser) Error() string {
@@ -1102,14 +1109,32 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	if dl == "" {
 		dl = DownloadFolder()
 	}
-	a.logf("Opening the download page in your browser: %s", nb.URL)
-	a.logf("Click the real download button (ignore ads; never run an .exe).")
+	page := nb.URL
+	// A Nexus file with ppgmods handling nxm:// links: the page opens as a
+	// mod manager download, and Nexus hands the file's one-time link to the
+	// window, which passes it here (no Downloads folder involved).
+	var nxm <-chan string
+	modID := 0
+	if _, err := fmt.Sscanf(nb.Mirror, "nexus:%d", &modID); err == nil && nb.FileID > 0 && a.Opt.NXMHandoff && !a.Opt.NoWatch {
+		if acct := LoadNexus(); acct != nil && acct.Handler {
+			ch, done := expectNXM(modID, nb.FileID)
+			defer done()
+			nxm = ch
+			page += "&nmm=1"
+		}
+	}
+	a.logf("Opening the download page in your browser: %s", page)
+	if nxm != nil {
+		a.logf("Click Slow download: Nexus Mods hands the file straight to ppgmods.")
+	} else {
+		a.logf("Click the real download button (ignore ads; never run an .exe).")
+	}
 	if a.Opt.NoWatch || dl == "" {
-		OpenBrowser(nb.URL)
+		OpenBrowser(page)
 		return nil, fmt.Errorf("download the file in your browser, then import it with workshop id %s", nb.WorkshopID)
 	}
 	since := time.Now()
-	OpenBrowser(nb.URL)
+	OpenBrowser(page)
 	prefix := nb.WorkshopID
 	if nb.AnyFile {
 		prefix = "" // any archive that appears from now on (with nb.Match in its name)
@@ -1117,7 +1142,34 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	} else {
 		a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
 	}
-	file, err := waitForDownload(dl, prefix, nb.Match, since, a.Opt.Wait)
+	stop := make(chan struct{})
+	defer close(stop)
+	type got struct {
+		file string
+		err  error
+	}
+	gotFile := make(chan got, 1)
+	go func() {
+		f, err := waitForDownload(dl, prefix, nb.Match, since, a.Opt.Wait, stop)
+		gotFile <- got{f, err}
+	}()
+	var file string
+	var err error
+	select {
+	case raw := <-nxm:
+		link, err := sources.ParseNXM(raw)
+		if err != nil {
+			return nil, err
+		}
+		a.logf("Nexus Mods handed over file %d", link.FileID)
+		c, err := a.fetchNexus(modID, link)
+		if err == nil && nb.Key != "" {
+			c.Key = nb.Key
+		}
+		return c, err
+	case r := <-gotFile:
+		file, err = r.file, r.err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%v; when you have the file, import it with workshop id %s", err, nb.WorkshopID)
 	}
@@ -1195,7 +1247,7 @@ var partialExt = map[string]bool{".crdownload": true, ".part": true, ".partial":
 
 // waitForDownload polls dir for an archive named "<workshop id>_..." (the
 // naming modsbase uses) that appeared after since and has stopped growing.
-func waitForDownload(dir, ws, match string, since time.Time, timeout time.Duration) (string, error) {
+func waitForDownload(dir, ws, match string, since time.Time, timeout time.Duration, stop <-chan struct{}) (string, error) {
 	deadline := time.Now().Add(timeout)
 	sizes := map[string]int64{}
 	for time.Now().Before(deadline) {
@@ -1219,7 +1271,11 @@ func waitForDownload(dir, ws, match string, since time.Time, timeout time.Durati
 			}
 			sizes[p] = info.Size()
 		}
-		time.Sleep(2 * time.Second)
+		select {
+		case <-stop:
+			return "", errors.New("stopped")
+		case <-time.After(2 * time.Second):
+		}
 	}
 	return "", fmt.Errorf("no download for %s appeared in %s", ws, dir)
 }
