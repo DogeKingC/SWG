@@ -66,7 +66,24 @@ var darkPal = palette{
 }
 
 func isDark() bool {
-	return fyne.CurrentApp().Settings().ThemeVariant() == theme.VariantDark
+	return variant(fyne.CurrentApp().Settings().ThemeVariant()) == theme.VariantDark
+}
+
+// windowTheme is the Appearance setting the native window started with.
+// Many of its parts take their colours when built, so a new setting
+// applies on the next start rather than leaving the window half-switched.
+var windowTheme = "dark"
+
+// variant is the theme variant the window shows: the Appearance setting,
+// or the system's for "Match system".
+func variant(system fyne.ThemeVariant) fyne.ThemeVariant {
+	switch windowTheme {
+	case "light":
+		return theme.VariantLight
+	case "system":
+		return system
+	}
+	return theme.VariantDark
 }
 
 func pal() *palette {
@@ -114,6 +131,7 @@ func newTheme() *ppgTheme {
 }
 
 func (t *ppgTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	v = variant(v)
 	p := &lightPal
 	if v == theme.VariantDark {
 		p = &darkPal

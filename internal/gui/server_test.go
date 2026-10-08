@@ -100,3 +100,29 @@ func TestSettingsRace(t *testing.T) {
 	}
 	s.handleState(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/state", nil))
 }
+
+// The Appearance setting is saved and read back; anything but light or
+// "match system" (including no setting at all) means dark.
+func TestSettingsTheme(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	s := &server{opt: app.DefaultOptions(), quit: make(chan struct{})}
+	defer func() { themeMode = "dark" }()
+	for body, want := range map[string]string{
+		`{"theme":"light"}`:  "light",
+		`{"theme":"system"}`: "system",
+		`{"theme":"pink"}`:   "dark",
+		`{}`:                 "dark",
+	} {
+		r := httptest.NewRequest("POST", "/api/settings", strings.NewReader(body))
+		w := httptest.NewRecorder()
+		s.handleSettings(w, r)
+		var st settings
+		if err := json.Unmarshal(w.Body.Bytes(), &st); err != nil || st.Theme != want {
+			t.Errorf("%s: theme %q, want %q (%v)", body, st.Theme, want, err)
+		}
+		saved, err := loadSettings()
+		if err != nil || themeSetting(saved.Theme) != want {
+			t.Errorf("%s: saved %+v", body, saved)
+		}
+	}
+}

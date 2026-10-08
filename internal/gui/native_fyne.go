@@ -102,6 +102,7 @@ type ui struct {
 func runNative(s *server) error {
 	a := fyneapp.NewWithID("io.github.dogekingc.ppgmods")
 	a.SetIcon(fyne.NewStaticResource("icon.png", desktop.IconPNG()))
+	windowTheme = themeMode
 	a.Settings().SetTheme(newTheme())
 	u := &ui{s: s, app: a}
 	u.thumbs = newThumbLoader(u)
@@ -627,7 +628,11 @@ func (u *ui) jobDone(j *job) {
 		if strings.HasPrefix(j.Browser.Mirror, "nexus:") {
 			b.Add(nexusAccountBox(u))
 		}
-		b.Add(text("Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."))
+		if j.Browser.Handoff {
+			b.Add(text("Open the download page and click Slow download: Nexus Mods hands the file straight to ppgmods, which scans and installs it. (If your browser asks whether to open the link with ppgmods, allow it.)"))
+		} else {
+			b.Add(text("Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."))
+		}
 		u.confirm("Download in your browser", b, "Open download page", false, func() { u.run(j.Retry, "Waiting for the browser download") })
 		return
 	}

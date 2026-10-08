@@ -885,6 +885,7 @@ type NeedsBrowser struct {
 	Key        string `json:"key,omitempty"`     // install under this ref instead of sky:<WorkshopID> (nx:<id>)
 	NXM        bool   `json:"nxm,omitempty"`     // a linked Nexus account handles "Mod Manager Download": just open the page
 	FileID     int    `json:"file_id,omitempty"` // Nexus: the file the page opens on
+	Handoff    bool   `json:"handoff,omitempty"` // Nexus hands the file to ppgmods (nxm:// links handled): nothing lands in Downloads
 	Name       string `json:"name,omitempty"`
 	Version    string `json:"version,omitempty"`
 }
@@ -900,11 +901,13 @@ func nexusBrowser(it sources.NXMod, key string) *NeedsBrowser {
 	// is linked). When ppgmods handles nxm:// links, viaBrowser opens the
 	// page as a mod manager download instead, and Nexus hands the file over.
 	reason := "Nexus Mods gives its files to signed-in users: on the page that opens, click Manual, then Slow download"
-	if acct := LoadNexus(); acct != nil && acct.Handler {
-		reason = "Nexus Mods gives its files to signed-in users: on the page that opens, click Slow download"
+	fileID := sources.NXMainFileID(it.ID)
+	handoff := false
+	if acct := LoadNexus(); acct != nil && acct.Handler && fileID > 0 {
+		reason, handoff = "Nexus Mods gives its files to signed-in users: on the page that opens, click Slow download", true
 	}
 	return &NeedsBrowser{URL: sources.NXDownloadPage(it), AnyFile: true, Match: fmt.Sprintf("-%d-", it.ID), Mirror: fmt.Sprintf("nexus:%d", it.ID), Key: key, Name: it.Name, Version: it.Version,
-		FileID: sources.NXMainFileID(it.ID), Reason: reason}
+		FileID: fileID, Handoff: handoff, Reason: reason}
 }
 
 func (e *NeedsBrowser) Error() string {
@@ -1120,7 +1123,7 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 			ch, done := expectNXM(modID, nb.FileID)
 			defer done()
 			nxm = ch
-			page += "&nmm=1"
+			page = withQuery(page, "nmm", "1")
 		}
 	}
 	a.logf("Opening the download page in your browser: %s", page)
@@ -1129,17 +1132,20 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	} else {
 		a.logf("Click the real download button (ignore ads; never run an .exe).")
 	}
-	if a.Opt.NoWatch || dl == "" {
-		OpenBrowser(page)
+	if a.Opt.NoWatch || (dl == "" && nxm == nil) {
+		openPage(page)
 		return nil, fmt.Errorf("download the file in your browser, then import it with workshop id %s", nb.WorkshopID)
 	}
 	since := time.Now()
-	OpenBrowser(page)
+	openPage(page)
 	prefix := nb.WorkshopID
-	if nb.AnyFile {
+	switch {
+	case nxm != nil && dl == "":
+		a.logf("Waiting for Nexus Mods to hand over the file (up to %s)...", a.Opt.Wait)
+	case nb.AnyFile:
 		prefix = "" // any archive that appears from now on (with nb.Match in its name)
 		a.logf("Waiting for a new .zip/.rar/.7z%s in %s (up to %s)...", map[bool]string{true: " named *" + nb.Match + "*", false: ""}[nb.Match != ""], dl, a.Opt.Wait)
-	} else {
+	default:
 		a.logf("Waiting for %s_* in %s (up to %s)...", nb.WorkshopID, dl, a.Opt.Wait)
 	}
 	stop := make(chan struct{})
@@ -1150,6 +1156,14 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 	}
 	gotFile := make(chan got, 1)
 	go func() {
+		if dl == "" { // only Nexus' hand-over can bring the file
+			select {
+			case <-stop:
+			case <-time.After(a.Opt.Wait):
+			}
+			gotFile <- got{"", fmt.Errorf("Nexus Mods didn't hand over the file within %s", a.Opt.Wait)}
+			return
+		}
 		f, err := waitForDownload(dl, prefix, nb.Match, since, a.Opt.Wait, stop)
 		gotFile <- got{f, err}
 	}()
@@ -1190,6 +1204,18 @@ func (a *App) viaBrowser(nb *NeedsBrowser) (*manager.Candidate, error) {
 		c.SteamOrig, c.Revision, c.Mirror, c.Source = false, time.Time{}, nb.Mirror, nb.URL
 	}
 	return c, err
+}
+
+// withQuery returns u with query parameter k set to v.
+func withQuery(u, k, v string) string {
+	p, err := url.Parse(u)
+	if err != nil {
+		return u
+	}
+	q := p.Query()
+	q.Set(k, v)
+	p.RawQuery = q.Encode()
+	return p.String()
 }
 
 // checkNexusDownload asks Nexus Mods, with the linked account, whether a
@@ -1307,6 +1333,9 @@ func AllowedURL(u string) bool {
 	}
 	return false
 }
+
+// openPage opens a download page in the browser (tests replace it).
+var openPage = OpenBrowser
 
 // OpenBrowser opens u in the default browser, if AllowedURL permits it.
 func OpenBrowser(u string) error {

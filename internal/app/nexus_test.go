@@ -205,3 +205,58 @@ func TestDeliverNXM(t *testing.T) {
 		t.Fatal("a link was taken after the install stopped waiting")
 	}
 }
+
+// Install's browser download of a Nexus file, with ppgmods handling nxm://
+// links: the page opens as a mod manager download (&nmm=1), and when Nexus
+// hands over that file's link, the file comes through the API and installs,
+// with no Downloads folder involved.
+func TestNexusInstallTakesHandedOverLink(t *testing.T) {
+	t.Setenv("PPGMODS_HOME", t.TempDir())
+	fakeNexus(t)
+	acct, err := LinkNexus("testkey")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acct.Handler = true
+	if err := acct.Save(); err != nil {
+		t.Fatal(err)
+	}
+	var opened string
+	openPage = func(u string) error {
+		opened = u
+		// The person clicks Slow download; Nexus hands the link over.
+		go func() {
+			for i := 0; i < 100 && !DeliverNXM("nxm://peopleplayground/mods/77/files/500?key=abc&expires=123&user_id=1"); i++ {
+				time.Sleep(20 * time.Millisecond)
+			}
+		}()
+		return nil
+	}
+	defer func() { openPage = OpenBrowser }()
+	nb := &NeedsBrowser{URL: "https://www.nexusmods.com/peopleplayground/mods/77?tab=files&file_id=500", AnyFile: true,
+		Match: "-77-", Mirror: "nexus:77", Key: "nx:77", FileID: 500, Handoff: true}
+	opt := DefaultOptions()
+	opt.NXMHandoff, opt.Wait = true, 10*time.Second
+	for _, dl := range []string{t.TempDir(), ""} { // with and without a Downloads folder
+		a := &App{Opt: opt}
+		a.Opt.Downloads = dl
+		if dl == "" {
+			t.Setenv("HOME", t.TempDir()) // no Downloads folder to find
+			t.Setenv("USERPROFILE", t.TempDir())
+			t.Setenv("XDG_DOWNLOAD_DIR", "")
+		}
+		c, err := a.viaBrowser(nb)
+		if err != nil {
+			t.Fatalf("downloads %q: %v", dl, err)
+		}
+		if !strings.Contains(opened, "nmm=1") || !strings.Contains(opened, "file_id=500") {
+			t.Fatalf("opened %q, want the mod manager download page", opened)
+		}
+		if c == nil || c.Key != "nx:77" || c.Version != "2.0" || c.Mirror != "nexus:77" {
+			t.Fatalf("candidate: %+v", c)
+		}
+	}
+	if DeliverNXM("nxm://peopleplayground/mods/77/files/500?key=abc&expires=123&user_id=1") {
+		t.Fatal("a link was taken after the install finished")
+	}
+}

@@ -125,6 +125,7 @@ async function refreshState() {
   $$(".cutoff").forEach((e) => (e.textContent = state.cutoff));
   $("#cutoffDate").textContent = state.cutoff;
   $("#cooldownShow").textContent = Math.round(state.settings.cooldown_hours);
+  document.documentElement.dataset.theme = state.settings.theme || "dark";
   $("#cacheList").textContent = p.workshop && p.workshop.length
     ? "Found: " + p.workshop.join("\n")
     : "No Workshop cache found on this PC.";
@@ -136,6 +137,7 @@ async function refreshState() {
     $("#setOffline").checked = state.settings.offline;
     $("#setBgThumbs").checked = !state.settings.no_bg_thumbs;
     $("#setSkymodsCheck").checked = !state.settings.no_skymods_check;
+    $("#setTheme").value = state.settings.theme || "dark";
   }
   $("#gameHint").textContent = p.game ? "Using: " + p.game : (p.game_error || "");
   $("#pathsInfo").textContent = [
@@ -364,7 +366,9 @@ function jobDone(j) {
         ? el("p", { class: "small" }, "No 01studio.dev account? Many 01 STUDIO mods are also on Nexus Mods, where a free account works: open the mod's details and pick its Nexus Mods or mirror copy instead.")
         : null,
       (j.browser.mirror || "").startsWith("nexus:") ? nexusAccountBox() : null,
-      el("p", {}, "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
+      el("p", {}, j.browser.handoff
+        ? "Open the download page and click Slow download: Nexus Mods hands the file straight to ppgmods, which scans and installs it. (If your browser asks whether to open the link with ppgmods, allow it.)"
+        : "Open the download page, click its download button, and ppgmods will pick the file up from your Downloads folder and install it automatically."));
     dialog("Download in your browser", body, { label: "Open download page", run: () => run(j.retry, "Waiting for the browser download") });
     $("#dlgExtra").className = "btn btn-primary";
     return;
@@ -860,6 +864,8 @@ function showCheck(m, p) {
   box.push(el("div", { class: "verdict " + text[0] }, text[1]));
   if (p.verdict === "browser" && p.browser?.nxm) {
     box.push(el("p", { class: "small" }, "On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."));
+  } else if (p.verdict === "browser" && p.browser?.handoff) {
+    box.push(el("p", { class: "small" }, "Reason: " + p.browser.reason + ". Nexus Mods then hands the file straight to ppgmods, which scans and installs it."));
   } else if (p.verdict === "browser") {
     box.push(el("p", { class: "small" }, "Reason: " + (p.browser?.reason || "unknown") + ". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."));
     if ((p.browser?.mirror || "").startsWith("01studio:")) box.push(el("p", { class: "small" }, "No 01studio.dev account? Pick the Nexus Mods or a mirror copy in the list above instead."));
@@ -982,6 +988,7 @@ $("#settingsForm").onsubmit = async (e) => {
       offline: $("#setOffline").checked,
       no_bg_thumbs: !$("#setBgThumbs").checked,
       no_skymods_check: !$("#setSkymodsCheck").checked,
+      theme: $("#setTheme").value,
     } });
     toast("Settings saved");
     document.activeElement.blur();

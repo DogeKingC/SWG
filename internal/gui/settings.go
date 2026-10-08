@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	themeMode      = "dark" // "dark", "light" or "system" (see themeSetting)
 	bgThumbsOff    bool
 	skymodsCheckOn bool = true // offer/run the Skymods browser check when Cloudflare asks
 )
@@ -23,6 +24,15 @@ type settings struct {
 	Offline        bool    `json:"offline"`
 	NoBgThumbs     bool    `json:"no_bg_thumbs"`     // don't fetch missing Workshop thumbnails in the background
 	NoSkymodsCheck bool    `json:"no_skymods_check"` // never run the Skymods browser check
+	Theme          string  `json:"theme,omitempty"`  // "dark" (default), "light" or "system"
+}
+
+// themeSetting normalises a saved theme: dark unless light or system.
+func themeSetting(s string) string {
+	if s == "light" || s == "system" {
+		return s
+	}
+	return "dark"
 }
 
 func settingsPath() (string, error) {
@@ -55,6 +65,7 @@ func (st *settings) save() error {
 func (st *settings) apply(o *app.Options) {
 	bgThumbsOff = st.NoBgThumbs
 	skymodsCheckOn = !st.NoSkymodsCheck
+	themeMode = themeSetting(st.Theme)
 	o.Game = st.Game
 	o.Offline = st.Offline
 	if st.CooldownHours >= 0 {
@@ -64,5 +75,5 @@ func (st *settings) apply(o *app.Options) {
 
 func settingsFrom(o app.Options) settings {
 	return settings{Game: o.Game, CooldownHours: o.Policy.Cooldown.Hours(), Offline: o.Offline,
-		NoBgThumbs: bgThumbsOff, NoSkymodsCheck: !skymodsCheckOn}
+		NoBgThumbs: bgThumbsOff, NoSkymodsCheck: !skymodsCheckOn, Theme: themeMode}
 }

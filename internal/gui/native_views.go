@@ -382,6 +382,8 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	box := []fyne.CanvasObject{tinted(v.msg, v.fg, v.bg, true)}
 	if p.Verdict == "browser" && p.Browser != nil && p.Browser.NXM {
 		box = append(box, muted("On the Files tab, click Mod Manager Download: your linked Nexus account lets ppgmods download, scan and install it."))
+	} else if p.Verdict == "browser" && p.Browser != nil && p.Browser.Handoff {
+		box = append(box, muted("Reason: "+p.Browser.Reason+". Nexus Mods then hands the file straight to ppgmods, which scans and installs it."))
 	} else if p.Verdict == "browser" && p.Browser != nil {
 		box = append(box, muted("Reason: "+p.Browser.Reason+". Open the download page in your browser and click download; ppgmods watches your Downloads folder and installs the file automatically."))
 		if strings.HasPrefix(p.Browser.Mirror, "01studio:") {
@@ -994,6 +996,7 @@ type settingsView struct {
 	cooldown  *widget.Entry
 	offline   *widget.Check
 	bgThumbs  *widget.Check
+	theme     *widget.Select
 	dirty     bool
 	nexus     *fyne.Container
 	paths     *widget.Label
@@ -1046,6 +1049,7 @@ func newSettings(u *ui) *settingsView {
 	v.cooldown.OnChanged = func(string) { mark() }
 	v.offline = widget.NewCheck("Don't download the latest blocklist", func(bool) { mark() })
 	v.bgThumbs = widget.NewCheck("Load missing Workshop thumbnails in the background", func(bool) { mark() })
+	v.theme = widget.NewSelect(themeLabels, func(string) { mark() })
 	pick := widget.NewButton("Choose…", func() {
 		dialog.ShowFolderOpen(func(l fyne.ListableURI, err error) {
 			if l != nil {
@@ -1058,14 +1062,21 @@ func newSettings(u *ui) *settingsView {
 		if h < 0 {
 			h = 0
 		}
-		st := settings{Game: strings.TrimSpace(v.game.Text), CooldownHours: h, Offline: v.offline.Checked, NoBgThumbs: !v.bgThumbs.Checked}
+		// Settings this form doesn't show keep their saved values.
+		st := settings{Game: strings.TrimSpace(v.game.Text), CooldownHours: h, Offline: v.offline.Checked, NoBgThumbs: !v.bgThumbs.Checked,
+			NoSkymodsCheck: u.state().Settings.NoSkymodsCheck, Theme: themeValue(v.theme.Selected)}
+		restart := themeSetting(st.Theme) != windowTheme
 		go func() {
 			if err := u.s.call("POST", "/api/settings", st, nil); err != nil {
 				u.toast(err.Error())
 				return
 			}
 			fyne.Do(func() { v.dirty = false })
-			u.toast("Settings saved")
+			if restart {
+				u.toast("Settings saved. The new appearance shows the next time ppgmods starts.")
+			} else {
+				u.toast("Settings saved")
+			}
 			u.refreshState()
 		}()
 	})
@@ -1074,6 +1085,7 @@ func newSettings(u *ui) *settingsView {
 	form := container.New(&vlist{gap: 14},
 		field("People Playground folder", container.NewBorder(nil, nil, nil, pick, v.game), v.gameHint),
 		field("Cooldown for new uploads (hours)", v.cooldown, nil),
+		field("Appearance", narrow(220, v.theme), nil),
 		v.offline,
 		container.New(&vlist{gap: 0}, v.bgThumbs, container.New(layout.NewCustomPaddedLayout(0, 0, 30, 0), thumbsHint)),
 		container.NewHBox(save))
@@ -1107,6 +1119,7 @@ func (v *settingsView) update(st *stateView) {
 		v.cooldown.SetText(strconv.Itoa(int(st.Settings.CooldownHours + 0.5)))
 		v.offline.SetChecked(st.Settings.Offline)
 		v.bgThumbs.SetChecked(!st.Settings.NoBgThumbs)
+		v.theme.SetSelected(themeLabel(st.Settings.Theme))
 		v.dirty = false
 	}
 	if p.Game != "" {
@@ -1277,4 +1290,27 @@ func nexusAccountBox(u *ui) fyne.CanvasObject {
 	b := widget.NewButton("Sign in / create a free account", func() { u.openURL(nexusAccountURL) })
 	b.Importance = widget.LowImportance
 	return tight(muted("Nexus Mods only lets signed-in users download (a free account works; free downloads are slower). Not signed in on nexusmods.com yet?"), container.NewHBox(b))
+}
+
+// The Appearance choices, as the settings form shows them.
+var themeLabels = []string{"Dark", "Light", "Match system"}
+
+func themeLabel(v string) string {
+	switch themeSetting(v) {
+	case "light":
+		return "Light"
+	case "system":
+		return "Match system"
+	}
+	return "Dark"
+}
+
+func themeValue(label string) string {
+	switch label {
+	case "Light":
+		return "light"
+	case "Match system":
+		return "system"
+	}
+	return "dark"
 }

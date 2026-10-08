@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -195,6 +195,9 @@
         </label>
         <label>Cooldown for new GameBanana uploads (hours)
           <input id="setCooldown" type="number" min="0" step="1">
+        </label>
+        <label>Appearance
+          <select id="setTheme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">Match system</option></select>
         </label>
         <label class="check"><input id="setOffline" type="checkbox"> Don't download the latest blocklist</label>
         <label class="check"><input id="setBgThumbs" type="checkbox"> Load missing Workshop thumbnails in the background
