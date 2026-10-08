@@ -46,9 +46,11 @@ func knownLibrary(p string) (knownLib, bool) {
 	return l, ok
 }
 
-// gameCopy reports whether the DLL at p is byte-identical to the file of
+// GameCopy reports whether the DLL at p is byte-identical to the file of
 // the same name in the game's Managed folder (Unity and game assemblies that
 // some mods ship by accident).
+func GameCopy(p, managed string) bool { return gameCopy(p, managed) }
+
 func gameCopy(p, managed string) bool {
 	if managed == "" {
 		return false

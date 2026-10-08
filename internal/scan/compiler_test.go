@@ -115,3 +115,16 @@ func TestReflectionByListing(t *testing.T) {
 		t.Errorf("type picked from GetTypes() not flagged HIGH: %+v", r.Findings)
 	}
 }
+
+func TestLooseJSON(t *testing.T) {
+	for in, want := range map[string]string{
+		"\xef\xbb\xbf{\"a\":1}":                         `{"a":1}`,
+		"{\"a\":[1,2,],}":                               `{"a":[1,2]}`,
+		"{ // c\n\"a\":\"//x/*y*/\", /* z */ \"b\":2 }": "{ \n\"a\":\"//x/*y*/\",   \"b\":2 }",
+		"{\"a\":\"q\\\",\"\n,}":                         "{\"a\":\"q\\\",\"\n}",
+	} {
+		if got := string(LooseJSON([]byte(in))); got != want {
+			t.Errorf("LooseJSON(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/DogeKingC/SWG/internal/app"
 	"github.com/DogeKingC/SWG/internal/cfclear"
 	"github.com/DogeKingC/SWG/internal/desktop"
+	"github.com/DogeKingC/SWG/internal/game"
 	"github.com/DogeKingC/SWG/internal/gui"
 	"github.com/DogeKingC/SWG/internal/manager"
 	"github.com/DogeKingC/SWG/internal/scan"
@@ -240,8 +241,15 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 		if len(args) > 1 {
 			out = args[1]
 		}
+		managed := ""
+		if dir, err := game.FindGameDir(a.Opt.Game); err == nil {
+			managed = filepath.Join(dir, "People Playground_Data", "Managed")
+			logf("DLLs identical to the game's own in %s are left out", managed)
+		} else {
+			logf("game not found (%v): bundled game DLLs stay in and those items will be held; pass --game to fix", err)
+		}
 		logf("packing %s -> %s", args[0], out)
-		mf, err := workshop.PackBulk(args[0], out, logf)
+		mf, err := workshop.PackBulk(args[0], out, managed, logf)
 		if err != nil {
 			return err
 		}

@@ -2,7 +2,6 @@ package workshop
 
 import (
 	"archive/zip"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/DogeKingC/SWG/internal/scan"
 )
 
 // Bulk publishing: the owner uploads a folder of old Steam Workshop items
@@ -36,6 +37,9 @@ type BulkItem struct {
 	File        string    `json:"file"` // asset name in the upload release
 	SHA256      string    `json:"sha256"`
 	Newest      time.Time `json:"newest"` // newest file time in the folder
+	// Removed lists files left out of the zip: project files, editor
+	// sources and DLLs identical to the game's own (see devOnly).
+	Removed []string `json:"removed,omitempty"`
 }
 
 // BulkManifest is bulk.json.
@@ -47,8 +51,10 @@ var reWSFolder = regexp.MustCompile(`^\d{6,12}$`)
 
 // PackBulk zips every Workshop-ID folder under src into out and writes
 // out/bulk.json. Folders that are neither a mod nor a contraption, or too
-// large, are skipped with a log line.
-func PackBulk(src, out string, logf func(string, ...any)) (*BulkManifest, error) {
+// large, are skipped with a log line. gameManaged is the game's
+// People Playground_Data/Managed folder ("" if unknown): bundled DLLs
+// identical to the game's own are left out.
+func PackBulk(src, out, gameManaged string, logf func(string, ...any)) (*BulkManifest, error) {
 	ents, err := os.ReadDir(src)
 	if err != nil {
 		return nil, err
@@ -61,12 +67,15 @@ func PackBulk(src, out string, logf func(string, ...any)) (*BulkManifest, error)
 		if !e.IsDir() || !reWSFolder.MatchString(e.Name()) {
 			continue
 		}
-		it, err := packItem(filepath.Join(src, e.Name()), e.Name(), out)
+		it, err := packItem(filepath.Join(src, e.Name()), e.Name(), out, gameManaged)
 		if err != nil {
 			logf("  %s: skipped: %v", e.Name(), err)
 			continue
 		}
 		logf("  %s: %s %q by %s", it.WorkshopID, it.Kind, it.Name, it.Author)
+		if len(it.Removed) > 0 {
+			logf("    left out: %s", strings.Join(it.Removed, ", "))
+		}
 		m.Items = append(m.Items, *it)
 	}
 	sort.Slice(m.Items, func(i, j int) bool { return m.Items[i].WorkshopID < m.Items[j].WorkshopID })
@@ -74,13 +83,58 @@ func PackBulk(src, out string, logf func(string, ...any)) (*BulkManifest, error)
 	return m, os.WriteFile(filepath.Join(out, "bulk.json"), b, 0o644)
 }
 
-func packItem(dir, id, out string) (*BulkItem, error) {
+// Files the game never reads that old Workshop items often carry: Visual
+// Studio project files and debug symbols, git settings, and image editor
+// sources. Leaving them out changes nothing in game.
+var devExt = map[string]bool{".csproj": true, ".sln": true, ".pdb": true, ".user": true, ".suo": true,
+	".ase": true, ".aseprite": true, ".pdn": true, ".xcf": true, ".psd": true, ".kra": true}
+
+var devNames = map[string]bool{".gitattributes": true, ".gitignore": true, ".editorconfig": true,
+	"packages.config": true, "app.config": true}
+
+var devDirs = map[string]bool{"bin": true, "obj": true, ".vs": true, ".git": true, ".idea": true}
+
+// devOnly reports whether the file at p is left out of a bulk zip.
+func devOnly(p, gameManaged string) bool {
+	base := strings.ToLower(filepath.Base(p))
+	ext := filepath.Ext(base)
+	switch {
+	case devExt[ext], devNames[base], strings.HasSuffix(base, ".dll.config"):
+		return true
+	case ext == ".xml":
+		// IntelliSense docs next to a DLL of the same name.
+		_, err := os.Stat(strings.TrimSuffix(p, filepath.Ext(p)) + ".dll")
+		return err == nil
+	case ext == ".dll":
+		return scan.GameCopy(p, gameManaged)
+	}
+	return false
+}
+
+func packItem(dir, id, out, gameManaged string) (*BulkItem, error) {
 	it := &BulkItem{WorkshopID: id, Version: "1.0"}
 	var modJSON, jaap string
+	var keep []string
 	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return nil
 		}
+		rel, _ := filepath.Rel(dir, p)
+		if d.IsDir() {
+			if p != dir && devDirs[strings.ToLower(d.Name())] {
+				it.Removed = append(it.Removed, filepath.ToSlash(rel)+"/")
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		if devOnly(p, gameManaged) {
+			it.Removed = append(it.Removed, filepath.ToSlash(rel))
+			return nil
+		}
+		keep = append(keep, rel)
 		if info, err := d.Info(); err == nil && info.ModTime().After(it.Newest) {
 			it.Newest = info.ModTime().UTC()
 		}
@@ -97,7 +151,7 @@ func packItem(dir, id, out string) (*BulkItem, error) {
 		it.Kind = "mod"
 		var mj struct{ Name, Author, ModVersion, Description string }
 		if b, err := os.ReadFile(modJSON); err == nil {
-			json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &mj)
+			json.Unmarshal(scan.LooseJSON(b), &mj)
 		}
 		it.Name, it.Author, it.Description = mj.Name, mj.Author, mj.Description
 		if reVersion.MatchString(strings.TrimSpace(mj.ModVersion)) {
@@ -108,7 +162,7 @@ func packItem(dir, id, out string) (*BulkItem, error) {
 		it.Name = strings.TrimSuffix(filepath.Base(jaap), filepath.Ext(jaap))
 		var meta struct{ DisplayName, Name, Author, Creator string }
 		if b, err := os.ReadFile(strings.TrimSuffix(jaap, filepath.Ext(jaap)) + ".json"); err == nil {
-			json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), &meta)
+			json.Unmarshal(scan.LooseJSON(b), &meta)
 		}
 		if meta.DisplayName != "" {
 			it.Name = meta.DisplayName
@@ -132,7 +186,7 @@ func packItem(dir, id, out string) (*BulkItem, error) {
 	}
 	it.Description = clipText(strings.TrimSpace(it.Description), 3000)
 	it.File = id + ".zip"
-	sum, size, err := zipDir(dir, id, filepath.Join(out, it.File))
+	sum, size, err := zipFiles(dir, keep, id, filepath.Join(out, it.File))
 	if err != nil {
 		return nil, err
 	}
@@ -144,40 +198,19 @@ func packItem(dir, id, out string) (*BulkItem, error) {
 	return it, nil
 }
 
-// zipDir writes dir (as top folder top) into a zip, keeping file times,
-// and returns its SHA-256 and size. Symlinks are left out.
-func zipDir(dir, top, dest string) (string, int64, error) {
+// zipFiles writes the files rels of dir (as top folder top) into a zip,
+// keeping file times, and returns its SHA-256 and size.
+func zipFiles(dir string, rels []string, top, dest string) (string, int64, error) {
 	f, err := os.Create(dest)
 	if err != nil {
 		return "", 0, err
 	}
 	zw := zip.NewWriter(f)
-	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Type()&fs.ModeSymlink != 0 {
-			return err
+	for _, rel := range rels {
+		if err = zipFile(zw, filepath.Join(dir, rel), top+"/"+filepath.ToSlash(rel)); err != nil {
+			break
 		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		h, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		h.Name, h.Method = top+"/"+filepath.ToSlash(rel), zip.Deflate
-		w, err := zw.CreateHeader(h)
-		if err != nil {
-			return err
-		}
-		in, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(w, in)
-		in.Close()
-		return err
-	})
+	}
 	if cerr := zw.Close(); err == nil {
 		err = cerr
 	}
@@ -194,6 +227,29 @@ func zipDir(dir, top, dest string) (string, int64, error) {
 	}
 	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:]), int64(len(b)), nil
+}
+
+func zipFile(zw *zip.Writer, p, name string) error {
+	info, err := os.Lstat(p)
+	if err != nil {
+		return err
+	}
+	h, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return err
+	}
+	h.Name, h.Method = name, zip.Deflate
+	w, err := zw.CreateHeader(h)
+	if err != nil {
+		return err
+	}
+	in, err := os.Open(p)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	_, err = io.Copy(w, in)
+	return err
 }
 
 // BulkSlug is a bulk item's entry name: its name and Workshop ID, so two

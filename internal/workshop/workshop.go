@@ -265,7 +265,7 @@ func Check(client *http.Client, s *Submission, work string) *Result {
 			CreatorUGCIdentity       json.RawMessage
 		}
 		b, _ := os.ReadFile(p)
-		if json.Unmarshal([]byte(strings.TrimPrefix(string(b), "\ufeff")), &mj) != nil {
+		if json.Unmarshal(scan.LooseJSON(b), &mj) != nil {
 			r.Problems = append(r.Problems, "mod.json is not valid JSON")
 			continue
 		}

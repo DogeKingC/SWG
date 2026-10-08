@@ -36,7 +36,7 @@ func TestBulkPackAndPublish(t *testing.T) {
 	write("5555555", "readme.txt", "not a mod", old)
 
 	out := t.TempDir()
-	m, err := workshop.PackBulk(src, out, t.Logf)
+	m, err := workshop.PackBulk(src, out, "", t.Logf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,5 +86,60 @@ func TestBulkPackAndPublish(t *testing.T) {
 	r = bulkPublish(ix, m.Items, srv.URL+"/", "owner", files, 150)
 	if len(r.published) != 0 || r.present != 2 {
 		t.Errorf("second run: published %d, already there %d", len(r.published), r.present)
+	}
+}
+
+// Old Workshop items often carry project files, editor sources, copies of
+// the game's own DLLs and a mod.json with comments or trailing commas.
+// None of that runs in game: the pack leaves it out, CI reads the loose
+// mod.json, and the item is published. A DLL that differs from the game's
+// copy stays in and holds the item.
+func TestBulkPackLeavesOutDevFiles(t *testing.T) {
+	src, managed := t.TempDir(), t.TempDir()
+	old := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	write := func(root, rel, body string) {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+		os.Chtimes(p, old, old)
+	}
+	unity := "MZ\x90\x00 unity engine"
+	write(managed, "UnityEngine.CoreModule.dll", unity)
+	write(src, "6666666/mod.json", "// my mod\n{\n  \"Name\": \"Loose\", /* old */ \"Author\": \"Old Timer\",\n  \"Scripts\": [\"s.cs\",],\n}\n")
+	write(src, "6666666/s.cs", "class S {}")
+	for _, f := range []string{"Loose.csproj", "Loose.sln", "s.pdb", "Loose.csproj.user", ".gitattributes",
+		"packages.config", "art/gun.aseprite", "art/gun.pdn", "obj/Debug/x.dll", "bin/s.dll"} {
+		write(src, "6666666/"+f, "dev")
+	}
+	write(src, "6666666/UnityEngine.CoreModule.dll", unity)
+	write(src, "7777777/mod.json", `{"Name":"Other","Author":"z","Scripts":["s.cs"]}`)
+	write(src, "7777777/s.cs", "class S {}")
+	write(src, "7777777/UnityEngine.CoreModule.dll", "MZ\x90\x00 not the game's")
+
+	out := t.TempDir()
+	m, err := workshop.PackBulk(src, out, managed, t.Logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Items) != 2 {
+		t.Fatalf("packed %d items, want 2", len(m.Items))
+	}
+	if it := m.Items[0]; it.Name != "Loose" || it.Author != "Old Timer" || len(it.Removed) != 11 {
+		t.Fatalf("loose item: %+v", it)
+	}
+	if it := m.Items[1]; len(it.Removed) != 0 {
+		t.Fatalf("a DLL that differs from the game's was left out: %+v", it.Removed)
+	}
+
+	srv := httptest.NewTLSServer(http.FileServer(http.Dir(out)))
+	defer srv.Close()
+	oc := client
+	client = srv.Client()
+	defer func() { client = oc }()
+	ix := &workshop.Index{}
+	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", t.TempDir(), 150)
+	t.Log(r.summary())
+	if len(r.published) != 1 || len(ix.Entries) != 1 || ix.Entries[0].WorkshopID != "6666666" {
+		t.Fatalf("want only the loose item published; got %d published, %d skipped", len(r.published), len(r.skipped))
 	}
 }

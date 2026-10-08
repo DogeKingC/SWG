@@ -250,6 +250,9 @@ func ManifestScripts(raw []byte) (scripts []string, ok bool) {
 	if s, err := manifestScripts(b); err == nil {
 		return s, true
 	}
+	if s, err := manifestScripts(LooseJSON(raw)); err == nil {
+		return s, true
+	}
 	m := reLooseScripts.FindAllSubmatch(b, -1)
 	if m == nil {
 		return nil, false
