@@ -57,6 +57,10 @@ func main() {
 		err = pause(os.Args[2:], false)
 	case "bulk":
 		err = bulk(os.Args[2:])
+	case "review":
+		err = review(os.Args[2:])
+	case "approve-held":
+		err = approveHeld(os.Args[2:])
 	case "pause-all":
 		err = lockdown(os.Args[2:], true)
 	case "resume-all":

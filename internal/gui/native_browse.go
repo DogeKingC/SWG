@@ -804,10 +804,14 @@ type thumbLoader struct {
 	sem    chan struct{}
 	client *http.Client
 
-	queue []*app.SearchResult
-	tried map[string]bool
-	busy  bool
+	queue   []*app.SearchResult
+	tried   map[string]bool
+	workers int // pumps running, at most thumbWorkers
 }
+
+// thumbWorkers is how many mods the background thumbnail loader fetches
+// at once: two keeps the window lively without hammering the mirror sites.
+const thumbWorkers = 2
 
 type thumbBox struct {
 	ref, img string
@@ -972,24 +976,36 @@ func (t *thumbLoader) enqueue(m *app.SearchResult) {
 	}
 	t.tried[m.Ref] = true
 	t.queue = append(t.queue, m)
-	if !t.busy {
-		t.busy = true
+	if t.workers < thumbWorkers {
+		t.workers++
 		go t.pump()
 	}
 }
 
+// paused reports whether background fetching should wait: a task is
+// running, it's turned off, or a mod's details are open (their own check
+// shouldn't queue behind thumbnails).
+func (t *thumbLoader) paused() bool {
+	t.u.mu.Lock()
+	running := t.u.running
+	t.u.mu.Unlock()
+	if running || t.u.state().Settings.NoBgThumbs {
+		return true
+	}
+	open := false
+	fyne.DoAndWait(func() { open = t.u.details != nil && t.u.details.pop.Visible() })
+	return open
+}
+
 func (t *thumbLoader) pump() {
 	for {
-		t.u.mu.Lock()
-		running := t.u.running
-		t.u.mu.Unlock()
-		if running || t.u.state().Settings.NoBgThumbs {
-			time.Sleep(3 * time.Second)
+		if t.paused() {
+			time.Sleep(2 * time.Second)
 			continue
 		}
 		t.mu.Lock()
 		if len(t.queue) == 0 {
-			t.busy = false
+			t.workers--
 			t.mu.Unlock()
 			return
 		}

@@ -273,6 +273,38 @@ own `mod.json` and files (Valve deleted the Workshop images of removed mods).
 Search cards with no author on the mirror page get it from `mod.json` once
 the mod has been previewed.
 
+RE_PPG asks before it runs a C# mod and remembers each answer per mod
+version; **Trust and run** lets that version skip its security checks.
+Verify files reports a new Trust and run approval with the time it was made
+(if you didn't click it then, something approved a mod behind your back), an
+approval file RE_PPG didn't write, and how many mod versions run unchecked.
+Settings → Game setup → **Revoke Trust and run approvals** (or `ppgmods
+revoke-approvals`) makes RE_PPG ask again.
+
+### Turning mods off, and profiles
+
+**Turn off** (in Installed, or `ppgmods off <key>`) moves a mod out of the
+game folder so the game doesn't load it; **Turn on** puts it back. Nothing is
+deleted, updates skip it while it's off, and Verify notices if something
+puts a folder back under its name. A **profile** is a saved list of the mods
+that are on: **Save as…** saves the current set under a name, **Use**
+switches to one (turning the others off and these on). Quarantined mods and
+contraptions are left alone. `ppgmods profile list | save <name> | use
+<name> | delete <name>` does the same.
+
+### Sharing your mod list
+
+**Export list** saves the installed mods as a small file naming where each
+comes from; **Import list…** installs the ones you don't have yet (`ppgmods
+export-list` / `import-list`). A list only says what to fetch: every mod is
+downloaded from its site and goes through every safety check as usual, and
+a list naming anything other than a mod reference is refused. Mods found on
+the PC without a site behind them can't be in a list.
+
+### Appearance
+
+Settings → **Appearance**: Dark (the default), Light, or Match system.
+
 ## Open Workshop
 
 A replacement for the Steam Workshop with nobody needed to review by hand:
@@ -286,7 +318,9 @@ updates arrive through **Check for updates**, and a mod is offered as an
 update to anyone who still has the old Steam Workshop copy. Unreviewed
 uploads wait 48 hours like GameBanana's. Published files are re-scanned
 nightly; withdrawn mods warn everyone who has them. **Share** (in Installed)
-packs a mod and opens the filled-in form. Details:
+packs a mod and opens the filled-in form. When an author publishes their own
+release of a mod the owner archived, everyone with the archived copy gets
+the author's release as an update. Details:
 [workshop/README.md](workshop/README.md).
 
 ## Pre-worm archive

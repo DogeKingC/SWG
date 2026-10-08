@@ -37,6 +37,8 @@ type stateView struct {
 	Loader       game.Loader     `json:"loader"`
 	NeedCompiler int             `json:"scripts_need_compiler"`
 	Installed    []installedView `json:"installed"`
+	Profiles     []string        `json:"profiles"`
+	Profile      string          `json:"profile"`
 	Job          *job            `json:"job"`
 	Settings     settings        `json:"settings"`
 	Cutoff       string          `json:"cutoff"`
@@ -593,6 +595,10 @@ func (u *ui) jobDone(j *job) {
 			u.toastAction("Installed into "+orStr(dir, "your "+what+" folder"), "Open folder", func() { u.open(what) })
 		case j.Name == "ow-share" && j.Data != nil:
 			u.showShare(j.Data)
+		case j.Name == "revoke-approvals" && j.Data != nil:
+			u.toast("Revoked " + j.Data["revoked"] + " Trust and run approval(s); RE_PPG asks again before running those mods")
+		case j.Name == "list-export" && j.Data != nil:
+			u.toastAction("Saved the list of "+j.Data["count"]+" item(s): share the file, and anyone can install the same mods with Import list", "Show file", func() { u.open("exports") })
 		case j.Name == "remove" && j.Data["others"] != "":
 			u.toastAction("Removed. Another copy is still in your Mods folder ("+j.Data["others"]+"), not installed by ppgmods.", "Open Mods folder", func() { u.open("mods") })
 		default:

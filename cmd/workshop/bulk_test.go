@@ -59,7 +59,7 @@ func TestBulkPackAndPublish(t *testing.T) {
 
 	ix := &workshop.Index{}
 	files := t.TempDir()
-	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", files, 150)
+	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", files, 150, nil)
 	t.Log(r.summary())
 	if len(r.published) != 2 || len(r.skipped) != 2 {
 		t.Fatalf("published %d, skipped %d; want 2 and 2", len(r.published), len(r.skipped))
@@ -84,7 +84,7 @@ func TestBulkPackAndPublish(t *testing.T) {
 		t.Errorf("%d files staged for upload, want 2", len(ents))
 	}
 
-	r = bulkPublish(ix, m.Items, srv.URL+"/", "owner", files, 150)
+	r = bulkPublish(ix, m.Items, srv.URL+"/", "owner", files, 150, nil)
 	if len(r.published) != 0 || r.present != 2 {
 		t.Errorf("second run: published %d, already there %d", len(r.published), r.present)
 	}
@@ -139,9 +139,82 @@ func TestBulkPackLeavesOutDevFiles(t *testing.T) {
 	client = srv.Client()
 	defer func() { client = oc }()
 	ix := &workshop.Index{}
-	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", t.TempDir(), 150)
+	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", t.TempDir(), 150, nil)
 	t.Log(r.summary())
 	if len(r.published) != 1 || len(ix.Entries) != 1 || ix.Entries[0].WorkshopID != "6666666" {
 		t.Fatalf("want only the loose item published; got %d published, %d skipped", len(r.published), len(r.skipped))
+	}
+}
+
+// An item held only for the owner's decision goes to the review queue with
+// its findings, not to the bin: review lists it, approve-held publishes it
+// after checking it again, and a file that changed in the meantime is
+// refused. Items with hard problems never enter the queue.
+func TestReviewQueue(t *testing.T) {
+	src := t.TempDir()
+	old := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
+	write := func(rel, body string) {
+		p := filepath.Join(src, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(body), 0o644)
+		os.Chtimes(p, old, old)
+	}
+	write("4444444/mod.json", `{"Name":"Launcher","Author":"y","Scripts":["s.cs"]}`)
+	write("4444444/s.cs", `class S { void M() { System.Diagnostics.Process.Start("calc"); } }`)
+	write("5555555/mod.json", `{"Name":"Late","Author":"z","Scripts":["s.cs"]}`)
+	write("5555555/s.cs", "class S {}")
+	os.Chtimes(filepath.Join(src, "5555555", "s.cs"), time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC))
+	out := t.TempDir()
+	m, err := workshop.PackBulk(src, out, "", t.Logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewTLSServer(http.FileServer(http.Dir(out)))
+	defer srv.Close()
+	oc := client
+	client = srv.Client()
+	defer func() { client = oc }()
+
+	data := t.TempDir()
+	ix := &workshop.Index{}
+	held := &heldList{}
+	r := bulkPublish(ix, m.Items, srv.URL+"/", "owner", t.TempDir(), 150, held)
+	if len(r.published) != 0 || r.held != 1 || len(held.Items) != 1 || held.Items[0].WorkshopID != "4444444" {
+		t.Fatalf("published %d, held %d: %+v", len(r.published), r.held, held.Items)
+	}
+	if !strings.Contains(r.summary(), "approve-held") {
+		t.Error("the bulk summary doesn't point to the review queue")
+	}
+	if err := saveHeld(data, held); err != nil {
+		t.Fatal(err)
+	}
+	back, _ := loadHeld(data)
+	sum := reviewSummary(back)
+	if !strings.Contains(sum, "4444444") || !strings.Contains(sum, "Safety scan") || strings.Contains(sum, "5555555") {
+		t.Fatalf("review summary:\n%s", sum)
+	}
+
+	files := t.TempDir()
+	if line := publishHeld(ix, back, "5555555", "owner", files); !strings.Contains(line, "not in the review queue") {
+		t.Errorf("an item with a hard problem was publishable: %s", line)
+	}
+	// The file changed on the release since it was held: refused.
+	good, _ := os.ReadFile(filepath.Join(out, "4444444.zip"))
+	os.WriteFile(filepath.Join(out, "4444444.zip"), append(append([]byte{}, good...), 0), 0o644)
+	if line := publishHeld(ix, back, "4444444", "owner", files); !strings.Contains(line, "NOT published") || len(ix.Entries) != 0 {
+		t.Fatalf("a changed file was published: %s", line)
+	}
+	os.WriteFile(filepath.Join(out, "4444444.zip"), good, 0o644)
+	if line := publishHeld(ix, back, "4444444", "owner", files); !strings.Contains(line, "published as") {
+		t.Fatalf("approve: %s", line)
+	}
+	if len(ix.Entries) != 1 || !ix.Entries[0].Approved || len(ix.Entries[0].Findings) == 0 || len(back.Items) != 0 {
+		t.Fatalf("entry %+v, queue %+v", ix.Entries, back.Items)
+	}
+	if err := saveHeld(data, back); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "held.json")); !os.IsNotExist(err) {
+		t.Error("an empty queue left held.json behind")
 	}
 }

@@ -126,6 +126,7 @@ async function refreshState() {
   $("#cutoffDate").textContent = state.cutoff;
   $("#cooldownShow").textContent = Math.round(state.settings.cooldown_hours);
   document.documentElement.dataset.theme = state.settings.theme || "dark";
+  $("#reppgBox").hidden = !(state.loader && state.loader.re_ppg);
   $("#cacheList").textContent = p.workshop && p.workshop.length
     ? "Found: " + p.workshop.join("\n")
     : "No Workshop cache found on this PC.";
@@ -183,6 +184,8 @@ function renderInstalled() {
   $("#countContraptions").textContent = all.filter(isC).length;
   $$(".seg-btn[data-ikind]").forEach((x) => x.classList.toggle("active", x.dataset.ikind === installedKind));
   const mods = all.filter((m) => isC(m) === (installedKind === "contraption"));
+  renderProfiles();
+  $("#profileBar").hidden = installedKind === "contraption";
   $("#openMods").hidden = installedKind === "contraption";
   $("#openContraptions").hidden = installedKind !== "contraption";
   if (!mods.length) {
@@ -193,7 +196,12 @@ function renderInstalled() {
   }
   list.replaceChildren(...mods.map((m) => {
     const kindBadge = m.kind === "GameBanana" ? "badge badge-gb" : m.kind === "Steam Workshop" ? "badge badge-sky" : "badge";
-    const actions = m.quarantined
+    const actions = m.off
+      ? el("div", { class: "item-actions" },
+        el("button", { class: "btn btn-primary btn-sm", onclick: () => run({ action: "turn-on", key: m.key }, "Turning on " + m.name) }, "Turn on"),
+        el("button", { class: "btn btn-sm", onclick: () => dialog("Remove " + m.name + "?", [el("p", {}, "This deletes its folders (kept outside the game folder while it's off).")],
+          { label: "Remove", run: () => run({ action: "remove", key: m.key }, "Removing " + m.name) }) }, "Remove"))
+      : m.quarantined
       ? el("div", { class: "item-actions" },
         el("button", { class: "btn btn-sm", onclick: () => dialog("Put " + m.name + " back?", [el("p", {}, "It goes back into your game folder and the game loads it again. Only do this if you have checked it.")],
           { label: "Release", run: () => run({ action: "release", key: m.key }, "Releasing " + m.name) }) }, "Release"),
@@ -201,6 +209,7 @@ function renderInstalled() {
           { label: "Remove", run: () => run({ action: "remove", key: m.key }, "Removing " + m.name) }) }, "Remove"))
       : el("div", { class: "item-actions" },
         m.link ? el("button", { class: "btn btn-ghost btn-sm", onclick: () => api("/api/open?what=url&url=" + encodeURIComponent(m.link)) }, "Open page") : null,
+        m.item_kind !== "contraption" ? el("button", { class: "btn btn-sm", title: "Move it out of the game folder so the game doesn't load it; Turn on puts it back", onclick: () => run({ action: "turn-off", key: m.key }, "Turning off " + m.name) }, "Turn off") : null,
         m.key.startsWith("gb:") ? el("button", { class: "btn btn-sm", onclick: () => run({ action: "pin", key: m.key, pinned: !m.pinned }, m.pinned ? "Resuming updates" : "Pinning") }, m.pinned ? "Unpin" : "Pin") : null,
         el("button", { class: "btn btn-sm", title: "Restore the version installed before the last update", onclick: () => run({ action: "rollback", key: m.key }, "Rolling back " + m.name) }, "Rollback"),
         el("button", { class: "btn btn-ghost btn-sm", title: "Share this on the Open Workshop", onclick: () => run({ action: "ow-share", key: m.key }, "Packing " + m.name) }, "Share"),
@@ -219,7 +228,8 @@ function renderInstalled() {
           m.withdrawn ? el("span", { class: "badge badge-bad", title: "Withdrawn from the Open Workshop: " + m.withdrawn }, "withdrawn") : null,
           m.risk_accepted ? el("span", { class: "badge badge-bad", title: "You installed this despite CRITICAL findings" }, "risk accepted") : null,
           m.pinned ? el("span", { class: "badge" }, " pinned") : null,
-          m.quarantined ? el("span", { class: "badge badge-bad", title: "In quarantine: " + m.quarantined + ". The game can't load it." }, "quarantined") : null),
+          m.quarantined ? el("span", { class: "badge badge-bad", title: "In quarantine: " + m.quarantined + ". The game can't load it." }, "quarantined") : null,
+          m.off ? el("span", { class: "badge", title: "Turned off: moved out of the game folder, so the game doesn't load it" }, "off") : null),
         el("div", { class: "item-meta" },
           m.author ? "by " + m.author + " · " : "", m.key, " · installed ", (m.installed_at || "").slice(0, 10),
           m.revision && !m.revision.startsWith("0001") ? " · source date " + m.revision.slice(0, 10) : "",
@@ -227,6 +237,50 @@ function renderInstalled() {
       actions);
   }));
 }
+
+$("#revokeApprovals").onclick = () => dialog("Revoke Trust and run approvals?",
+  [el("p", {}, "RE_PPG then asks again before running any mod you allowed to skip its security checks. Nothing else changes.")],
+  { label: "Revoke", run: () => run({ action: "revoke-approvals" }, "Revoking Trust and run approvals") });
+
+// Mod lists: export the installed mods as a file, or install a shared one.
+$("#exportList").onclick = () => run({ action: "list-export" }, "Saving the mod list");
+$("#importList").onclick = () => $("#importListFile").click();
+$("#importListFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  if (f.size > 1048576) { toast("That file is too large to be a mod list"); return; }
+  run({ action: "list-import", list: await f.text() }, "Installing the mods of the list");
+};
+
+// Profiles: saved sets of the mods that are on.
+function renderProfiles() {
+  const sel = $("#profileSel");
+  const names = state.profiles || [];
+  const keep = sel.value || state.profile || "";
+  if (sel.dataset.names !== names.join("\0")) {
+    sel.dataset.names = names.join("\0");
+    sel.replaceChildren(el("option", { value: "" }, names.length ? "Choose a profile" : "No profiles yet"),
+      ...names.map((n) => el("option", { value: n }, n)));
+  }
+  sel.value = names.includes(keep) ? keep : (names.includes(state.profile) ? state.profile : "");
+}
+$("#profileUse").onclick = () => {
+  const n = $("#profileSel").value;
+  if (n) run({ action: "profile-use", name: n }, "Switching to profile " + n);
+};
+$("#profileSave").onclick = () => {
+  const input = el("input", { placeholder: "e.g. Gore pack", value: $("#profileSel").value || "" });
+  dialog("Save profile", [el("p", {}, "Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the game folder, nothing deleted) and these back on."), input],
+    { label: "Save", run: () => { const n = input.value.trim(); if (n) run({ action: "profile-save", name: n }, "Saving profile " + n); } });
+  input.focus();
+};
+$("#profileDelete").onclick = () => {
+  const n = $("#profileSel").value;
+  if (!n) return;
+  dialog("Delete profile " + n + "?", [el("p", {}, "Only the saved list is deleted; your mods stay as they are.")],
+    { label: "Delete", run: () => run({ action: "profile-delete", name: n }, "Deleting profile " + n) });
+};
 
 // renderMissing offers to restore tracked items whose folders disappeared
 // (deleted by accident, by another program, or by malware).
@@ -331,6 +385,12 @@ function jobDone(j) {
       return;
     }
     if (j.name === "ow-share" && j.data) return showShare(j.data);
+    if (j.name === "revoke-approvals" && j.data) { toast("Revoked " + j.data.revoked + " Trust and run approval(s); RE_PPG asks again before running those mods", 7000); return; }
+    if (j.name === "list-export" && j.data) {
+      toast("Saved the list of " + j.data.count + " item(s): share the file, and anyone can install the same mods with Import list", 8000,
+        { label: "Show file", run: () => api("/api/open?what=exports") });
+      return;
+    }
     if (j.name === "remove" && j.data && j.data.others) {
       toast("Removed. Another copy is still in your Mods folder (" + j.data.others + "), not installed by ppgmods.", 10000,
         { label: "Open Mods folder", run: () => api("/api/open?what=mods") });
@@ -631,7 +691,7 @@ const thumbBust = {};
 // gone: one small mod at a time, paused while a task runs.
 const thumbQueue = [];
 const thumbTried = new Set();
-let thumbBusy = false;
+let thumbBusy = 0; // fetches running
 
 function sizeBytes(s) {
   const m = /([\d.]+)\s*(KB|MB|GB|B)/i.exec(s || "");
@@ -647,10 +707,12 @@ function queueThumb(m) {
   pumpThumbs();
 }
 
+// Two at a time, and never while a task runs or a mod's details are open
+// (their own check shouldn't queue behind thumbnails).
 async function pumpThumbs() {
-  if (thumbBusy || !thumbQueue.length) return;
-  if (jobRunning || state?.settings?.no_bg_thumbs) { setTimeout(pumpThumbs, 3000); return; }
-  thumbBusy = true;
+  if (thumbBusy >= 2 || !thumbQueue.length) return;
+  if (jobRunning || state?.settings?.no_bg_thumbs || $("#details").open) { setTimeout(pumpThumbs, 2000); return; }
+  thumbBusy++;
   const m = thumbQueue.shift();
   try {
     if (document.querySelector(`.mod[data-ref="${CSS.escape(m.ref)}"]`)) {
@@ -662,7 +724,7 @@ async function pumpThumbs() {
       }
     }
   } catch { /* leave the placeholder */ }
-  thumbBusy = false;
+  thumbBusy--;
   setTimeout(pumpThumbs, 500);
 }
 

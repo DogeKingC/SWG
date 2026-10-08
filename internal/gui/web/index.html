@@ -121,8 +121,18 @@
         <button id="applyUpdates" class="btn btn-primary">Apply safe updates</button>
         <button id="verifyBtn" class="btn">Verify files</button>
         <button id="findBtn" class="btn" title="Track mods and contraptions you installed without this app">Find already-installed</button>
+        <button id="exportList" class="btn btn-ghost" title="Save the installed mods as a file you can share">Export list</button>
+        <button id="importList" class="btn btn-ghost" title="Install the mods of a list someone shared">Import list…</button>
+        <input id="importListFile" type="file" accept=".json,application/json" hidden>
         <button id="openMods" class="btn btn-ghost">Open Mods folder</button>
         <button id="openContraptions" class="btn btn-ghost">Open Contraptions folder</button>
+      </div>
+      <div id="profileBar" class="toolbar profile-bar">
+        <b>Profile</b>
+        <select id="profileSel"></select>
+        <button id="profileUse" class="btn">Use</button>
+        <button id="profileSave" class="btn">Save as…</button>
+        <button id="profileDelete" class="btn btn-ghost">Delete</button>
       </div>
       <div id="missingBanner" class="notice notice-warn missing-banner" hidden></div>
       <div id="verifyPanel" class="panel" hidden></div>
@@ -206,6 +216,13 @@
           <span class="hint">smods.ru sometimes asks browsers to prove they are real. ppgmods then runs the check with a background browser and retries on its own - nothing for you to do. The clearance it earns stays on this PC and is only sent to smods.ru.</span></label>
         <div><button class="btn btn-primary" type="submit">Save</button></div>
       </form>
+      <div id="reppgBox" hidden>
+        <h2>RE_PPG</h2>
+        <div class="panel">
+          <p class="small">RE_PPG asks before it runs a C# mod. "Trust and run" lets a mod version skip its security checks; Verify files tells you when such an approval appears.</p>
+          <button id="revokeApprovals" class="btn btn-ghost" type="button">Revoke Trust and run approvals</button>
+        </div>
+      </div>
       <h2>Skymods (Workshop mirror)</h2>
       <div id="skymodsBox" class="panel"></div>
       <h2>Nexus Mods</h2>

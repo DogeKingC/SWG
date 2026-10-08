@@ -27,16 +27,22 @@ on:
   #   (GameBanana, Steam copies, True Workshop, Nexus, Open Workshop, local
   #   files) until "resume-all". Browsing still works.
   # And "bulk": publish an owner's bulk upload of old Workshop items (made
-  # with `ppgmods ow-pack`, uploaded as the assets of a release).
+  # with `ppgmods ow-pack`, uploaded as the assets of a release). Bulk items
+  # held only for the owner's decision go to the review queue: "review"
+  # lists them (and submissions waiting for /approve) with their findings,
+  # "approve-held" publishes the Workshop IDs given in "ids".
   workflow_dispatch:
     inputs:
       action:
-        description: "refresh; pause / resume (Open Workshop only); pause-all / resume-all (every source); bulk (upload)"
+        description: "refresh; pause / resume (Open Workshop only); pause-all / resume-all (every source); bulk (upload); review / approve-held (review queue)"
         type: choice
-        options: [refresh, pause, resume, pause-all, resume-all, bulk]
+        options: [refresh, pause, resume, pause-all, resume-all, bulk, review, approve-held]
         default: refresh
       release:
         description: "bulk: the tag of the release holding the zips and bulk.json (e.g. bulk-20261004)"
+        required: false
+      ids:
+        description: "approve-held: Workshop IDs to publish, separated by spaces or commas"
         required: false
       reason:
         description: "pause, pause-all: why (shown to everyone)"
@@ -121,6 +127,27 @@ jobs:
           REPO_OWNER: ${{ github.repository_owner }}
           GH_TOKEN: ${{ github.token }}
           WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
+      - name: Review queue
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'review'
+        run: |
+          go run ./cmd/workshop review -data data
+          {
+            echo
+            echo "## Submissions waiting for /approve"
+            echo
+            gh issue list --repo "$GITHUB_REPOSITORY" --label needs-approval --state open --limit 100 \
+              --json number,title,url --jq '.[] | "- [#\(.number) \(.title | gsub("[\\[\\]<>`]"; ""))](\(.url))"' > waiting.md || true
+            if [ -s waiting.md ]; then cat waiting.md; else echo "None."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Approve held items
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'approve-held'
+        run: go run ./cmd/workshop approve-held -data data -out out -owner "$REPO_OWNER" -ids "$IDS"
+        env:
+          IDS: ${{ inputs.ids }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          WORKSHOP_SIGNING_KEY: ${{ secrets.WORKSHOP_SIGNING_KEY }}
       - name: Pause or resume every source
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.action == 'pause-all' || inputs.action == 'resume-all')
         # The app reads blocklist.json from main on every action. A push made
@@ -171,6 +198,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           [ -f index.json ] || exit 0
           git add index.json
+          if [ -f held.json ]; then git add held.json; else git rm -q --cached --ignore-unmatch held.json; fi
           if [ -f index.sig ]; then git add index.sig; else git rm -q --cached --ignore-unmatch index.sig; fi
           if git diff --cached --quiet; then echo "index unchanged"; exit 0; fi
           git commit -q -m "Open Workshop index $(date -u +%F)"

@@ -40,11 +40,18 @@ type Installed struct {
 	// it is in place.
 	Quarantined   string     `json:"quarantined,omitempty"`
 	QuarantinedAt *time.Time `json:"quarantined_at,omitempty"`
+	// Off: the mod is turned off; its folders are in ppgmods' "off" area
+	// (see TurnOff), not the game folder.
+	Off bool `json:"off,omitempty"`
 }
 
 type State struct {
 	path string
 	Mods map[string]*Installed `json:"mods"`
+	// Profiles are saved lists of the mods that are on (keys); Profile is
+	// the one last saved or used.
+	Profiles map[string][]string `json:"profiles,omitempty"`
+	Profile  string              `json:"profile,omitempty"`
 }
 
 func ConfigDir() (string, error) {

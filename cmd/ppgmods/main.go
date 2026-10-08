@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -52,6 +53,12 @@ Keep up to date:
   remove <key>               uninstall
   quarantine <key> [reason]  move it out of the game folder (the game can't load it)
   release <key>              put a quarantined item back
+  revoke-approvals           delete RE_PPG's "Trust and run" approvals (it asks again)
+  export-list [file]         save the installed mods as a list to share
+  import-list <file>         install a list's mods (each downloaded and scanned)
+  off <key> / on <key>       turn a mod off (moved out, the game won't load it) or back on
+  profile [list | save <name> | use <name> | delete <name>]
+                             saved sets of the mods that are on
   find-installed             track mods/contraptions already in the game folders
                              (installed by hand or from the sites)
   self-update                update ppgmods itself to the latest release
@@ -341,6 +348,53 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 			return err
 		}
 		return m.Release(args[0])
+	case "off":
+		if err := need(args, 1, "mod key"); err != nil {
+			return err
+		}
+		return m.TurnOff(args[0])
+	case "on":
+		if err := need(args, 1, "mod key"); err != nil {
+			return err
+		}
+		return m.TurnOn(args[0])
+	case "profile":
+		return cmdProfile(m, args)
+	case "revoke-approvals":
+		_, err := m.RevokeUnsafeApprovals()
+		return err
+	case "export-list":
+		l, skipped := app.ExportList(m.State)
+		b, _ := json.MarshalIndent(l, "", "  ")
+		out := "ppgmods-mod-list.json"
+		if len(args) > 0 {
+			out = args[0]
+		}
+		if err := os.WriteFile(out, b, 0o644); err != nil {
+			return err
+		}
+		logf("saved %d item(s) to %s", len(l.Mods), out)
+		if skipped > 0 {
+			logf("%d item(s) found on this PC without a source can't be downloaded again, so they aren't in the list", skipped)
+		}
+		return nil
+	case "import-list":
+		if err := need(args, 1, "mod list file"); err != nil {
+			return err
+		}
+		b, err := os.ReadFile(args[0])
+		if err != nil {
+			return err
+		}
+		l, err := app.ParseList(b)
+		if err != nil {
+			return err
+		}
+		sum := a.ImportList(m, l)
+		if sum.Refused+sum.Failed > 0 {
+			return fmt.Errorf("%d not installed; see above for reasons", sum.Refused+sum.Failed)
+		}
+		return nil
 	case "verify":
 		return cmdVerify(m)
 	case "find-installed":
@@ -527,4 +581,39 @@ func cmdNexusProbe(arg string) error {
 		logf("v3 download-repacked: OK, a link on %s (expires %s)", host(link), exp.Local().Format("15:04"))
 	}
 	return nil
+}
+
+// cmdProfile is `ppgmods profile [list | save <name> | use <name> | delete <name>]`.
+func cmdProfile(m *manager.Manager, args []string) error {
+	if len(args) == 0 || args[0] == "list" {
+		names := m.State.ProfileNames()
+		if len(names) == 0 {
+			logf("no profiles yet; save the mods that are on now with: ppgmods profile save <name>")
+		}
+		for _, n := range names {
+			cur := ""
+			if n == m.State.Profile {
+				cur = "  (current)"
+			}
+			logf("%s: %d mod(s)%s", n, len(m.State.Profiles[n]), cur)
+		}
+		return nil
+	}
+	if len(args) < 2 {
+		return fmt.Errorf("usage: ppgmods profile [list | save <name> | use <name> | delete <name>]")
+	}
+	name := strings.Join(args[1:], " ")
+	switch args[0] {
+	case "save":
+		return m.SaveProfile(name)
+	case "use":
+		missing, err := m.UseProfile(name)
+		if len(missing) > 0 {
+			logf("not installed (install them to have them on): %s", strings.Join(missing, ", "))
+		}
+		return err
+	case "delete":
+		return m.DeleteProfile(name)
+	}
+	return fmt.Errorf("usage: ppgmods profile [list | save <name> | use <name> | delete <name>]")
 }

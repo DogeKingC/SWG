@@ -263,6 +263,9 @@ func (m *Manager) Install(c *Candidate) error {
 	if prev != nil && prev.Quarantined != "" {
 		return errQuarantined(prev) // an update or repair must not bring it back
 	}
+	if prev != nil && prev.Off {
+		return errOff(prev) // its folders aren't in the game folder to replace
+	}
 	if err := m.Check(c, rep, prev); err != nil {
 		return err
 	}
@@ -431,6 +434,9 @@ func (m *Manager) Rollback(key string) error {
 	if cur := m.State.Mods[key]; cur != nil && cur.Quarantined != "" {
 		return errQuarantined(cur)
 	}
+	if cur := m.State.Mods[key]; cur != nil && cur.Off {
+		return errOff(cur)
+	}
 	base, err := m.workDir("backups")
 	if err != nil {
 		return err
@@ -500,6 +506,14 @@ func (m *Manager) RemoveReport(key string) ([]string, error) {
 		}
 		delete(m.State.Mods, key)
 		m.logf("removed %s (deleted its quarantined copy)", key)
+		return nil, m.State.Save()
+	}
+	if inst.Off {
+		if err := m.deleteOff(inst); err != nil {
+			return nil, err
+		}
+		delete(m.State.Mods, key)
+		m.logf("removed %s (it was turned off; deleted its folders)", key)
 		return nil, m.State.Save()
 	}
 	base := m.dirFor(inst)
@@ -598,7 +612,7 @@ func UGCString(raw json.RawMessage) string {
 // MissingFolders reports whether any of an installed item's folders is gone
 // from the game folder (deleted by hand, by another program, or by malware).
 func (m *Manager) MissingFolders(inst *Installed) bool {
-	if inst.Quarantined != "" {
+	if inst.Quarantined != "" || inst.Off {
 		return false // moved out on purpose
 	}
 	for _, f := range inst.Folders {
@@ -642,6 +656,17 @@ func (m *Manager) Verify() ([]Problem, error) {
 					probs = append(probs, Problem{f, "a quarantined mod's folder is back in the game folder (put there by something else); remove it", true, inst.Key})
 				} else {
 					probs = append(probs, Problem{f, "in quarantine: " + inst.Quarantined + " (the game can't load it)", false, inst.Key})
+				}
+			}
+			continue
+		}
+		if inst.Off {
+			// Like quarantine: its folder names stay reserved for it.
+			for _, f := range inst.Folders {
+				if _, err := os.Stat(filepath.Join(m.dirFor(inst), f)); err == nil {
+					probs = append(probs, Problem{f, "a turned-off mod's folder is back in the game folder (put there by something else); remove it, or remove the mod and install it again", true, inst.Key})
+				} else {
+					probs = append(probs, Problem{f, "turned off (the game doesn't load it)", false, inst.Key})
 				}
 			}
 			continue
@@ -738,6 +763,9 @@ func (m *Manager) Verify() ([]Problem, error) {
 		probs = append(probs, pr)
 	}
 	probs = append(probs, m.verifyGameCode()...)
+	if m.ModsDir != "" {
+		probs = append(probs, m.verifyApprovals(filepath.Dir(m.ModsDir))...)
+	}
 	return probs, nil
 }
 

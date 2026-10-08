@@ -823,7 +823,12 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	a := s.newApp(nil)
 	paths := a.Paths()
 	var mods []installedView
+	profiles, profile := []string{}, ""
 	if st, err := manager.LoadState(); err == nil {
+		profiles, profile = st.ProfileNames(), st.Profile
+		if profiles == nil {
+			profiles = []string{}
+		}
 		mg := &manager.Manager{State: st, ModsDir: paths.Mods, ContraptionsDir: paths.Contraptions}
 		for _, m := range st.Sorted() {
 			v := installedView{Installed: m, Link: m.Source, ItemKind: m.Kind}
@@ -880,6 +885,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 		"version":               s.version,
 		"paths":                 paths,
 		"installed":             mods,
+		"profiles":              profiles,
+		"profile":               profile,
 		"job":                   j,
 		"settings":              stateSettings,
 		"skymods":               s.skymodsView(),
@@ -955,6 +962,8 @@ type actionReq struct {
 	Override   map[string]bool `json:"override,omitempty"`
 	Mirror     string          `json:"mirror,omitempty"`
 	Confirm    string          `json:"confirm,omitempty"` // RiskPhrase, typed by the person, with override accept_risk
+	Name       string          `json:"name,omitempty"`    // a profile's name
+	List       string          `json:"list,omitempty"`    // a mod list file's contents (list-import)
 	background bool            // started by ppgmods itself; never set from a request
 }
 
@@ -1172,6 +1181,32 @@ func (s *server) do(j *job, req actionReq) error {
 		j.Data = map[string]string{"zip": sh.Zip, "sha256": sh.SHA256, "slug": sh.Slug, "issue_url": sh.IssueURL}
 		s.logf("packed %s for the Open Workshop: %s", req.Key, sh.Zip)
 		return nil
+	case "list-export":
+		l, skipped := app.ExportList(m.State)
+		b, _ := json.MarshalIndent(l, "", "  ")
+		dir := exportDir()
+		os.MkdirAll(dir, 0o755)
+		p := filepath.Join(dir, "ppgmods-mod-list-"+time.Now().Format("2006-01-02-150405")+".json")
+		if err := os.WriteFile(p, b, 0o644); err != nil {
+			return err
+		}
+		j.Data = map[string]string{"file": p, "count": strconv.Itoa(len(l.Mods)), "skipped": strconv.Itoa(skipped)}
+		s.logf("saved the mod list (%d item(s)) to %s", len(l.Mods), p)
+		if skipped > 0 {
+			s.logf("%d item(s) found on this PC without a source can't be downloaded again, so they aren't in the list", skipped)
+		}
+		return nil
+	case "list-import":
+		l, err := app.ParseList([]byte(req.List))
+		if err != nil {
+			return err
+		}
+		sum := a.ImportList(m, l)
+		j.Summary = &sum
+		if sum.Refused+sum.Failed > 0 {
+			return fmt.Errorf("%d of %d not installed; see the log for reasons", sum.Refused+sum.Failed, len(l.Mods)-sum.Current)
+		}
+		return nil
 	case "repair":
 		sum := a.Repair(m, req.Refs)
 		j.Summary = &sum
@@ -1221,6 +1256,24 @@ func (s *server) do(j *job, req actionReq) error {
 		return m.Quarantine(req.Key, "quarantined from the window")
 	case "release":
 		return m.Release(req.Key)
+	case "turn-off":
+		return m.TurnOff(req.Key)
+	case "turn-on":
+		return m.TurnOn(req.Key)
+	case "profile-save":
+		return m.SaveProfile(req.Name)
+	case "profile-use":
+		missing, err := m.UseProfile(req.Name)
+		if len(missing) > 0 {
+			s.logf("profile %q also has mods that aren't installed: %s (install them to have them on)", req.Name, strings.Join(missing, ", "))
+		}
+		return err
+	case "profile-delete":
+		return m.DeleteProfile(req.Name)
+	case "revoke-approvals":
+		n, err := m.RevokeUnsafeApprovals()
+		j.Data = map[string]string{"revoked": strconv.Itoa(n)}
+		return err
 	}
 	return fmt.Errorf("unknown action %q", req.Action)
 }
@@ -1398,6 +1451,8 @@ func (s *server) handleOpen(w http.ResponseWriter, r *http.Request) {
 			dl = p.Data
 		}
 		path = filepath.Join(dl, "ppgmods-share")
+	case "exports":
+		path = exportDir()
 	case "url":
 		u := r.URL.Query().Get("url")
 		if app.AllowedURL(u) && !strings.HasPrefix(u, "http://") {
@@ -1602,4 +1657,14 @@ func (s *server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", app.ImageType(b))
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Write(b)
+}
+
+// exportDir is where saved mod lists go: the Downloads folder, else the
+// ppgmods data folder.
+func exportDir() string {
+	if dl := app.DownloadFolder(); dl != "" {
+		return dl
+	}
+	d, _ := manager.ConfigDir()
+	return d
 }

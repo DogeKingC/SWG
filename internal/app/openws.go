@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -114,12 +115,35 @@ func owForWorkshop(ws string) *workshop.Entry {
 	if err != nil || ws == "" || ix.Paused {
 		return nil
 	}
+	return bestForWorkshop(ix, ws)
+}
+
+// isArchive reports whether an entry is the owner's archived copy of an old
+// Workshop item (bulk upload), not its author's own release.
+func isArchive(e *workshop.Entry) bool { return slices.Contains(e.Tags, "archive") }
+
+// bestForWorkshop picks the Open Workshop entry to offer for Workshop item
+// ws: its author's own release before an archived copy, then the highest
+// version; withdrawn entries never.
+func bestForWorkshop(ix *workshop.Index, ws string) *workshop.Entry {
+	var best *workshop.Entry
 	for i := range ix.Entries {
-		if e := &ix.Entries[i]; e.WorkshopID == ws && ix.Blocked(e) == "" {
-			return e
+		e := &ix.Entries[i]
+		if ws == "" || e.WorkshopID != ws || ix.Blocked(e) != "" {
+			continue
+		}
+		switch {
+		case best == nil:
+			best = e
+		case isArchive(best) != isArchive(e):
+			if isArchive(best) {
+				best = e
+			}
+		case CompareVersions(e.Version, best.Version) > 0:
+			best = e
 		}
 	}
-	return nil
+	return best
 }
 
 // downloadOW downloads an entry's file into the cache and checks it is
@@ -205,6 +229,13 @@ func (a *App) owUpdate(inst *manager.Installed) (*manager.Candidate, error) {
 			return nil, err
 		}
 		e = ent
+		// An archived copy is superseded by its author's own release.
+		if isArchive(e) && !ix.Paused {
+			if b := bestForWorkshop(ix, e.WorkshopID); b != nil && b.Slug != e.Slug && !isArchive(b) {
+				a.logf("%s: its author published it on the Open Workshop themselves (version %s); updating from their release", inst.Name, b.Version)
+				e = b
+			}
+		}
 		if why := ix.Blocked(e); why != "" {
 			a.logf("%s was WITHDRAWN from the Open Workshop: %s. Consider removing it.", inst.Name, why)
 			return nil, nil

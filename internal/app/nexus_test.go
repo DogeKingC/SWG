@@ -260,3 +260,22 @@ func TestNexusInstallTakesHandedOverLink(t *testing.T) {
 		t.Fatal("a link was taken after the install finished")
 	}
 }
+
+// A Nexus upload of a Workshop item installs from the free mirror copy
+// only when that copy is at least the Nexus version.
+func TestPreferMirror(t *testing.T) {
+	for _, c := range []struct {
+		mirror, nexus string
+		want          bool
+	}{
+		{"1.2", "1.2", true},
+		{"1.3", "1.2", true},
+		{"1.2", "1.3", false},
+		{"1.2", "", true},  // Nexus doesn't say: the mirror copy will do
+		{"", "1.0", false}, // the mirror copy doesn't say: Nexus' is the known one
+	} {
+		if got := preferMirror(c.mirror, c.nexus); got != c.want {
+			t.Errorf("preferMirror(%q, %q) = %v", c.mirror, c.nexus, got)
+		}
+	}
+}

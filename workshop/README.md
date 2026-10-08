@@ -105,6 +105,16 @@ named by its Workshop ID, e.g. a copy of
    the worm cutoff, scanner findings, unusual file types, items already on
    the Open Workshop. The run's summary lists what was published and what to
    look at by hand. At most 150 per run: run it again for the rest.
+4. Items held only for your decision (scanner findings to judge, an unusual
+   file type) go to the review queue, `held.json` on the `workshop-data`
+   branch. Run the workflow with action `review`: its summary lists each
+   held item with its findings, and the submissions waiting for `/approve`.
+   To publish some, run action `approve-held` with their Workshop IDs in
+   `ids` (spaces or commas). Each is downloaded and checked again; a file
+   that changed, or anything that does what the worm did, is never
+   published. There is no "approve all": name what you've looked at.
+   Items with hard problems (worm patterns, files from after the cutoff, a
+   broken mod.json) never enter the queue.
 
 Authors can ask for their item to be taken down; withdraw it with the
 `withdrawn` label or `/withdraw` on any issue that names it.

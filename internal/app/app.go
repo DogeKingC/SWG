@@ -26,6 +26,7 @@ import (
 	"github.com/Trlydev/SWG/internal/manager"
 	"github.com/Trlydev/SWG/internal/popularity"
 	"github.com/Trlydev/SWG/internal/sources"
+	"github.com/Trlydev/SWG/internal/version"
 )
 
 type Options struct {
@@ -991,12 +992,42 @@ func (a *App) Fetch(m *manager.Manager, ref string, prev *manager.Installed) (*m
 		if acct := LoadNexus(); acct != nil && acct.Premium {
 			return a.fetchNexus(id, nil) // linked premium account: download directly
 		}
+		if c := a.nexusViaWorkshop(m, *it, ref); c != nil {
+			return c, nil
+		}
 		return nil, nexusBrowser(*it, ref)
 	}
 	return nil, fmt.Errorf("unknown reference %q; use gb:<id>, sky:<workshop id>, tw:<id>, nx:<id>, or a mod page link", ref)
 }
 
 var fetchLocks sync.Map
+
+// nexusViaWorkshop returns the free Workshop mirror copy of a Nexus upload
+// of a Steam Workshop item, when one exists and is at least the Nexus
+// version, so the person needn't download from Nexus by hand; else nil.
+func (a *App) nexusViaWorkshop(m *manager.Manager, it sources.NXMod, ref string) *manager.Candidate {
+	ws := sources.NXInfos([]sources.NXMod{it})[it.ID].WorkshopID
+	if ws == "" {
+		return nil
+	}
+	c, err := a.fetchWorkshop(m, ws)
+	if err != nil || c == nil {
+		return nil // no usable mirror copy: Nexus it is
+	}
+	if !preferMirror(c.Version, it.Version) {
+		a.logf("%s: the Workshop mirror copy (version %q) is older than the Nexus upload (%q); getting it from Nexus", ref, c.Version, it.Version)
+		return nil
+	}
+	a.logf("%s is Steam Workshop item %s: installing its mirror copy (version %q), no Nexus download needed", ref, ws, c.Version)
+	c.Aliases = append(c.Aliases, ref)
+	return c
+}
+
+// preferMirror reports whether a mirror copy of version mirror is as new as
+// the Nexus upload of version nexus (an unknown Nexus version doesn't win).
+func preferMirror(mirror, nexus string) bool {
+	return version.Compare(mirror, nexus) >= 0
+}
 
 // CacheDir is where downloaded archives and their thumbnails are kept, so a
 // preview and the install that follows download only once.
@@ -1477,6 +1508,10 @@ func (a *App) Update(m *manager.Manager) Summary {
 	for _, inst := range m.State.Sorted() {
 		if inst.Quarantined != "" {
 			a.logf("%s is in quarantine, skipped", inst.Key)
+			continue
+		}
+		if inst.Off {
+			a.logf("%s is turned off, skipped", inst.Key)
 			continue
 		}
 		if strings.HasPrefix(inst.Key, "ow:") || strings.HasPrefix(inst.Key, "sky:") {

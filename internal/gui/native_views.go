@@ -5,7 +5,9 @@ package gui
 import (
 	"fmt"
 	"image/color"
+	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -517,6 +519,9 @@ type installedPane struct {
 	openMods  *widget.Button
 	openContr *widget.Button
 	lastApply bool
+	profBar   *fyne.Container
+	profSel   *widget.Select
+	profNames []string
 }
 
 func newInstalled(u *ui) *installedPane {
@@ -542,14 +547,84 @@ func newInstalled(u *ui) *installedPane {
 	find := u.busyButton("Find already-installed", func() {
 		u.run(map[string]any{"action": "find-installed"}, "Looking for mods installed without this app")
 	})
+	export := u.busyButton("Export list", func() { u.run(map[string]any{"action": "list-export"}, "Saving the mod list") })
+	export.Importance = widget.LowImportance
+	importList := u.busyButton("Import list…", func() {
+		dialog.ShowFileOpen(func(r fyne.URIReadCloser, err error) {
+			if err != nil || r == nil {
+				return
+			}
+			defer r.Close()
+			b, err := io.ReadAll(io.LimitReader(r, 1<<20+1))
+			if err != nil {
+				u.toast(err.Error())
+				return
+			}
+			u.run(map[string]any{"action": "list-import", "list": string(b)}, "Installing the mods of the list")
+		}, u.win)
+	})
+	importList.Importance = widget.LowImportance
 	p.openMods = widget.NewButton("Open Mods folder", func() { u.open("mods") })
 	p.openContr = widget.NewButton("Open Contraptions folder", func() { u.open("contraptions") })
 	p.openMods.Importance, p.openContr.Importance = widget.LowImportance, widget.LowImportance
 	p.missing.Hide()
 	p.verify.Hide()
+	p.profileBar()
 	p.root = view(container.New(&vlist{gap: 12}, h1("Installed"), p.kind.root,
-		flowBox(8, check, apply, verify, find, p.openMods, p.openContr), p.compiler, p.missing, p.verify, p.list))
+		flowBox(8, check, apply, verify, find, export, importList, p.openMods, p.openContr), p.profBar, p.compiler, p.missing, p.verify, p.list))
 	return p
+}
+
+// profileBar is the row to switch, save and delete profiles: saved sets of
+// the mods that are on.
+func (p *installedPane) profileBar() {
+	u := p.u
+	p.profSel = widget.NewSelect(nil, nil)
+	p.profSel.PlaceHolder = "No profile"
+	use := u.busyButton("Use", func() {
+		if n := p.profSel.Selected; n != "" {
+			u.run(map[string]any{"action": "profile-use", "name": n}, "Switching to profile "+n)
+		}
+	})
+	save := u.busyButton("Save as…", func() {
+		name := widget.NewEntry()
+		name.SetPlaceHolder("e.g. Gore pack")
+		name.SetText(p.profSel.Selected)
+		body := container.New(&vlist{gap: 8}, text("Saves which mods are on now under this name. Switching to it later turns the other mods off (moved out of the game folder, nothing deleted) and these back on."), name)
+		u.confirm("Save profile", body, "Save", false, func() {
+			if n := strings.TrimSpace(name.Text); n != "" {
+				u.run(map[string]any{"action": "profile-save", "name": n}, "Saving profile "+n)
+			}
+		})
+	})
+	del := widget.NewButton("Delete", func() {
+		n := p.profSel.Selected
+		if n == "" {
+			return
+		}
+		u.confirm("Delete profile "+n+"?", text("Only the saved list is deleted; your mods stay as they are."), "Delete", true, func() {
+			u.run(map[string]any{"action": "profile-delete", "name": n}, "Deleting profile "+n)
+		})
+	})
+	del.Importance = widget.LowImportance
+	label := widget.NewLabelWithStyle("Profile", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	p.profBar = container.NewHBox(label, narrow(260, p.profSel), use, save, del)
+}
+
+// renderProfiles fills the profile list from the state.
+func (p *installedPane) renderProfiles(st *stateView) {
+	if strings.Join(st.Profiles, "\x00") != strings.Join(p.profNames, "\x00") {
+		p.profNames = st.Profiles
+		p.profSel.Options = st.Profiles
+		p.profSel.Refresh()
+	}
+	if p.profSel.Selected == "" || !slices.Contains(st.Profiles, p.profSel.Selected) {
+		p.profSel.Selected = ""
+		if st.Profile != "" && slices.Contains(st.Profiles, st.Profile) {
+			p.profSel.Selected = st.Profile
+		}
+		p.profSel.Refresh()
+	}
 }
 
 func (p *installedPane) kindValue() string {
@@ -576,12 +651,15 @@ func (p *installedPane) render() {
 	p.kind.SetText(0, fmt.Sprintf("Mods  %d", nm))
 	p.kind.SetText(1, fmt.Sprintf("Contraptions  %d", nc))
 	wantC := p.kind.selected == 1
+	p.renderProfiles(u.state())
 	if wantC {
 		p.openMods.Hide()
 		p.openContr.Show()
+		p.profBar.Hide()
 	} else {
 		p.openMods.Show()
 		p.openContr.Hide()
+		p.profBar.Show()
 	}
 	var rows []fyne.CanvasObject
 	for _, m := range all {
@@ -644,6 +722,9 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	if m.Quarantined != "" {
 		pills = append(pills, pill("quarantined", pBad))
 	}
+	if m.Off {
+		pills = append(pills, pill("off", pNeutral))
+	}
 	meta := ""
 	if m.Author != "" {
 		meta = "by " + m.Author + " · "
@@ -659,6 +740,9 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 	if m.Quarantined != "" {
 		meta += "\nIn quarantine (" + m.Quarantined + "): moved out of the game folder, so the game can't load it."
 	}
+	if m.Off {
+		meta += "\nTurned off: moved out of the game folder, so the game doesn't load it."
+	}
 	actions := container.NewHBox()
 	if m.Quarantined != "" {
 		// Only putting it back or deleting it make sense while it's out.
@@ -673,13 +757,25 @@ func (p *installedPane) row(m installedView) fyne.CanvasObject {
 				u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
 			})
 		}))
+	} else if m.Off {
+		on := widget.NewButton("Turn on", func() { u.run(map[string]any{"action": "turn-on", "key": m.Key}, "Turning on "+m.Name) })
+		on.Importance = widget.HighImportance
+		actions.Add(on)
+		actions.Add(widget.NewButton("Remove", func() {
+			u.confirm("Remove "+m.Name+"?", text("This deletes its folders (kept outside the game folder while it's off)."), "Remove", true, func() {
+				u.run(map[string]any{"action": "remove", "key": m.Key}, "Removing "+m.Name)
+			})
+		}))
 	} else if m.Link != "" {
 		link := m.Link
 		b := widget.NewButton("Open page", func() { u.openURL(link) })
 		b.Importance = widget.LowImportance
 		actions.Add(b)
 	}
-	if m.Quarantined == "" {
+	if m.Quarantined == "" && !m.Off {
+		if m.ItemKind != "contraption" {
+			actions.Add(widget.NewButton("Turn off", func() { u.run(map[string]any{"action": "turn-off", "key": m.Key}, "Turning off "+m.Name) }))
+		}
 		if strings.HasPrefix(m.Key, "gb:") {
 			l := "Pin"
 			if m.Pinned {
@@ -1200,6 +1296,16 @@ func (v *settingsView) renderSetup(st *stateView) {
 		row("BepInEx", l.BepInEx, bepDetail),
 		row("RE_PPG", l.REPPG, reDetail),
 		muted(fmt.Sprintf("%d BepInEx plugins, %d patchers. Verify files (Installed) checks them for the worms.", len(l.Plugins), len(l.Patchers))),
+	}
+	if l.REPPG {
+		u := v.u
+		revoke := widget.NewButton("Revoke Trust and run approvals", func() {
+			u.confirm("Revoke Trust and run approvals?", text("RE_PPG then asks again before running any mod you allowed to skip its security checks. Nothing else changes."), "Revoke", false, func() {
+				u.run(map[string]any{"action": "revoke-approvals"}, "Revoking Trust and run approvals")
+			})
+		})
+		revoke.Importance = widget.LowImportance
+		objs = append(objs, container.NewHBox(revoke))
 	}
 	v.setup.Objects = objs
 	v.setup.Refresh()
