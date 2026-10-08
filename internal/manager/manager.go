@@ -164,11 +164,24 @@ func (m *Manager) Check(c *Candidate, rep *scan.Report, prev *Installed) error {
 		for _, k := range prev.Findings {
 			old[stripFolder(k)] = true
 		}
+		// A DLL recorded as unreadable ("executable-file") by an older
+		// scanner: what reading its metadata finds now isn't new to it.
+		oldDLL := map[string]bool{}
+		for k := range old {
+			if rule, file, ok := strings.Cut(k, "|"); ok && rule == "executable-file" && strings.EqualFold(path.Ext(file), ".dll") {
+				oldDLL[file] = true
+			}
+		}
 		var added []string
 		for k := range rep.Keys() {
-			if !old[stripFolder(k)] {
-				added = append(added, k)
+			sk := stripFolder(k)
+			if old[sk] {
+				continue
 			}
+			if _, file, ok := strings.Cut(sk, "|"); ok && oldDLL[file] {
+				continue
+			}
+			added = append(added, k)
 		}
 		if len(added) > 0 {
 			reasons = append(reasons, "update adds new findings not present in the installed version: "+strings.Join(added, ", ")+" (override: --allow-new-findings)")

@@ -375,7 +375,7 @@ fine, anything else must be explained by a rule or is HIGH.
   - the Steam Workshop upload API (how the worm spread), Steam friends/chat (how it spammed), Steam auth tickets
   - reflection on a sensitive name (`"Assembly"`, `"System.Reflection.Assembly"`, `"Process"`, `"SteamUGC"`…), including names built from fragments or assembly-qualified (`"…, mscorlib"`)
   - combinations the worm used: listing folders + deleting files; writing `.cs`/`mod.json` while listing folders or naming game paths (self-replication); deleting under game/Steam paths; base64 + loading code at runtime
-  - shipped executables (`.exe` and similar), unknown `.dll`s, or binaries disguised with another extension
+  - shipped executables (`.exe` and similar), native or unreadable `.dll`s, or binaries disguised with another extension
   - `mod.json` script paths that point outside the mod
 - **HIGH**: deleting files, reaching `System.IO.File`/`Directory` through reflection (gets around the game's block on file access), bundled Harmony or Mono.Cecil (genuine builds, but they exist to rewrite code), any other Steamworks use, loading assemblies or code at runtime, `unsafe` code, namespaces outside the allowlist, reading user folders or environment variables, strings naming a shell or download tool (`cmd.exe`, `powershell`, `curl`…), writing `.cs`/`mod.json` files or under game paths, character-code or split-string obfuscation, nested archives.
 - **MEDIUM** (shown, not blocking): bundled Newtonsoft.Json, writing or listing files, reflection by name, base64, long encoded strings (usually embedded images), opening URLs.
@@ -388,7 +388,19 @@ Bundled DLLs are identified, not just counted:
 - byte-identical to the same file in your game's
   `People Playground_Data/Managed` folder (Unity and game assemblies some
   mods ship by accident): INFO;
-- anything else stays CRITICAL: its code can't be read by a source scanner.
+- anything else is read from its .NET metadata: every outside type and
+  method a DLL calls, every native function it imports and its string
+  literals have to be listed there, so the same rules as for C# source say
+  what it can do (start programs, use the network, touch files, load other
+  code, call native code, reach code by name through reflection). A DLL is
+  at least HIGH, to look at before it's installed; one whose metadata shows
+  only the game, Unity and basic .NET says so. Native, mixed or unreadable
+  DLLs stay CRITICAL. The reader ([clr.go](internal/scan/clr.go)) never runs
+  the file and is fuzz-tested against malformed input.
+
+A mod's details list **What it can do** in plain words ("start other
+programs", "use the internet", "load other compiled code while running"…),
+from the same findings, for source and DLLs alike.
 
 Measured on the 116 maintainer-reviewed True Workshop mods (500 `.cs` files,
 16 MB, 119 bundled DLLs): 13 are CRITICAL, mostly for unknown DLLs, and 7

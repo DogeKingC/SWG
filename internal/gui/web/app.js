@@ -949,6 +949,8 @@ function showCheck(m, p) {
   if (p.author) info.push("mod.json author: " + p.author);
   if (p.scan_max) info.push("scanner: " + (p.scan_max === "none" ? "nothing found" : "highest " + p.scan_max));
   if (info.length) box.push(el("p", { class: "small muted" }, info.join(" · ")));
+  if (p.can && p.scan_max) box.push(el("p", {}, el("b", {}, "What it can do: "),
+    p.can.length ? p.can.join("; ") + "." : "nothing beyond the game, Unity and basic C#."));
   if (p.findings && p.findings.length) box.push(el("ul", { class: "findings mono small" }, p.findings.map((f) => el("li", {}, f))));
   if (p.description && $("#detDesc").textContent.startsWith("No description")) $("#detDesc").textContent = p.description;
   $("#detCheck").replaceChildren(...box);

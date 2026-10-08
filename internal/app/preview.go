@@ -26,6 +26,7 @@ type Preview struct {
 	Scripts      int           `json:"scripts"`
 	ScanMax      string        `json:"scan_max"`
 	Findings     []string      `json:"findings,omitempty"`
+	Can          []string      `json:"can"`     // what it can do, in plain words (scan.Capabilities)
 	Verdict      string        `json:"verdict"` // ok, review (overridable), blocked
 	Reasons      []string      `json:"reasons,omitempty"`
 	Thumb        bool          `json:"thumb"`
@@ -84,6 +85,10 @@ func (a *App) Preview(m *manager.Manager, ref string) (*Preview, error) {
 	p.ScanMax = "none"
 	if rep.Max() >= 0 {
 		p.ScanMax = rep.Max().String()
+	}
+	p.Can = scan.Capabilities(rep)
+	if p.Can == nil {
+		p.Can = []string{}
 	}
 	for _, f := range rep.Findings {
 		if f.Severity >= scan.Medium && len(p.Findings) < 30 {

@@ -431,6 +431,13 @@ func (u *ui) showCheck(d *detailsWin, m app.SearchResult, p *app.Preview) {
 	if len(info) > 0 {
 		box = append(box, muted(strings.Join(info, " · ")))
 	}
+	if p.Can != nil && p.ScanMax != "" {
+		if len(p.Can) == 0 {
+			box = append(box, text("What it can do: nothing beyond the game, Unity and basic C#."))
+		} else {
+			box = append(box, text("What it can do: "+strings.Join(p.Can, "; ")+"."))
+		}
+	}
 	if len(p.Findings) > 0 {
 		box = append(box, mono(strings.Join(p.Findings, "\n")))
 	}

@@ -404,3 +404,24 @@ func TestVerifyGameRewriteOfRealWorldManifests(t *testing.T) {
 		})
 	}
 }
+
+// A DLL an older scanner recorded as unreadable: the capability findings
+// reading its metadata now gives are not "new" on update.
+func TestUpdateNotHeldForDLLNowReadable(t *testing.T) {
+	m := &Manager{Policy: Policy{AcceptRisk: true}}
+	prev := &Installed{Key: "sky:1", Findings: []string{"executable-file|Mod/Main.dll", "code-loader|Mod/Starter.cs"}}
+	rep := &scan.Report{Findings: []scan.Finding{
+		{Severity: scan.High, Rule: "compiled-code", File: "Mod/Main.dll"},
+		{Severity: scan.Critical, Rule: "code-loader", File: "Mod/Main.dll"},
+		{Severity: scan.Critical, Rule: "code-loader", File: "Mod/Starter.cs"},
+	}}
+	err := m.Check(&Candidate{Key: "sky:1"}, rep, prev)
+	var rej *Rejection
+	if errors.As(err, &rej) && strings.Contains(strings.Join(rej.Reasons, " "), "new findings") {
+		t.Fatalf("held for findings on a DLL that was already there: %v", rej.Reasons)
+	}
+	rep.Findings = append(rep.Findings, scan.Finding{Severity: scan.High, Rule: "network", File: "Mod/Other.cs"})
+	if err := m.Check(&Candidate{Key: "sky:1"}, rep, prev); !errors.As(err, &rej) || !strings.Contains(strings.Join(rej.Reasons, " "), "new findings") {
+		t.Fatalf("a really new finding didn't hold the update: %v", err)
+	}
+}
