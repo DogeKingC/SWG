@@ -5,37 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/cfclear"
 	"github.com/Trlydev/SWG/internal/manager"
 )
 
 // browserCandidates lists Chromium-based browsers that support --app windows.
-func browserCandidates() []string {
-	if runtime.GOOS == "windows" {
-		var out []string
-		for _, env := range []string{"ProgramFiles(x86)", "ProgramFiles", "LocalAppData"} {
-			base := os.Getenv(env)
-			if base == "" {
-				continue
-			}
-			out = append(out,
-				filepath.Join(base, `Microsoft\Edge\Application\msedge.exe`),
-				filepath.Join(base, `Google\Chrome\Application\chrome.exe`),
-				filepath.Join(base, `BraveSoftware\Brave-Browser\Application\brave.exe`),
-			)
-		}
-		return out
-	}
-	var out []string
-	for _, n := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"} {
-		if p, err := exec.LookPath(n); err == nil {
-			out = append(out, p)
-		}
-	}
-	return out
-}
+func browserCandidates() []string { return cfclear.FindBrowsers() }
 
 // openWindow shows url in an app-style window (no tabs or address bar) using
 // a separate browser profile, or in the default browser as a fallback.

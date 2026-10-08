@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -67,6 +68,8 @@ Safety and recovery:
                              window (clears "Skymods is showing a browser check")
   backup-workshop            copy the Steam Workshop cache before Steam deletes it
   restore-workshop <dir>     import every item from a backup-workshop folder
+  nexus-probe <mod id>       check whether your Nexus account gets download
+                             links from Nexus's API (downloads nothing)
   ow-pack <dir> [out]        pack a folder of Workshop-ID folders for an Open
                              Workshop bulk upload (owner)
   paths                      show detected game, Mods and Workshop folders
@@ -225,6 +228,11 @@ func run(cmd string, args []string, a *app.App, g gui.Options) error {
 			return err
 		}
 		return cmdScan(args[0], a)
+	case "nexus-probe":
+		if err := need(args, 1, "Nexus Mods mod id (from its page address)"); err != nil {
+			return err
+		}
+		return cmdNexusProbe(args[0])
 	case "skymods-check":
 		return cmdSkymodsCheck()
 	case "backup-workshop":
@@ -477,5 +485,46 @@ func cmdSelfUpdate() error {
 		return err
 	}
 	fmt.Println("done; run ppgmods again to use the new version")
+	return nil
+}
+
+// cmdNexusProbe asks Nexus Mods' own API, with the linked account's key, for
+// a download link of a mod's main file, the v1 way and the v3 way, and
+// says which one gives it. Nothing is downloaded.
+func cmdNexusProbe(arg string) error {
+	modID, err := strconv.Atoi(strings.TrimSpace(arg))
+	if err != nil || modID <= 0 {
+		return fmt.Errorf("%q is not a mod id (the number in nexusmods.com/peopleplayground/mods/<id>)", arg)
+	}
+	acct := app.LoadNexus()
+	if acct == nil {
+		return errors.New("link your Nexus Mods account first (Settings → Nexus Mods, with your personal API key)")
+	}
+	kind := "free"
+	if acct.Premium {
+		kind = "premium"
+	}
+	logf("account: %s (%s)", acct.User, kind)
+	fileID := sources.NXMainFileID(modID)
+	if fileID <= 0 {
+		return fmt.Errorf("mod %d: no main file found", modID)
+	}
+	logf("mod %d, main file %d", modID, fileID)
+	host := func(link string) string {
+		if u, err := url.Parse(link); err == nil {
+			return u.Host
+		}
+		return "?"
+	}
+	if link, err := sources.NXDownloadURL(acct.Key, modID, fileID, "", ""); err != nil {
+		logf("v1 download_link: refused: %v", err)
+	} else {
+		logf("v1 download_link: OK, a link on %s", host(link))
+	}
+	if link, exp, err := sources.NXRepackedLink(acct.Key, fileID); err != nil {
+		logf("v3 download-repacked: refused: %v", err)
+	} else {
+		logf("v3 download-repacked: OK, a link on %s (expires %s)", host(link), exp.Local().Format("15:04"))
+	}
 	return nil
 }
