@@ -77,6 +77,19 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+          cache: false
+      # Its own build cache: release builds use -trimpath, so the test job's
+      # cache never matches them and the window toolkit's C code was
+      # compiled from scratch every time.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: release-linux-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            release-linux-${{ hashFiles('go.sum') }}-
+            release-linux-
       - name: Window toolkit headers
         run: sudo apt-get update -q && sudo apt-get install -y -q libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Windows icon and version info (arm64)
@@ -96,9 +109,11 @@ jobs:
         run: |
           mkdir dist
           flags="-s -w -X main.version=${VERSION}"
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-amd64 ./cmd/ppgmods
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-arm64 ./cmd/ppgmods
-          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$flags -H windowsgui" -o dist/ppgmods-windows-arm64.exe ./cmd/ppgmods
+          # The three builds run side by side; each must succeed.
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-amd64 ./cmd/ppgmods & a=$!
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$flags" -o dist/ppgmods-linux-arm64 ./cmd/ppgmods & b=$!
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$flags -H windowsgui" -o dist/ppgmods-windows-arm64.exe ./cmd/ppgmods & c=$!
+          wait $a && wait $b && wait $c
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: part-linux

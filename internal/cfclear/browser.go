@@ -6,24 +6,95 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
-// ErrNoBrowser explains why no browser could be used. The background check
-// drives the browser through Chrome's DevTools protocol, which only
-// Chromium-based browsers speak; Firefox-based ones (Firefox, Zen,
-// LibreWolf, Floorp, Waterfox) can't be used for it.
-var ErrNoBrowser = errors.New("no Chromium-based browser found (Chrome, Edge, Brave, Vivaldi or Chromium). " +
-	"Firefox-based browsers such as Zen or Firefox can't run this check; install one of those " +
-	"(it doesn't have to be your default browser), or set its path with PPGMODS_BROWSER")
+// ErrNoBrowser means no usable browser is installed.
+var ErrNoBrowser = errors.New("no browser found for the check: install Chrome, Edge, Brave, Vivaldi, Chromium, " +
+	"Firefox or Zen (it doesn't have to be your default browser), or set its path with PPGMODS_BROWSER")
 
-// FindBrowser locates a Chromium-based browser. ppgmods uses the person's
-// installed browser to view the page; it never bundles one.
-// PPGMODS_BROWSER overrides the search with an explicit path.
+// FindBrowser locates a browser for the background check: a Chromium-based
+// one first (driven through Chrome's DevTools protocol), else a
+// Firefox-based one (driven through WebDriver BiDi). ppgmods uses the
+// person's installed browser; it never bundles one. PPGMODS_BROWSER
+// overrides the search with an explicit path.
 func FindBrowser() (string, error) {
 	if all := FindBrowsers(); len(all) > 0 {
 		return all[0], nil
 	}
+	if all := firefoxBrowsers(); len(all) > 0 {
+		return all[0], nil
+	}
 	return "", ErrNoBrowser
+}
+
+// firefoxBrowsers lists installed Firefox-based browsers.
+func firefoxBrowsers() []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[p] {
+			return
+		}
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	home, _ := os.UserHomeDir()
+	switch runtime.GOOS {
+	case "windows":
+		pf, pf86, local := os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), os.Getenv("LocalAppData")
+		for _, rel := range []string{
+			`Mozilla Firefox\firefox.exe`, `Zen Browser\zen.exe`, `Zen\zen.exe`, `LibreWolf\librewolf.exe`,
+			`Floorp\floorp.exe`, `Waterfox\waterfox.exe`,
+		} {
+			for _, base := range []string{pf, pf86, local, filepath.Join(local, "Programs")} {
+				if base != "" {
+					add(filepath.Join(base, rel))
+				}
+			}
+		}
+	case "darwin":
+		for _, app := range [][2]string{{"Firefox", "firefox"}, {"Zen", "zen"}, {"Zen Browser", "zen"},
+			{"LibreWolf", "librewolf"}, {"Floorp", "floorp"}, {"Waterfox", "waterfox"}} {
+			for _, dir := range []string{"/Applications", filepath.Join(home, "Applications")} {
+				add(filepath.Join(dir, app[0]+".app", "Contents", "MacOS", app[1]))
+			}
+		}
+	default:
+		for _, name := range []string{"firefox", "zen-browser", "zen", "librewolf", "floorp", "waterfox", "firefox-esr"} {
+			if p, err := exec.LookPath(name); err == nil {
+				add(p)
+			}
+		}
+		for _, p := range []string{"/opt/zen-browser/zen", "/opt/zen/zen", "/opt/firefox/firefox", "/usr/lib/firefox/firefox",
+			"/usr/lib/librewolf/librewolf", "/snap/bin/firefox"} {
+			add(p)
+		}
+		for _, dir := range []string{"/var/lib/flatpak/exports/bin", filepath.Join(home, ".local", "share", "flatpak", "exports", "bin")} {
+			for _, id := range []string{"app.zen_browser.zen", "io.github.zen_browser.zen", "org.mozilla.firefox", "io.gitlab.librewolf-community", "one.ablaze.floorp"} {
+				add(filepath.Join(dir, id))
+			}
+		}
+	}
+	return out
+}
+
+// sandboxProfileBase is where a Snap or Flatpak browser can read a profile
+// (its sandbox hides /tmp), or "" for other installs.
+func sandboxProfileBase(exe string) string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		return ""
+	}
+	if strings.HasPrefix(exe, "/snap/bin/") {
+		return filepath.Join(home, "snap", filepath.Base(exe), "common")
+	}
+	if strings.Contains(exe, "/flatpak/exports/bin/") {
+		return filepath.Join(home, ".var", "app", filepath.Base(exe), "cache")
+	}
+	return ""
 }
 
 // FindBrowsers lists the installed Chromium-based browsers, most suitable

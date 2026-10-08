@@ -79,7 +79,11 @@ func Run(u string, opt Options) (*Result, error) {
 	}
 	profile := opt.ProfileDir
 	if profile == "" {
-		d, err := os.MkdirTemp("", "ppgmods-browser-")
+		base := sandboxProfileBase(exe)
+		if base != "" {
+			os.MkdirAll(base, 0o700)
+		}
+		d, err := os.MkdirTemp(base, "ppgmods-browser-")
 		if err != nil {
 			return nil, err
 		}
@@ -88,6 +92,9 @@ func Run(u string, opt Options) (*Result, error) {
 	}
 
 	logf("passing %s's browser check in a background browser", hostOf(u))
+	if isFirefox(exe) {
+		return runFirefox(u, exe, profile, opt, logf)
+	}
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(exe),
 		chromedp.UserDataDir(profile),

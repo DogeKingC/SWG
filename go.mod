@@ -7,6 +7,7 @@ require (
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/chromedp/cdproto v0.0.0-20250403032234-65de8f5d025b
 	github.com/chromedp/chromedp v0.13.6
+	github.com/gobwas/ws v1.4.0
 	github.com/nwaples/rardecode/v2 v2.4.1
 	golang.org/x/image v0.24.0
 )
@@ -34,7 +35,6 @@ require (
 	github.com/go-text/typesetting v0.3.4 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.0 // indirect
