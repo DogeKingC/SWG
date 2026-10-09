@@ -195,7 +195,7 @@ function renderInstalled() {
     return;
   }
   list.replaceChildren(...mods.map((m) => {
-    const kindBadge = m.kind === "GameBanana" ? "badge badge-gb" : m.kind === "Steam Workshop" ? "badge badge-sky" : "badge";
+    const kindBadge = m.kind === "GameBanana" ? "badge badge-gb" : m.kind === "Steam Workshop" ? "badge badge-sky" : m.kind === "01 STUDIO" ? "badge badge-01" : "badge";
     const actions = m.off
       ? el("div", { class: "item-actions" },
         el("button", { class: "btn btn-primary btn-sm", onclick: () => run({ action: "turn-on", key: m.key }, "Turning on " + m.name) }, "Turn on"),

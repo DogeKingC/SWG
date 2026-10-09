@@ -3,6 +3,8 @@ package app
 import (
 	"archive/zip"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -286,39 +288,40 @@ func TestArchiveRecordChecksCopies(t *testing.T) {
 	}
 }
 
-// 01 STUDIO's own copy of its mod (from its CDN) is used unless another
-// copy is newer or it is flagged by the scanner.
+// 01 STUDIO's own mod comes from 01 STUDIO's site alone: the mirrors
+// (Skymods, top-mods) are not fetched unless that copy can't be had.
 func TestFetchWorkshopPrefers01Studio(t *testing.T) {
 	t.Setenv("PPGMODS_HOME", t.TempDir())
-	zipVer := func(path, ver, script string) {
+	cdn := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
+	defer cdn.Close()
+	defer sources.UseTestServer(rewrite{strings.TrimPrefix(cdn.URL, "https://"), cdn.Client().Transport}, cdn.URL)()
+	zipVer := func(path, ver string) {
 		f, _ := os.Create(path)
 		zw := zip.NewWriter(f)
 		w, _ := zw.Create("Mod/mod.json")
 		w.Write([]byte(`{"Name":"Test","Author":"01 STUDIO","ModVersion":"` + ver + `","Scripts":["s.cs"]}`))
 		w, _ = zw.Create("Mod/s.cs")
-		w.Write([]byte(script))
+		w.Write([]byte("class S {}"))
 		zw.Close()
 		f.Close()
 	}
 	st, _ := manager.LoadState()
 	m := &manager.Manager{State: st, ModsDir: t.TempDir()}
-	a := &App{Opt: DefaultOptions()}
+	var log []string
+	a := &App{Opt: DefaultOptions(), Logf: func(f string, v ...any) { log = append(log, fmt.Sprintf(f, v...)) }}
 	for i, c := range []struct {
-		s01Ver, s01Script, skyVer, want string
+		s01Cached bool
+		want      string
 	}{
-		{"2.0", "class S {}", "2.0", "01studio:"},
-		{"2.0", "class S {}", "3.0", "skymods:"},
-		{"3.0", `class S { void A() { System.Diagnostics.Process.Start("cmd.exe"); } }`, "2.0", "skymods:"},
-		{"2.0", `class S { void A() { System.Diagnostics.Process.Start("cmd.exe"); } }`, "2.0", "01studio:"}, // both flagged: 01 STUDIO's
+		{true, "01studio:"}, // its own copy, even with a newer-looking mirror copy
+		{false, "skymods:"}, // 01 STUDIO's site doesn't have it: the mirror
 	} {
 		ws := fmt.Sprintf("12345679%02d", i)
 		dir, _ := CacheDir("sky:" + ws)
-		zipVer(filepath.Join(dir, "01studio-t"+ws+"-"+ws+".zip"), c.s01Ver, c.s01Script)
-		skyScript := "class S {}"
-		if i == 3 {
-			skyScript = c.s01Script
+		if c.s01Cached {
+			zipVer(filepath.Join(dir, "01studio-t"+ws+"-"+ws+".zip"), "2.0")
 		}
-		zipVer(filepath.Join(dir, "skymods-9"+ws+"-old.zip"), c.skyVer, skyScript)
+		zipVer(filepath.Join(dir, "skymods-9"+ws+"-old.zip"), "3.0")
 		mirrorMemo[ws] = mirrorMemoEntry{at: time.Now(), list: []Mirror{
 			{ID: "skymods:9" + ws, Source: "Skymods", Title: "Test", Version: "2024-01-01", VersionTime: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), sky: &sources.SkyItem{}},
 			s01Mirror(sources.S01Mod{Slug: "t" + ws, Title: "Test", Category: "Free", Steam: 1}),
@@ -330,6 +333,10 @@ func TestFetchWorkshopPrefers01Studio(t *testing.T) {
 		} else if c.want == "01studio:" && got.SteamOrig {
 			t.Errorf("case %d: 01 STUDIO's own file treated as a Steam copy", i)
 		}
+		if c.s01Cached && strings.Contains(strings.Join(log, "\n"), "Skymods: ") {
+			t.Errorf("case %d: Skymods was fetched although 01 STUDIO had the mod:\n%s", i, strings.Join(log, "\n"))
+		}
+		log = nil
 	}
 	if u := sources.S01DownloadURL("3704779343"); u != "https://cdn.01studio.dev/files/download/3704779343.zip" {
 		t.Errorf("download URL %q", u)

@@ -633,7 +633,20 @@ func (a *App) fetchWorkshop(m *manager.Manager, ws string) (*manager.Candidate, 
 	var copies []copyC
 	var browser *NeedsBrowser
 	var gone []string
+	// 01 STUDIO's own mod: its site's copy first, alone. The other copies
+	// (Skymods, top-mods...) are only tried if that one can't be had.
+	if a.Opt.Mirror == "" {
+		for i, mr := range usable {
+			if mr.s01 != nil {
+				usable = append([]Mirror{mr}, append(append([]Mirror{}, usable[:i]...), usable[i+1:]...)...)
+				break
+			}
+		}
+	}
 	for _, mr := range usable {
+		if len(copies) > 0 && copies[0].mr.s01 != nil {
+			break // got 01 STUDIO's own copy: no need to fetch the mirrors
+		}
 		if len(copies) == 4 {
 			break
 		}

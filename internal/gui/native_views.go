@@ -700,6 +700,8 @@ func kindPill(kind string) pillKind {
 		return pOW
 	case "Nexus Mods":
 		return pNX
+	case "01 STUDIO":
+		return p01
 	}
 	return pNeutral
 }

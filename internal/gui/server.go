@@ -841,6 +841,8 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case strings.HasPrefix(m.Key, "gb:"):
 				v.Kind = "GameBanana"
+			case strings.HasPrefix(m.Key, "sky:") && (strings.HasPrefix(m.Mirror, "01studio:") || sources.S01Known(strings.TrimPrefix(m.Key, "sky:"))):
+				v.Kind = "01 STUDIO" // their own mod, kept under its Workshop ID
 			case strings.HasPrefix(m.Key, "sky:"):
 				v.Kind = "Steam Workshop"
 			case strings.HasPrefix(m.Key, "tw:"):

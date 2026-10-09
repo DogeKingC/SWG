@@ -141,6 +141,25 @@ func S01All() ([]S01Mod, error) {
 	return all, nil
 }
 
+// S01Known reports whether Workshop item ws is one of 01 STUDIO's free
+// mods, from the cached catalogue only (never waits on the network; an
+// empty cache is filled in the background).
+func S01Known(ws string) bool {
+	s01Mu.Lock()
+	list, fresh := s01All, s01All != nil
+	s01Mu.Unlock()
+	if !fresh {
+		go S01All()
+		return false
+	}
+	for _, m := range list {
+		if m.Free() && m.WorkshopID() == ws {
+			return true
+		}
+	}
+	return false
+}
+
 // S01ByWorkshopID finds the 01 STUDIO entry for a Workshop item.
 func S01ByWorkshopID(ws string) (*S01Mod, error) {
 	all, err := S01All()
