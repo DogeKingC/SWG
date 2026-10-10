@@ -122,7 +122,7 @@ func SkyByWorkshopID(id string) (*SkyItem, error) {
 // not try. It usually clears on its own; installs can still come from the
 // other mirrors meanwhile. A clearance the person's browser earned (see the
 // cfclear package) is attached automatically when one is stored.
-var ErrSkyChallenge = errors.New("smods.ru is showing a Cloudflare browser check right now; try again later")
+var ErrSkyChallenge = errors.New("smods.ru is showing a Cloudflare browser check")
 
 // SkyClearance, if set, returns the cf_clearance cookie the person's browser
 // earned from smods.ru and the User-Agent it was issued to (Cloudflare binds
@@ -135,10 +135,11 @@ var SkyClearance func() (cookie, userAgent string)
 // check has to be passed again.
 var SkyClearanceExpired func()
 
-// SkyAutoCheck, if set, passes the check automatically with a background
-// browser (the cfclear package) and stores a fresh clearance. It reports
-// whether the site is usable now; callers retry their request when it is.
-var SkyAutoCheck func() bool
+// SkyBrowserGet, if set, reads a smods.ru page through a browser (the
+// cfclear package) when Cloudflare checks ppgmods' own requests: the
+// browser passes a check that passes by itself, or uses the clearance a
+// person earned in it earlier.
+var SkyBrowserGet func(u string) ([]byte, error)
 
 var (
 	skyChallengeMu sync.Mutex
@@ -214,48 +215,34 @@ func skyFetch(u string) ([]SkyItem, error) {
 
 // skyGet fetches a Skymods page, telling a Cloudflare challenge from other
 // failures (get() would report both as a bare HTTP status). When a check is
-// served it heals on its own: a stored clearance (the person's browser or a
-// background browser passed the check earlier) is attached and the request
-// retried; if none is stored, a background browser passes the check by
-// itself. Every caller here serves catalogue.smods.ru, so the clearance
-// never goes anywhere else.
+// served, a stored clearance is tried once; if Cloudflare refuses it (it
+// accepts it only from the browser that earned it), the page is read
+// through the browser (SkyBrowserGet). Every caller here serves
+// catalogue.smods.ru, so the clearance never goes anywhere else.
 func skyGet(u string) ([]byte, error) {
 	b, challenge, err := skyGetOnce(u, "", "")
-	if err != nil {
-		return nil, err
+	if err != nil || !challenge {
+		return b, err
 	}
-	for challenge {
-		if SkyClearance != nil {
-			if cookie, userAgent := SkyClearance(); cookie != "" {
-				b, challenge, err = skyGetOnce(u, cookie, userAgent)
-				if err != nil {
-					return nil, err
-				}
-				if challenge && SkyClearanceExpired != nil {
-					SkyClearanceExpired() // this clearance no longer works
-				}
+	if SkyClearance != nil {
+		if cookie, userAgent := SkyClearance(); cookie != "" {
+			b, challenge, err = skyGetOnce(u, cookie, userAgent)
+			if err != nil || !challenge {
+				return b, err
+			}
+			if SkyClearanceExpired != nil {
+				SkyClearanceExpired() // refused: read through the browser from now on
 			}
 		}
-		if !challenge {
-			break
-		}
-		// Nothing stored (or it was rejected): pass the check with a
-		// background browser, then try the page again with what it stored.
-		if SkyAutoCheck == nil || !SkyAutoCheck() {
-			return nil, ErrSkyChallenge
-		}
-		cookie, userAgent := "", ""
-		if SkyClearance != nil {
-			cookie, userAgent = SkyClearance()
-		}
-		b, challenge, err = skyGetOnce(u, cookie, userAgent)
-		if err != nil {
-			return nil, err
-		}
-		if challenge && SkyClearanceExpired != nil {
-			SkyClearanceExpired()
-		}
 	}
+	if SkyBrowserGet == nil {
+		return nil, ErrSkyChallenge
+	}
+	b, err = SkyBrowserGet(u)
+	if err != nil {
+		return nil, fmt.Errorf("%w (%v)", ErrSkyChallenge, err)
+	}
+	clearSkyChallenge()
 	return b, nil
 }
 

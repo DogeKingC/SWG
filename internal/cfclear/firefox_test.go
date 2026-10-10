@@ -71,12 +71,16 @@ func fakeFirefox() {
 				json.Unmarshal(req.Params, &p)
 				navigated = p.URL
 			case "script.evaluate":
+				if strings.Contains(string(req.Params), "outerHTML") {
+					result = map[string]any{"type": "success", "result": map[string]any{"type": "string", "value": "<html>Skymods</html>"}}
+					break
+				}
 				polls++
 				title := "Just a moment..."
 				if polls > 2 {
 					title = "Skymods"
 				}
-				v, _ := json.Marshal([]string{"Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101 Firefox/157.0", title})
+				v, _ := json.Marshal(map[string]any{"ua": "Mozilla/5.0 (X11; Linux x86_64; rv:157.0) Gecko/20100101 Firefox/157.0", "title": title, "ready": "complete", "check": polls <= 2})
 				result = map[string]any{"type": "success", "result": map[string]any{"type": "string", "value": string(v)}}
 			case "storage.getCookies":
 				var cs []any
@@ -109,7 +113,7 @@ func TestRunFirefox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Cookie("cf_clearance") != "ok123" || !strings.Contains(res.UserAgent, "Firefox/157") {
+	if res.Cookie("cf_clearance") != "ok123" || !strings.Contains(res.UserAgent, "Firefox/157") || res.HTML != "<html>Skymods</html>" {
 		t.Fatalf("result: %+v", res)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Trlydev/SWG/internal/app"
+	"github.com/Trlydev/SWG/internal/cfclear"
 	"github.com/Trlydev/SWG/internal/manager"
 )
 
@@ -65,6 +66,7 @@ func (st *settings) save() error {
 func (st *settings) apply(o *app.Options) {
 	bgThumbsOff = st.NoBgThumbs
 	skymodsCheckOn = !st.NoSkymodsCheck
+	cfclear.SetAuto(skymodsCheckOn)
 	themeMode = themeSetting(st.Theme)
 	o.Game = st.Game
 	o.Offline = st.Offline

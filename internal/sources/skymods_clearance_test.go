@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -84,23 +85,17 @@ func TestSkyClearanceExpired(t *testing.T) {
 	}
 }
 
-// When the automatic check succeeds, the request heals by itself: challenge
-// → background browser stores a clearance → retry carries it → page served.
-func TestSkyAutoCheckHeals(t *testing.T) {
+// When Cloudflare refuses ppgmods' own requests, even with the stored
+// clearance, the page is read through the browser once, and the request
+// does not loop.
+func TestSkyBrowserGetHeals(t *testing.T) {
 	page, err := os.ReadFile("testdata/skymods_page.html")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var mu sync.Mutex
-	requests := 0
+	var requests atomic.Int32
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		requests++
-		if r.Header.Get("Cookie") == "cf_clearance=fresh" && r.Header.Get("User-Agent") == "Browser/2.0" {
-			w.Write(page)
-			return
-		}
+		requests.Add(1)
 		w.Header().Set("cf-mitigated", "challenge")
 		w.WriteHeader(403)
 		io.WriteString(w, "Just a moment...")
@@ -108,33 +103,34 @@ func TestSkyAutoCheckHeals(t *testing.T) {
 	defer UseTestServer(stubRT{h}, "http://unused")()
 	clearSkyCache()
 
-	oldC, oldA := SkyClearance, SkyAutoCheck
-	defer func() { SkyClearance, SkyAutoCheck = oldC, oldA }()
-	var stored atomic.Bool
-	SkyClearance = func() (string, string) {
-		if stored.Load() {
-			return "fresh", "Browser/2.0"
-		}
-		return "", ""
-	}
-	SkyAutoCheck = func() bool {
-		stored.Store(true) // the background browser passed the check
-		return true
+	oldC, oldE, oldB := SkyClearance, SkyClearanceExpired, SkyBrowserGet
+	defer func() { SkyClearance, SkyClearanceExpired, SkyBrowserGet = oldC, oldE, oldB }()
+	SkyClearance = func() (string, string) { return "refused", "Browser/2.0" }
+	var expired, browser atomic.Int32
+	SkyClearanceExpired = func() { expired.Add(1) }
+	SkyBrowserGet = func(u string) ([]byte, error) {
+		browser.Add(1)
+		return page, nil
 	}
 
-	if _, err := SkySearch("sky-auto-heal", 1); err != nil {
+	items, err := SkySearch("sky-browser-heal", 1)
+	if err != nil {
 		t.Fatal(err)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if requests != 2 {
-		t.Fatalf("expected challenge + healed retry, got %d requests", requests)
+	if len(items) == 0 {
+		t.Fatal("the page read through the browser was not parsed")
+	}
+	if requests.Load() != 2 || expired.Load() != 1 || browser.Load() != 1 {
+		t.Fatalf("requests %d, expired %d, browser reads %d; want 2, 1, 1", requests.Load(), expired.Load(), browser.Load())
+	}
+	if SkyChallengeUp() {
+		t.Fatal("a page read through the browser must clear the challenge marker")
 	}
 }
 
-// A check that the background browser cannot pass still ends in the friendly
-// error, without spinning on retries.
-func TestSkyAutoCheckFailed(t *testing.T) {
+// A browser read that fails (the check wants a person) ends in
+// ErrSkyChallenge carrying the reason, after one try.
+func TestSkyBrowserGetFailed(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("cf-mitigated", "challenge")
 		w.WriteHeader(403)
@@ -143,19 +139,19 @@ func TestSkyAutoCheckFailed(t *testing.T) {
 	defer UseTestServer(stubRT{h}, "http://unused")()
 	clearSkyCache()
 
-	oldA := SkyAutoCheck
-	defer func() { SkyAutoCheck = oldA }()
-	var autoCalls atomic.Int32
-	SkyAutoCheck = func() bool {
-		autoCalls.Add(1)
-		return false
+	oldB := SkyBrowserGet
+	defer func() { SkyBrowserGet = oldB }()
+	var calls atomic.Int32
+	SkyBrowserGet = func(string) ([]byte, error) {
+		calls.Add(1)
+		return nil, errors.New("wants a person")
 	}
 
-	_, err := SkySearch("sky-auto-failed", 1)
-	if !errors.Is(err, ErrSkyChallenge) {
-		t.Fatalf("want ErrSkyChallenge, got %v", err)
+	_, err := SkySearch("sky-browser-failed", 1)
+	if !errors.Is(err, ErrSkyChallenge) || !strings.Contains(err.Error(), "wants a person") {
+		t.Fatalf("want ErrSkyChallenge with the reason, got %v", err)
 	}
-	if n := autoCalls.Load(); n != 1 {
-		t.Fatalf("the automatic check ran %d times, want 1", n)
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("the browser read ran %d times, want 1", n)
 	}
 }

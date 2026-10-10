@@ -125,59 +125,75 @@ func runFirefox(u, exe, profile string, opt Options, logf func(string, ...any)) 
 	}
 	tab := t.Contexts[0].Context
 	if _, err := c.call(ctx, "browsingContext.navigate", map[string]any{"context": tab, "url": u, "wait": "none"}); err != nil {
-		return nil, fmt.Errorf("the background browser could not open the page: %w", err)
+		return nil, fmt.Errorf("the browser could not open the page: %w", err)
 	}
 
 	tick := time.NewTicker(700 * time.Millisecond)
 	defer tick.Stop()
+	prog := newProgress(logf)
 	for {
-		var ua, title string
+		var st pageState
 		raw, err := c.call(ctx, "script.evaluate", map[string]any{
-			"expression":   `JSON.stringify([navigator.userAgent, document.title])`,
+			"expression":   "JSON.stringify(" + pageStateJS + ")",
 			"target":       map[string]any{"context": tab},
 			"awaitPromise": false,
 		})
 		if err == nil {
-			var ev struct {
-				Result struct {
-					Value string `json:"value"`
-				} `json:"result"`
+			json.Unmarshal([]byte(evalString(raw)), &st)
+		} else if ctx.Err() == nil && strings.Contains(err.Error(), "closed the connection") {
+			if opt.Headed {
+				return nil, errors.New("the browser window was closed before the check passed")
 			}
-			var pair []string
-			if json.Unmarshal(raw, &ev) == nil && json.Unmarshal([]byte(ev.Result.Value), &pair) == nil && len(pair) == 2 {
-				ua, title = pair[0], pair[1]
-			}
+			return nil, fmt.Errorf("the background browser stopped: %w", err)
 		}
-		res := &Result{UserAgent: ua, At: time.Now().UTC()}
-		if raw, err := c.call(ctx, "storage.getCookies", map[string]any{"partition": map[string]any{"type": "context", "context": tab}}); err == nil {
-			var cs struct {
-				Cookies []struct {
-					Name   string `json:"name"`
-					Domain string `json:"domain"`
-					Value  struct {
-						Value string `json:"value"`
-					} `json:"value"`
-				} `json:"cookies"`
+		if st.loaded() {
+			res := &Result{UserAgent: st.UA, At: time.Now().UTC()}
+			if raw, err := c.call(ctx, "script.evaluate", map[string]any{
+				"expression":   `document.documentElement.outerHTML`,
+				"target":       map[string]any{"context": tab},
+				"awaitPromise": false,
+			}); err == nil {
+				res.HTML = evalString(raw)
 			}
-			json.Unmarshal(raw, &cs)
-			for _, k := range cs.Cookies {
-				res.Cookies = append(res.Cookies, Cookie{Name: k.Name, Value: k.Value.Value, Domain: k.Domain})
+			if raw, err := c.call(ctx, "storage.getCookies", map[string]any{"partition": map[string]any{"type": "context", "context": tab}}); err == nil {
+				var cs struct {
+					Cookies []struct {
+						Name   string `json:"name"`
+						Domain string `json:"domain"`
+						Value  struct {
+							Value string `json:"value"`
+						} `json:"value"`
+					} `json:"cookies"`
+				}
+				json.Unmarshal(raw, &cs)
+				for _, k := range cs.Cookies {
+					res.Cookies = append(res.Cookies, Cookie{Name: k.Name, Value: k.Value.Value, Domain: k.Domain})
+				}
 			}
-		}
-		if ua != "" && res.Cookie("cf_clearance") != "" {
-			logf("check passed; captured the clearance cookie")
+			prog.done(res)
 			return res, nil
 		}
-		if ua != "" && title != "" && !strings.Contains(strings.ToLower(title), "just a moment") {
-			logf("no check was served; the page loaded directly")
-			return res, nil
+		if !opt.Headed && prog.elapsed() >= opt.PersonAfter {
+			return nil, ErrNeedsPerson
 		}
+		prog.note(st.Title)
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("the check did not finish within %s (try again)", opt.Timeout)
+			return nil, timeoutErr(opt)
 		case <-tick.C:
 		}
 	}
+}
+
+// evalString is the string a script.evaluate reply carries, or "".
+func evalString(raw json.RawMessage) string {
+	var ev struct {
+		Result struct {
+			Value string `json:"value"`
+		} `json:"result"`
+	}
+	json.Unmarshal(raw, &ev)
+	return ev.Result.Value
 }
 
 // bidiConn is a minimal WebDriver BiDi client: commands with ids, replies

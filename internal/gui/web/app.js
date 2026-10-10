@@ -1063,44 +1063,41 @@ $("#settingsForm").onsubmit = async (e) => {
 };
 
 // ---------- Skymods Cloudflare check ----------
-// When smods.ru serves its browser check, ppgmods passes it by itself with a
-// background browser and retries - no interaction needed. The banner below
-// only appears if the automatic attempt failed; the Settings panel shows
-// what is going on and offers a manual retry.
+// When smods.ru checks ppgmods' requests, its pages are read through a
+// background browser on ppgmods' own profile. A check that passes by itself
+// needs nothing; one that wants a person to tick "Verify you are human"
+// shows the banner, and its button opens the check in a browser window.
 let skyCheckPoll = null;
 let skyDismissed = false;
 
 function renderSkymods(sm) {
   if (!sm) return;
-  const off = state.settings && state.settings.no_skymods_check;
   if (!sm.challenge) skyDismissed = false;
   const st = sm.check || {};
   const banner = $("#skyBanner");
-  const stuck = sm.challenge && !sm.clearance && !st.running && (st.error || (st.at && !st.ok));
+  const stuck = sm.challenge && !st.running && !!st.error;
   banner.hidden = !(stuck && !skyDismissed);
   if (!banner.hidden) {
-    $("#skyText").textContent = "smods.ru is blocking Skymods for now and the background browser check did not get through. It usually clears on its own; other sites keep working. You can retry from Settings.";
+    $("#skyText").textContent = st.needs_person
+      ? "smods.ru wants a person to tick its \"Verify you are human\" box before Skymods works. Press the button: a browser window opens, tick the box there, and it closes by itself. Other sites keep working meanwhile."
+      : "smods.ru is blocking Skymods for now and the background browser didn't get through (" + st.error + "). Other sites keep working.";
     $("#skyCheckBtn").disabled = st.running;
-    $("#skyCheckBtn").textContent = st.running ? "Retry running…" : "Retry the check";
+    $("#skyCheckBtn").textContent = st.running ? "Check running…" : "Pass the check now";
   }
   const box = $("#skymodsBox");
   if (!box) return;
   const lines = [
     el("p", { class: "small" },
       sm.challenge
-        ? "smods.ru is showing its browser check right now. ppgmods passes it with a background browser and retries on its own - nothing for you to do."
+        ? "smods.ru is showing its browser check to ppgmods right now. Its pages are read through a background browser with ppgmods' own profile (never yours)."
         : "smods.ru is not asking for a browser check."),
-    el("p", { class: "small" },
-      sm.clearance
-        ? "A clearance from the check is saved (earned " + (sm.clearance_age || "recently") + "). It is attached to Skymods requests when Cloudflare asks, and only ever sent to smods.ru."
-        : "No clearance saved."),
   ];
-  if (st.running) lines.push(el("p", { class: "small" }, "A background browser is passing the check right now…"));
+  if (st.running) lines.push(el("p", { class: "small" }, "A browser is passing the check right now. If a window opens, tick \"Verify you are human\" in it."));
   if (st.error) lines.push(el("p", { class: "small", style: "color:#ff8484" }, "Last check failed: " + st.error));
   else if (st.at && st.ok) lines.push(el("p", { class: "small muted" }, "Last check passed " + new Date(st.at).toLocaleTimeString() + "."));
   lines.push(el("div", { class: "toolbar" },
-    el("button", { class: "btn btn-primary btn-sm", onclick: runSkyCheck, disabled: st.running === true }, st.running ? "Check running…" : "Run the check now"),
-    sm.clearance ? el("button", { class: "btn btn-ghost btn-sm", onclick: clearSkyCheck }, "Clear saved check") : null,
+    el("button", { class: "btn btn-primary btn-sm", onclick: runSkyCheck, disabled: st.running === true }, st.running ? "Check running…" : "Pass the check now"),
+    el("button", { class: "btn btn-ghost btn-sm", onclick: clearSkyCheck }, "Forget the check"),
   ));
   box.replaceChildren(...lines);
 }
@@ -1114,12 +1111,14 @@ async function runSkyCheck() {
 }
 
 function pollSkyCheck() {
+  const started = Date.now();
   skyCheckPoll = setInterval(async () => {
     let sm;
     try { sm = await api("/api/skymods"); } catch { return; }
     state.skymods = sm;
     renderSkymods(sm);
-    if (!sm.check || !sm.check.running) {
+    // The check starts a moment after the button; don't stop before it shows.
+    if ((!sm.check || !sm.check.running) && Date.now() - started > 4000) {
       clearInterval(skyCheckPoll);
       skyCheckPoll = null;
       if (sm.ok || (sm.check && sm.check.ok)) toast("Skymods browser check passed");
@@ -1130,7 +1129,7 @@ function pollSkyCheck() {
 async function clearSkyCheck() {
   try {
     await api("/api/skymods", { method: "DELETE" });
-    toast("Cleared the saved Skymods check");
+    toast("Forgot the Skymods check");
     refreshState();
   } catch (e) { toast(e.message); }
 }

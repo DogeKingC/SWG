@@ -484,28 +484,14 @@ func cmdScan(p string, a *app.App) error {
 	return nil
 }
 
-// cmdSkymodsCheck passes smods.ru's Cloudflare check with a real browser
-// window and saves the clearance it earns, so Skymods works again for
-// installs and searches.
+// cmdSkymodsCheck passes smods.ru's Cloudflare check with a real browser:
+// in the background if it passes by itself, otherwise in a window where the
+// person ticks its box. ppgmods' browser profile keeps the clearance, so
+// Skymods works again for installs and searches.
 func cmdSkymodsCheck() error {
-	res, err := cfclear.Run("https://catalogue.smods.ru/", cfclear.Options{Logf: logf})
-	if err != nil {
-		return err
+	if !cfclear.RunSkymodsCheck(logf) {
+		return fmt.Errorf("the Skymods browser check did not pass")
 	}
-	if res.Cookie("cf_clearance") == "" {
-		logf("no Cloudflare check was served; Skymods works without a clearance")
-		return nil
-	}
-	if err := cfclear.Save(&cfclear.Clearance{
-		Site:      cfclear.SkymodsSite,
-		Cookie:    res.Cookie("cf_clearance"),
-		UserAgent: res.UserAgent,
-		At:        time.Now().UTC(),
-	}); err != nil {
-		return err
-	}
-	sources.InvalidateSkyCache()
-	logf("clearance saved; Skymods should work again")
 	return nil
 }
 

@@ -107,9 +107,9 @@ type job struct {
 const maxLogLines = 5000
 
 // skymodsView is what the window shows about the Cloudflare check: whether
-// one is being served right now, what the stored clearance can do, and how
-// the last automatic check went. The check itself runs automatically in the
-// background; nothing here needs the person to act.
+// one is being served right now and how the last check went, including
+// whether it wants a person to tick its box (the Settings button then
+// opens it in a window).
 func (s *server) skymodsView() map[string]any {
 	clearance, _ := cfclear.Load(cfclear.SkymodsSite)
 	return map[string]any{
@@ -765,16 +765,16 @@ func (s *server) handleSkymods(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "the check is already running", http.StatusConflict)
 			return
 		}
-		go cfclear.RunSkymodsCheck(true, s.logf)
+		go cfclear.RunSkymodsCheck(s.logf)
 		writeJSON(w, map[string]bool{"ok": true})
 		return
 	case http.MethodDelete:
-		if err := cfclear.Clear(cfclear.SkymodsSite); err != nil {
+		if err := cfclear.Forget(cfclear.SkymodsSite); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		sources.InvalidateSkyCache()
-		s.logf("cleared the saved Skymods browser check")
+		s.logf("forgot the Skymods browser check (clearance and ppgmods' browser profile)")
 		writeJSON(w, map[string]bool{"ok": true})
 		return
 	}
